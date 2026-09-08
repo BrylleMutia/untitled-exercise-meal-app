@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-nunito), ui-rounded, "Segoe UI", system-ui, sans-serif;
+
+  /* Pastel palette derived from assets/ui_reference_01.jpg */
+  --color-cream: #f6f5fa;
+  --color-ink: #262836;
+  --color-ink-soft: #4a4d61;
+  --color-muted: #82869c;
+  --color-blush-50: #fdf0f1;
+  --color-blush-100: #f9dde0;
+  --color-blush-200: #f4c6cc;
+  --color-blush-300: #eda9b2;
+  --color-lav-50: #f1effb;
+  --color-lav-100: #e2def6;
+  --color-lav-200: #cbc3ee;
+  --color-lav-300: #aa9ce0;
+  --color-lav-500: #7c6fd0;
+  --color-peach-50: #fef4e9;
+  --color-peach-100: #fce7d1;
+  --color-peach-200: #f8d3ac;
+  --color-mint-50: #edf8f5;
+  --color-mint-100: #d7efe9;
+  --color-mint-200: #b5e2d8;
+  --color-coral-100: #ffc9ce;
+  --color-coral-200: #ffabb3;
+  --color-coral-300: #ff8d98;
+
+  --shadow-card: 0 12px 32px -12px rgb(38 40 54 / 0.12);
+  --shadow-chip: 0 4px 12px -4px rgb(38 40 54 / 0.15);
+
+  --animate-fade-up: fade-up 0.45s ease-out both;
+  --animate-pop: pop 0.25s ease-out both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.96);
+      opacity: 0.4;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 85% -10%, #e7e3f8 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, #fdeef0 0%, transparent 55%),
+    var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-lav-500);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* Shared pill inputs (onboarding, logger, forms) */
+.input {
+  min-height: 3rem;
+  width: 100%;
+  border-radius: 1rem;
+  background: var(--color-cream);
+  padding: 0 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.input::placeholder {
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

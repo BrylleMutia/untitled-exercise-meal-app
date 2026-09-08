@@ -1,0 +1,216 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  Download,
+  Info,
+  Pencil,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
+import { useApp } from "@/contexts/AppContext";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { HEALTH_DISCLAIMER, kgToLb, lbToKg } from "@/utility/health";
+
+export default function SettingsPage() {
+  const { snapshot, actions } = useApp();
+  const [confirmErase, setConfirmErase] = useState(false);
+  const [weight, setWeight] = useState("");
+  const profile = snapshot.profile;
+  const target = snapshot.target;
+
+  const displayWeight =
+    profile?.units === "imperial"
+      ? kgToLb(profile.weightKg)
+      : profile?.weightKg ?? 0;
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `calicoach-export-${snapshot.userId}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    actions.notify("Export downloaded.");
+  };
+
+  return (
+    <div className="grid gap-4 pb-4">
+      <Card tone="lavender" className="flex items-center gap-4">
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-white text-xl font-extrabold">
+          {profile?.name.charAt(0).toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-extrabold">{profile?.name}</h2>
+          <p className="text-xs font-semibold text-ink-soft">
+            {profile?.experience} · {profile?.daysPerWeek} days/week · ~
+            {profile?.sessionMinutes} min sessions · goal: {profile?.goal}
+          </p>
+        </div>
+        <Link href="/onboarding" className="ml-auto">
+          <Button variant="soft" className="!min-h-11 !px-3 text-xs">
+            <Pencil className="h-4 w-4" aria-hidden /> Edit
+          </Button>
+        </Link>
+      </Card>
+
+      <Card>
+        <h2 className="font-extrabold">Your targets</h2>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-2xl bg-cream p-3">
+            <p className="text-[10px] font-bold text-muted">BMR</p>
+            <p className="font-extrabold tabular-nums">{target?.bmr} kcal</p>
+          </div>
+          <div className="rounded-2xl bg-cream p-3">
+            <p className="text-[10px] font-bold text-muted">BMI</p>
+            <p className="font-extrabold tabular-nums">{target?.bmi}</p>
+          </div>
+          <div className="rounded-2xl bg-cream p-3">
+            <p className="text-[10px] font-bold text-muted">TDEE</p>
+            <p className="font-extrabold tabular-nums">{target?.tdee} kcal</p>
+          </div>
+          <div className="rounded-2xl bg-cream p-3">
+            <p className="text-[10px] font-bold text-muted">Daily target</p>
+            <p className="font-extrabold tabular-nums">{target?.calories} kcal</p>
+          </div>
+        </div>
+        <div className="mt-3 rounded-2xl bg-mint-100 p-3 text-xs font-semibold text-ink-soft">
+          {HEALTH_DISCLAIMER} Formula: {target?.formula} · activity factor{" "}
+          {target?.activityFactor} · effective {target?.effectiveDate} · version{" "}
+          {target?.version}.
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-extrabold">Units & weight</h2>
+        <div className="mt-3 flex gap-2" role="group" aria-label="Units">
+          {(["metric", "imperial"] as const).map((u) => (
+            <Button
+              key={u}
+              variant={profile?.units === u ? "primary" : "soft"}
+              onClick={() => actions.updateUnits(u)}
+              aria-pressed={profile?.units === u}
+              className="!min-h-11 !px-4 text-xs"
+            >
+              {u}
+            </Button>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            inputMode="decimal"
+            placeholder={
+              profile?.units === "metric" ? "Weight in kg" : "Weight in lb"
+            }
+            className="input max-w-40"
+            aria-label="New weight entry"
+          />
+          <Button
+            className="!min-h-12"
+            disabled={!weight}
+            onClick={() => {
+              const kg =
+                profile?.units === "metric"
+                  ? Number(weight)
+                  : lbToKg(Number(weight));
+              if (!kg) return;
+              const today = new Date();
+              const key = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+              actions.logWeight(Math.round(kg * 10) / 10, key);
+              setWeight("");
+            }}
+          >
+            Log {displayWeight ? `(${displayWeight.toFixed(1)} ${profile?.units === "metric" ? "kg" : "lb"} now)` : ""}
+          </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-extrabold">Data controls</h2>
+        <div className="mt-3 grid gap-2">
+          <Button variant="soft" onClick={exportData}>
+            <Download className="h-4 w-4" aria-hidden /> Export JSON
+          </Button>
+          <Button variant="soft" onClick={actions.resetPlan}>
+            <RefreshCw className="h-4 w-4" aria-hidden />
+            Regenerate plan from current profile
+          </Button>
+          <Button variant="soft" onClick={() => { actions.loadDemo(); setConfirmErase(false); }}>
+            <RefreshCw className="h-4 w-4" aria-hidden /> Restore demo data
+          </Button>
+          <div className="rounded-2xl bg-coral-100 p-3">
+            <p className="flex items-center gap-2 text-sm font-extrabold">
+              <AlertTriangle className="h-4 w-4" aria-hidden /> Erase demo data
+            </p>
+            <p className="mt-1 text-xs font-semibold text-ink-soft">
+              Removes the snapshot stored in this browser. Production deletion
+              runs through an authorized server workflow.
+            </p>
+            {!confirmErase ? (
+              <Button
+                variant="danger"
+                className="mt-2 !min-h-11 !px-4 text-xs"
+                onClick={() => setConfirmErase(true)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden /> Erase…
+              </Button>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="danger"
+                  className="!min-h-11 !px-4 text-xs"
+                  onClick={() => {
+                    actions.eraseAll();
+                    setConfirmErase(false);
+                  }}
+                >
+                  Confirm erase
+                </Button>
+                <Button
+                  variant="soft"
+                  className="!min-h-11 !px-4 text-xs"
+                  onClick={() => setConfirmErase(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-extrabold">Safety & sources</h2>
+        <ul className="mt-2 grid gap-2 text-xs font-semibold text-ink-soft">
+          <li className="flex gap-2">
+            <Info className="h-4 w-4 shrink-0" aria-hidden />
+            Health and nutrition values are estimates, not medical advice.
+          </li>
+          <li className="flex gap-2">
+            <Info className="h-4 w-4 shrink-0" aria-hidden />
+            Demo food catalog {snapshot.target ? "v2026.09" : "—"} with visible
+            confidence and source on each entry.
+          </li>
+          <li className="flex gap-2">
+            <Info className="h-4 w-4 shrink-0" aria-hidden />
+            Exercise illustrations by Bryl Lim (CC BY-SA 4.0) via
+            @bryllim/workout-guide.
+          </li>
+          <li className="flex gap-2">
+            <Info className="h-4 w-4 shrink-0" aria-hidden />
+            Demo build — no sign-in, no server. Your data lives in this browser
+            only.
+          </li>
+        </ul>
+      </Card>
+    </div>
+  );
+}
