@@ -3,21 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  AlertTriangle,
   Download,
   Info,
+  LogOut,
   Pencil,
   RefreshCw,
-  Trash2,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { HEALTH_DISCLAIMER, kgToLb, lbToKg } from "@/utility/health";
+import { signOutAction } from "@/app/auth/actions";
 
 export default function SettingsPage() {
   const { snapshot, actions } = useApp();
-  const [confirmErase, setConfirmErase] = useState(false);
   const [weight, setWeight] = useState("");
   const profile = snapshot.profile;
   const target = snapshot.target;
@@ -143,47 +142,11 @@ export default function SettingsPage() {
             <RefreshCw className="h-4 w-4" aria-hidden />
             Regenerate plan from current profile
           </Button>
-          <Button variant="soft" onClick={() => { actions.loadDemo(); setConfirmErase(false); }}>
-            <RefreshCw className="h-4 w-4" aria-hidden /> Restore demo data
-          </Button>
-          <div className="rounded-2xl bg-coral-100 p-3">
-            <p className="flex items-center gap-2 text-sm font-extrabold">
-              <AlertTriangle className="h-4 w-4" aria-hidden /> Erase demo data
-            </p>
-            <p className="mt-1 text-xs font-semibold text-ink-soft">
-              Removes the snapshot stored in this browser. Production deletion
-              runs through an authorized server workflow.
-            </p>
-            {!confirmErase ? (
-              <Button
-                variant="danger"
-                className="mt-2 !min-h-11 !px-4 text-xs"
-                onClick={() => setConfirmErase(true)}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden /> Erase…
-              </Button>
-            ) : (
-              <div className="mt-2 flex gap-2">
-                <Button
-                  variant="danger"
-                  className="!min-h-11 !px-4 text-xs"
-                  onClick={() => {
-                    actions.eraseAll();
-                    setConfirmErase(false);
-                  }}
-                >
-                  Confirm erase
-                </Button>
-                <Button
-                  variant="soft"
-                  className="!min-h-11 !px-4 text-xs"
-                  onClick={() => setConfirmErase(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
-          </div>
+          <form action={signOutAction}>
+            <Button type="submit" variant="danger" className="w-full">
+              <LogOut className="h-4 w-4" aria-hidden /> Sign out
+            </Button>
+          </form>
         </div>
       </Card>
 
@@ -196,8 +159,8 @@ export default function SettingsPage() {
           </li>
           <li className="flex gap-2">
             <Info className="h-4 w-4 shrink-0" aria-hidden />
-            Demo food catalog {snapshot.target ? "v2026.09" : "—"} with visible
-            confidence and source on each entry.
+            Food entries show source, confidence, and estimate status. Replace
+            the current catalog with the selected production nutrition database.
           </li>
           <li className="flex gap-2">
             <Info className="h-4 w-4 shrink-0" aria-hidden />
@@ -206,8 +169,8 @@ export default function SettingsPage() {
           </li>
           <li className="flex gap-2">
             <Info className="h-4 w-4 shrink-0" aria-hidden />
-            Demo build — no sign-in, no server. Your data lives in this browser
-            only.
+            Account deletion and export must use authorized server workflows
+            before production release.
           </li>
         </ul>
       </Card>

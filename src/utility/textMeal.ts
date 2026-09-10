@@ -37,7 +37,7 @@ const NUMBER_WORDS: Record<string, number> = {
 };
 
 /**
- * Demo stand-in for the server-side AI extraction endpoint. It runs entirely
+ * Temporary client-side stand-in for the server-side AI extraction endpoint. It runs entirely
  * on structured pattern matching, never invents nutrition numbers, and marks
  * unmatched or ambiguous items as low confidence for user correction. The real
  * flow sends text to a protected Edge Function and validates the JSON schema.

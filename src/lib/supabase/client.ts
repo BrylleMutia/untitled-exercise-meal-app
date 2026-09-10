@@ -1,9 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { Database } from "@/types/database.generated";
 
 /**
- * Browser-side Supabase client for the future authenticated path. The demo
- * mockup does not call it; wiring servers/credentials without shipped auth is
- * the next step.
+ * Browser-side Supabase client for authenticated client-side integrations.
  */
 export function createClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,5 +12,5 @@ export function createClient() {
       "Supabase browser client requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
     );
   }
-  return createBrowserClient(url, key);
+  return createBrowserClient<Database>(url, key);
 }

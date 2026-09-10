@@ -1,0 +1,450 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/types/database.generated";
+import type {
+  AppSnapshot,
+  DailyTarget,
+  EquipmentId,
+  Exercise,
+  ExerciseLog,
+  Food,
+  GroceryItem,
+  Meal,
+  MealPlan,
+  NutritionLog,
+  PlannedExercise,
+  PlannedMeal,
+  PlannedWorkout,
+  UserProfile,
+  WorkoutPlan,
+  WorkoutSession,
+} from "@/types/domain";
+
+type AppSupabaseClient = SupabaseClient<Database>;
+type ProfileRow = Tables<"profiles">;
+type TargetRow = Tables<"daily_targets">;
+type WorkoutPlanRow = Tables<"workout_plans">;
+type PlannedWorkoutRow = Tables<"planned_workouts">;
+type PlannedExerciseRow = Tables<"planned_exercises">;
+type MealPlanRow = Tables<"meal_plans">;
+type PlannedMealRow = Tables<"planned_meals">;
+type SessionRow = Tables<"workout_sessions">;
+type ExerciseLogRow = Tables<"exercise_logs">;
+type FoodRow = Tables<"foods">;
+type ExerciseRow = Tables<"exercises">;
+type MealRow = Tables<"meals">;
+type IngredientRow = Tables<"meal_ingredients">;
+type NutritionRow = Tables<"nutrition_logs">;
+type WeightRow = Tables<"weight_entries">;
+type GroceryListRow = Tables<"grocery_lists">;
+type GroceryItemRow = Tables<"grocery_items">;
+
+const isEquipment = (value: string): value is EquipmentId =>
+  ["none", "pullup_bar", "bands", "dumbbells", "bench"].includes(value);
+
+function mapProfile(row: ProfileRow): UserProfile {
+  return {
+    id: row.id,
+    name: row.name,
+    age: row.age,
+    sex: row.sex as UserProfile["sex"],
+    heightCm: Number(row.height_cm),
+    weightKg: Number(row.weight_kg),
+    units: row.units as UserProfile["units"],
+    experience: row.experience as UserProfile["experience"],
+    equipment: row.equipment.filter(isEquipment),
+    daysPerWeek: row.days_per_week,
+    sessionMinutes: row.session_minutes,
+    goal: row.goal as UserProfile["goal"],
+    dietaryPattern: row.dietary_pattern,
+    allergies: row.allergies,
+    createdAt: row.created_at,
+  };
+}
+
+function mapTarget(row: TargetRow): DailyTarget {
+  return {
+    id: row.app_id,
+    version: row.version,
+    effectiveDate: row.effective_date,
+    calories: Number(row.calories),
+    proteinG: Number(row.protein_g),
+    carbsG: Number(row.carbs_g),
+    fatG: Number(row.fat_g),
+    bmr: Number(row.bmr),
+    bmi: Number(row.bmi),
+    tdee: Number(row.tdee),
+    formula: row.formula,
+    activityFactor: Number(row.activity_factor),
+    disclaimer: row.disclaimer,
+  };
+}
+
+function mapFood(row: FoodRow): Food {
+  return {
+    id: row.app_id,
+    name: row.name,
+    servingLabel: row.serving_label,
+    servingGrams: Number(row.serving_grams),
+    unit: row.serving_unit as Food["unit"],
+    calories: Number(row.calories),
+    proteinG: Number(row.protein_g),
+    carbsG: Number(row.carbs_g),
+    fatG: Number(row.fat_g),
+    ...(row.fiber_g === null ? {} : { fiberG: Number(row.fiber_g) }),
+    source: row.source,
+    sourceVersion: row.source_version,
+    estimated: row.estimated,
+    confidence: row.confidence as Food["confidence"],
+    category: row.category as Food["category"],
+  };
+}
+
+function mapExercise(row: ExerciseRow): Exercise {
+  return {
+    id: row.app_id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    category: row.movement_category as Exercise["category"],
+    muscles: row.muscles,
+    difficulty: row.difficulty as Exercise["difficulty"],
+    equipment: row.equipment.filter(isEquipment),
+    measure: row.measure as Exercise["measure"],
+    illustrationAlt: row.illustration_alt,
+    ...(row.regression_reference ? { regression: row.regression_reference } : {}),
+    ...(row.progression_reference ? { progression: row.progression_reference } : {}),
+    safety: row.safety,
+  };
+}
+
+function mapWorkoutPlan(
+  row: WorkoutPlanRow,
+  targetsByRow: Map<number, TargetRow>,
+  workouts: PlannedWorkoutRow[],
+  exercises: PlannedExerciseRow[],
+  exercisesByRow: Map<number, ExerciseRow>,
+): WorkoutPlan {
+  const target = targetsByRow.get(row.target_row_id);
+  const exercisesByWorkout = new Map<number, PlannedExerciseRow[]>();
+  for (const exercise of exercises) {
+    const list = exercisesByWorkout.get(exercise.planned_workout_row_id) ?? [];
+    list.push(exercise);
+    exercisesByWorkout.set(exercise.planned_workout_row_id, list);
+  }
+
+  const mappedWorkouts: PlannedWorkout[] = workouts
+    .filter((workout) => workout.plan_row_id === row.row_id)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((workout) => ({
+      id: workout.app_id,
+      dayOfWeek: workout.day_of_week,
+      title: workout.title,
+      focus: workout.focus,
+      warmup: workout.warmup,
+      cooldown: workout.cooldown,
+      estimatedMinutes: workout.estimated_minutes,
+      exercises: (exercisesByWorkout.get(workout.row_id) ?? [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((exercise): PlannedExercise => ({
+          id: exercise.app_id,
+          exerciseId: exercisesByRow.get(exercise.exercise_row_id)?.app_id ?? "",
+          sets: exercise.sets,
+          ...(exercise.reps === null ? {} : { reps: exercise.reps }),
+          ...(exercise.hold_seconds === null ? {} : { holdSeconds: exercise.hold_seconds }),
+          restSeconds: exercise.rest_seconds,
+        })),
+    }));
+
+  return {
+    id: row.app_id,
+    version: row.version,
+    createdAt: row.created_at,
+    targetId: target?.app_id ?? "",
+    workouts: mappedWorkouts,
+  };
+}
+
+function mapMealPlan(
+  row: MealPlanRow,
+  targetsByRow: Map<number, TargetRow>,
+  meals: PlannedMealRow[],
+  mealsByRow: Map<number, MealRow>,
+  foodsByRow: Map<number, FoodRow>,
+): MealPlan {
+  const target = targetsByRow.get(row.target_row_id);
+  return {
+    id: row.app_id,
+    version: row.version,
+    weekOf: row.week_of,
+    targetId: target?.app_id ?? "",
+    meals: meals
+      .filter((meal) => meal.meal_plan_row_id === row.row_id)
+      .sort((a, b) => a.meal_date.localeCompare(b.meal_date) || a.meal_slot.localeCompare(b.meal_slot))
+      .map((meal): PlannedMeal => {
+        const mealRef = meal.meal_row_id === null ? undefined : mealsByRow.get(meal.meal_row_id);
+        const foodRef = meal.food_row_id === null ? undefined : foodsByRow.get(meal.food_row_id);
+        return {
+          id: meal.app_id,
+          date: meal.meal_date,
+          slot: meal.meal_slot as PlannedMeal["slot"],
+          ...(mealRef ? { mealId: mealRef.app_id } : {}),
+          ...(foodRef ? { foodId: foodRef.app_id } : {}),
+          label: meal.label,
+          servings: Number(meal.servings),
+          ...(meal.skipped ? { skipped: true } : {}),
+        };
+      }),
+  };
+}
+
+function mapSession(
+  row: SessionRow,
+  workoutsByRow: Map<number, PlannedWorkoutRow>,
+  logsBySession: Map<number, ExerciseLogRow[]>,
+  exercisesByRow: Map<number, ExerciseRow>,
+): WorkoutSession {
+  const workout = workoutsByRow.get(row.planned_workout_row_id);
+  return {
+    id: row.app_id,
+    plannedWorkoutId: workout?.app_id ?? "",
+    plannedPlanVersion: row.planned_plan_version,
+    date: row.session_date,
+    startedAt: row.started_at,
+    ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
+    status: row.status as WorkoutSession["status"],
+    logs: (logsBySession.get(row.row_id) ?? []).map((log): ExerciseLog => ({
+      exerciseId: exercisesByRow.get(log.actual_exercise_row_id)?.app_id ?? "",
+      planned: {
+        sets: log.planned_sets,
+        ...(log.planned_reps === null ? {} : { reps: log.planned_reps }),
+        ...(log.planned_hold_seconds === null ? {} : { holdSeconds: log.planned_hold_seconds }),
+      },
+      actual: {
+        sets: log.actual_sets ?? 0,
+        ...(log.actual_reps === null ? {} : { reps: log.actual_reps }),
+        ...(log.actual_hold_seconds === null ? {} : { holdSeconds: log.actual_hold_seconds }),
+      },
+      status: log.status as ExerciseLog["status"],
+      ...(log.rpe === null ? {} : { rpe: log.rpe }),
+      ...(log.manageable === null ? {} : { manageable: log.manageable }),
+      ...(log.pain === null ? {} : { pain: log.pain }),
+      ...(log.note === null ? {} : { note: log.note }),
+    })),
+  };
+}
+
+function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>): NutritionLog {
+  const food = row.food_row_id === null ? undefined : foodsByRow.get(row.food_row_id);
+  return {
+    id: row.app_id,
+    date: row.log_date,
+    slot: row.meal_slot as NutritionLog["slot"],
+    ...(food ? { foodId: food.app_id } : {}),
+    ...(row.custom_name ? { customName: row.custom_name } : {}),
+    servings: Number(row.servings),
+    calories: Number(row.calories),
+    proteinG: Number(row.protein_g),
+    carbsG: Number(row.carbs_g),
+    fatG: Number(row.fat_g),
+    estimated: row.estimated,
+    confidence: row.confidence as NutritionLog["confidence"],
+    source: row.source,
+    ...(row.assumptions ? { assumptions: row.assumptions } : {}),
+    createdAt: row.created_at,
+  };
+}
+
+function mapGrocery(row: GroceryListRow, items: GroceryItemRow[]): AppSnapshot["grocery"] {
+  return {
+    id: row.app_id,
+    weekOf: row.week_of,
+    items: items
+      .filter((item) => item.grocery_list_row_id === row.row_id)
+      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+      .map(
+        (item): GroceryItem => ({
+          id: item.app_id,
+          name: item.name,
+          category: item.category as GroceryItem["category"],
+          unit: item.unit,
+          generatedQuantity: Number(item.generated_quantity),
+          quantity: Number(item.quantity),
+          checked: item.checked,
+          ...(item.custom_item ? { custom: true } : {}),
+          ...(item.removed ? { removed: true } : {}),
+        }),
+      ),
+  };
+}
+
+function mapMeal(
+  row: MealRow,
+  ingredientsByMeal: Map<number, IngredientRow[]>,
+  foodsByRow: Map<number, FoodRow>,
+): Meal {
+  return {
+    id: row.app_id,
+    name: row.name,
+    servings: Number(row.servings),
+    ...(row.notes ? { notes: row.notes } : {}),
+    ingredients: (ingredientsByMeal.get(row.row_id) ?? [])
+      .sort((a, b) => a.ingredient_order - b.ingredient_order)
+      .flatMap((ingredient) => {
+        const food = foodsByRow.get(ingredient.food_row_id);
+        return food ? [{ foodId: food.app_id, servings: Number(ingredient.servings) }] : [];
+      }),
+  };
+}
+
+function emptySnapshot(userId: string): AppSnapshot {
+  return {
+    schemaVersion: 1,
+    userId,
+    onboarded: false,
+    profile: null,
+    target: null,
+    plan: null,
+    mealPlan: null,
+    sessions: [],
+    nutritionLogs: [],
+    weights: [],
+    grocery: null,
+    savedMeals: [],
+  };
+}
+
+async function required<T>(
+  query: PromiseLike<{ data: T; error: { message: string } | null }>,
+): Promise<T> {
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function loadAppSnapshot(
+  client: AppSupabaseClient,
+  userId: string,
+): Promise<AppSnapshot> {
+  const profile = await required(
+    client.from("profiles").select("*").eq("id", userId).maybeSingle(),
+  );
+  const targets = await required(
+    client.from("daily_targets").select("*").eq("user_id", userId).order("version", { ascending: false }),
+  );
+  const targetRows = targets as TargetRow[];
+  const targetsByRow = new Map(targetRows.map((row) => [row.row_id, row]));
+  const currentTarget = targetRows[0] ? mapTarget(targetRows[0]) : null;
+
+  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems] =
+    await Promise.all([
+      required(client.from("exercises").select("*")),
+      required(client.from("foods").select("*")),
+      required(client.from("meals").select("*").or(`is_system.eq.true,owner_user_id.eq.${userId}`)),
+      required(client.from("meal_ingredients").select("*")),
+      required(client.from("workout_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
+      required(client.from("meal_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
+      required(client.from("workout_sessions").select("*").eq("user_id", userId).order("session_date", { ascending: false })),
+      required(client.from("nutrition_logs").select("*").eq("user_id", userId).order("log_date", { ascending: false })),
+      required(client.from("weight_entries").select("*").eq("user_id", userId).order("entry_date", { ascending: false })),
+      required(client.from("grocery_lists").select("*").eq("user_id", userId).order("week_of", { ascending: false })),
+      required(client.from("grocery_items").select("*").eq("user_id", userId)),
+    ]);
+
+  const exerciseRows = exercises as ExerciseRow[];
+  const foodRows = foods as FoodRow[];
+  const mealRows = meals as MealRow[];
+  const ingredientRows = ingredients as IngredientRow[];
+  const planRows = workoutPlans as WorkoutPlanRow[];
+  const mealPlanRows = mealPlans as MealPlanRow[];
+  const sessionRows = sessions as SessionRow[];
+  const nutritionRows = nutrition as NutritionRow[];
+  const weightRows = weights as WeightRow[];
+  const groceryListRows = groceryLists as GroceryListRow[];
+  const groceryItemRows = groceryItems as GroceryItemRow[];
+  const mealsByRow = new Map(mealRows.map((row) => [row.row_id, row]));
+  const exercisesByRow = new Map(exerciseRows.map((row) => [row.row_id, row]));
+  const foodsByRow = new Map(foodRows.map((row) => [row.row_id, row]));
+
+  const currentPlan = planRows[0];
+  const currentMealPlan = mealPlanRows[0];
+  const plannedWorkouts = currentPlan
+    ? await required(client.from("planned_workouts").select("*").eq("plan_row_id", currentPlan.row_id))
+    : [];
+  const plannedWorkoutRows = plannedWorkouts as PlannedWorkoutRow[];
+  const plannedExercises = currentPlan && plannedWorkoutRows.length
+    ? await required(
+        client
+          .from("planned_exercises")
+          .select("*")
+          .eq("user_id", userId)
+          .in("planned_workout_row_id", plannedWorkoutRows.map((row) => row.row_id)),
+      )
+    : [];
+  const sessionLogs = sessionRows.length
+    ? await required(
+        client
+          .from("exercise_logs")
+          .select("*")
+          .eq("user_id", userId)
+          .in("session_row_id", sessionRows.map((row) => row.row_id)),
+      )
+    : [];
+
+  const workoutsByRow = new Map(plannedWorkoutRows.map((row) => [row.row_id, row]));
+  const logsBySession = new Map<number, ExerciseLogRow[]>();
+  for (const log of sessionLogs as ExerciseLogRow[]) {
+    const list = logsBySession.get(log.session_row_id) ?? [];
+    list.push(log);
+    logsBySession.set(log.session_row_id, list);
+  }
+  const ingredientsByMeal = new Map<number, IngredientRow[]>();
+  for (const ingredient of ingredientRows) {
+    const list = ingredientsByMeal.get(ingredient.meal_row_id) ?? [];
+    list.push(ingredient);
+    ingredientsByMeal.set(ingredient.meal_row_id, list);
+  }
+
+  const snapshot = emptySnapshot(userId);
+  snapshot.profile = profile ? mapProfile(profile as ProfileRow) : null;
+  snapshot.onboarded = Boolean(snapshot.profile);
+  snapshot.target = currentTarget;
+  snapshot.plan = currentPlan
+    ? mapWorkoutPlan(
+        currentPlan,
+        targetsByRow,
+        plannedWorkoutRows,
+        plannedExercises as PlannedExerciseRow[],
+        exercisesByRow,
+      )
+    : null;
+  snapshot.mealPlan = currentMealPlan
+    ? mapMealPlan(
+        currentMealPlan,
+        targetsByRow,
+        (await required(
+          client.from("planned_meals").select("*").eq("meal_plan_row_id", currentMealPlan.row_id),
+        )) as PlannedMealRow[],
+        mealsByRow,
+        foodsByRow,
+      )
+    : null;
+  snapshot.sessions = sessionRows.map((row) =>
+    mapSession(row, workoutsByRow, logsBySession, exercisesByRow),
+  );
+  snapshot.nutritionLogs = nutritionRows.map((row) => mapNutrition(row, foodsByRow));
+  snapshot.weights = weightRows.map((row) => ({
+    id: row.app_id,
+    date: row.entry_date,
+    weightKg: Number(row.weight_kg),
+  }));
+  snapshot.grocery = groceryListRows[0]
+    ? mapGrocery(groceryListRows[0], groceryItemRows)
+    : null;
+  snapshot.savedMeals = mealRows
+    .filter((row) => row.is_system || row.owner_user_id === userId)
+    .map((row) => mapMeal(row, ingredientsByMeal, foodsByRow));
+
+  return snapshot;
+}
+
+export { mapFood, mapExercise };

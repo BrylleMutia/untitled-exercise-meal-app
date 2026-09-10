@@ -3,6 +3,7 @@
 > **Purpose:** Define the stable client, backend, security, persistence, testing, and delivery standards that every feature must follow.
 >
 > **Product contract:** [`FEATURES.md`](./FEATURES.md)
+> **Design contract:** [`DESIGN.md`](./DESIGN.md)
 > **Agent workflow:** [`AGENTS.md`](./AGENTS.md)
 
 ## Architecture Baseline
@@ -17,14 +18,15 @@ writes. Supabase is the authoritative source of truth for durable user data in
 the MVP. Browser storage may cache read models and preserve recoverable drafts,
 but it is not a competing source of truth.
 
-### Current mockup boundary
+### Current auth-first boundary
 
-The initialized scaffold is a clearly labeled demo mockup. Its repository uses
-validated, user-scoped browser storage so the product loop can be exercised
-without a configured Supabase project. The authenticated Supabase clients are
-prepared under `src/lib/supabase/`, but durable MVP authority, RPCs, RLS,
-authentication, migrations, and server-side mutation outcomes remain pending
-backend implementation; demo storage must not be promoted as that authority.
+The initialized scaffold requires a configured Supabase project and authenticated
+identity before product routes are available. The browser/server clients,
+session-refresh Proxy, PKCE callback route, auth pages, and auth actions are
+implemented. Durable profile/plan/log persistence, schema migrations, RLS,
+RPCs, generated database types, and the authenticated repository remain pending
+backend implementation. The app does not fall back to dummy or localStorage
+product data when Supabase is unavailable.
 
 ### Client
 
@@ -613,11 +615,12 @@ A feature is complete only when all applicable conditions are met:
 7. Accessibility, reduced motion, large text, keyboard input, responsive behavior, and narrow-screen overflow are verified.
 8. Pure calculations, repositories, critical component states, and the primary user flow have appropriate tests.
 9. TypeScript, Next.js build checks, Supabase tests, and browser checks pass as applicable.
-10. `FEATURES.md`, `ARCHITECTURE.md`, and `AGENTS.md` remain consistent with implemented behavior.
+10. `FEATURES.md`, `ARCHITECTURE.md`, `DESIGN.md`, and `AGENTS.md` remain consistent with implemented behavior.
 
 ## Documentation Ownership
 
 - This file owns stable client architecture, state/data ownership, security, persistence, testing, and delivery standards.
 - [`FEATURES.md`](./FEATURES.md) owns product goals, feature scope, UX behavior, navigation, data-model expectations, and MVP acceptance criteria.
+- [`DESIGN.md`](./DESIGN.md) owns current visual/design decisions, design tokens, UX patterns, responsive/navigation model, and auth-first setup.
 - [`AGENTS.md`](./AGENTS.md) owns mandatory agent workflow, task routing, product guardrails, engineering guardrails, and verification requirements.
 - Source code, tests, migrations, generated types, and deployed configuration remain the final truth for current implementation behavior.

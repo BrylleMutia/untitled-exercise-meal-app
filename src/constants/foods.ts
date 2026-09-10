@@ -1,11 +1,11 @@
 import type { Food } from "@/types/domain";
 
-export const FOOD_SOURCE = "Demo Food Catalog";
+export const FOOD_SOURCE = "Starter Food Catalog";
 export const FOOD_SOURCE_VERSION = "2026.09";
 
 /**
- * Demo nutrition catalog. Values are per serving as labeled and are estimates
- * for the mockup; production must select one trusted, versioned database per
+ * Starter nutrition catalog. Values are per serving as labeled and are estimates;
+ * production must select one trusted, versioned database per
  * FEATURES.md and retain source + version on every record.
  */
 const f = (

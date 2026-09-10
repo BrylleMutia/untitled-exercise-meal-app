@@ -27,19 +27,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const app = useAppOptional();
   const isOnboarding = pathname.startsWith("/onboarding");
+  const isAuthRoute = pathname.startsWith("/auth");
 
   if (!app?.hydrated) {
     return (
       <main className="grid min-h-dvh place-items-center px-6" role="status">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-pulse rounded-3xl bg-lav-100" />
-          <p className="mt-3 text-sm font-bold text-muted">Loading your local demo…</p>
+          <p className="mt-3 text-sm font-bold text-muted">Loading your account…</p>
         </div>
       </main>
     );
   }
 
-  if (isOnboarding) {
+  if (isOnboarding || isAuthRoute) {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6">
         {children}
@@ -73,9 +74,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
           </div>
-          <span className="hidden rounded-full bg-mint-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft sm:inline-block">
-            Demo mode
-          </span>
         </div>
 
         <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
@@ -99,7 +97,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            aria-label="Notifications (demo, not active)"
+            aria-label="Notifications"
             className="relative grid h-11 w-11 place-items-center rounded-full bg-white text-ink shadow-chip"
           >
             <Bell className="h-5 w-5" aria-hidden />
@@ -116,19 +114,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="mx-auto w-full max-w-3xl px-4 pb-32 pt-5 md:pb-14 lg:max-w-5xl">
-        {app.storageUnavailable ? (
-          <div className="mb-4 rounded-2xl bg-coral-100 px-4 py-3 text-xs font-bold text-ink" role="status">
-            Browser storage is unavailable. Changes are visible for this session
-            but may not survive a refresh.
-          </div>
-        ) : null}
         {children}
       </main>
 
       <footer className="mx-auto w-full max-w-3xl px-4 pb-28 text-center md:pb-8 lg:max-w-5xl">
         <p className="text-[11px] font-semibold text-muted">
-          Estimates only — not medical, dietary, or exercise care. Demo build:
-          data stays in this browser.
+          Estimates only — not medical, dietary, or exercise care.
         </p>
       </footer>
 

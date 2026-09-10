@@ -3,12 +3,15 @@ import type { Exercise } from "@/types/domain";
 import type { CardTone } from "@/components/ui/Card";
 
 const toneClasses: Record<CardTone, string> = {
-  white: "bg-cream",
-  blush: "bg-blush-100",
-  lavender: "bg-lav-100",
-  peach: "bg-peach-100",
-  mint: "bg-mint-100",
-  coral: "bg-coral-100",
+  // The workout-guide frames use white line art on transparency. Keep the
+  // illustration surface dark enough for the artwork to remain legible while
+  // preserving a slightly softer option for the pastel card tones.
+  white: "bg-ink",
+  blush: "bg-ink-soft",
+  lavender: "bg-ink-soft",
+  peach: "bg-ink-soft",
+  mint: "bg-ink-soft",
+  coral: "bg-ink",
 };
 
 interface ExerciseIllustrationProps {

@@ -12,6 +12,8 @@ architecture.
 |----------|---------|
 | [`FEATURES.md`](FEATURES.md) | Product goal, MVP scope, feature behavior, navigation, data model, and acceptance criteria |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stack, state/data ownership, persistence, security, testing, delivery, and migration procedures |
+| [`DESIGN.md`](DESIGN.md) | Current visual/design decisions, design tokens, UX patterns, responsive/navigation model, and auth-first setup |
+| [`SUPABASE_SETUP.md`](SUPABASE_SETUP.md) | Supabase dashboard, environment, auth URL, and cautious CLI setup |
 | Source code, tests, migrations, generated types, and deployed configuration | Final truth for current implementation behavior |
 
 When `FEATURES.md` and `ARCHITECTURE.md` conflict, `FEATURES.md` defines
@@ -22,6 +24,7 @@ the affected feature.
 Task routing:
 
 - **Feature implementation:** Read the relevant section of `FEATURES.md` and only the applicable sections of `ARCHITECTURE.md`.
+- **UI, visual, or design-system change:** Read the relevant section of `DESIGN.md` and preserve the styling, accessibility, and motion guidance in `ARCHITECTURE.md`.
 - **Workout, nutrition, health, or UX change:** Read the related feature section and preserve the product loop and safety boundaries.
 - **State, persistence, local storage, Supabase, auth, AI, security, or delivery work:** Read the relevant architecture sections and the related feature contract.
 - **Bug fix or diagnosis:** Inspect current source code and tests first. Consult the feature plan only when behavior is feature-specific.
@@ -193,7 +196,7 @@ straightforward refactoring, or code review without external API behavior.
 ## Commands and Next.js Policy
 
 The Next.js project scripts are defined in `package.json` and can be used for
-the current mockup. Supabase CLI scripts remain prospective until the backend
+the current app. Supabase CLI scripts remain prospective until the backend
 and local database workflow are added.
 
 - `npm run dev` - start the Next.js development server.
@@ -295,11 +298,12 @@ A feature is complete only when all applicable conditions are met:
 7. Accessibility, reduced motion, large text, keyboard input, responsive behavior, and narrow-screen overflow are verified.
 8. Pure calculations, repositories, critical component states, and the primary user flow have appropriate tests.
 9. TypeScript, Next.js build checks, Supabase tests, and browser checks pass as applicable.
-10. `FEATURES.md` and `ARCHITECTURE.md` are updated when the implemented behavior or technical contract changes.
+10. `FEATURES.md`, `ARCHITECTURE.md`, and `DESIGN.md` are updated when the implemented behavior, technical contract, or design decisions change.
 
 ## Documentation Ownership
 
 - This file owns mandatory agent workflow, task routing, product guardrails, engineering guardrails, and verification requirements.
 - [`FEATURES.md`](FEATURES.md) owns product goals, feature scope, UX behavior, navigation, data-model expectations, and MVP acceptance criteria.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) owns stable client architecture, state/data ownership, security, persistence, testing, and delivery standards.
+- [`DESIGN.md`](DESIGN.md) owns current visual/design decisions, tokens, UX patterns, responsive/navigation model, and auth-first setup.
 - Source code, tests, migrations, generated types, and deployed configuration remain the final truth for current implementation behavior.

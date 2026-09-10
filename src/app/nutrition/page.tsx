@@ -48,7 +48,7 @@ export default function NutritionPage() {
   );
 
   return (
-    <div className="grid gap-4 pb-4">
+    <div className="grid min-w-0 gap-4 pb-4">
       <Card tone="blush">
         <DayStrip selected={selected} onSelect={setSelected} />
         <div className="mt-4 flex items-center justify-between">
@@ -417,7 +417,7 @@ export default function NutritionPage() {
           aria-label="Describe the meal in plain text"
         />
         <Button variant="soft" onClick={review} disabled={!text.trim()}>
-          <Sparkles className="h-4 w-4" aria-hidden /> Estimate (demo flow)
+          <Sparkles className="h-4 w-4" aria-hidden /> Review estimate
         </Button>
         {candidates.length > 0 ? (
           <ul className="grid gap-1.5">
@@ -467,7 +467,7 @@ export default function NutritionPage() {
           </ul>
         ) : null}
         <p className="text-[11px] font-semibold text-muted">
-          Demo parser — production runs this on a protected Edge Function with
+          Temporary parser — production runs this on a protected Edge Function with
           schema-validated JSON. Calculations always use the food catalog, never
           model numbers.
         </p>

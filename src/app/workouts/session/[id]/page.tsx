@@ -32,6 +32,7 @@ export default function SessionPage() {
 
   const workout = snapshot.plan?.workouts.find((w) => w.id === params.id);
   const createdRef = useRef<string | null>(null);
+  const creatingRef = useRef(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -42,9 +43,13 @@ export default function SessionPage() {
 
   // Create the in-progress session once (StrictMode safe via ref).
   useEffect(() => {
-    if (!workout || createdRef.current) return;
-    createdRef.current = actions.startSession(workout.id);
-    setSessionId(createdRef.current);
+    if (!workout || createdRef.current || creatingRef.current) return;
+    creatingRef.current = true;
+    void actions.startSession(workout.id).then((id) => {
+      if (!id) return;
+      createdRef.current = id;
+      setSessionId(id);
+    });
   }, [workout, actions]);
 
   const session = snapshot.sessions.find((s) => s.id === sessionId);
@@ -87,7 +92,7 @@ export default function SessionPage() {
     (updater: (current: WorkoutSession) => WorkoutSession) => {
       const current = snapshot.sessions.find((s) => s.id === sessionId);
       if (!current) return;
-      actions.saveSession(updater(current));
+      void actions.saveSession(updater(current));
     },
     [snapshot.sessions, sessionId, actions],
   );
@@ -128,17 +133,17 @@ export default function SessionPage() {
     );
   }
 
-  const finish = () => {
+  const finish = async () => {
     if (!sessionId) return;
-    actions.finishSession(sessionId);
-    setFinished(true);
-    router.push("/workouts");
+    if (await actions.finishSession(sessionId)) {
+      setFinished(true);
+      router.push("/workouts");
+    }
   };
 
-  const discard = () => {
+  const discard = async () => {
     if (!sessionId) return;
-    actions.abandonSession(sessionId);
-    router.push("/workouts");
+    if (await actions.abandonSession(sessionId)) router.push("/workouts");
   };
 
   const togglePaused = () => {

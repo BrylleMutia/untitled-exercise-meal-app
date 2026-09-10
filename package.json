@@ -9,7 +9,16 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test:local": "vitest run"
+    "test:local": "vitest run",
+    "supabase:start": "npx supabase@latest start",
+    "supabase:reset": "npx supabase@latest db reset --local",
+    "supabase:test": "npx supabase@latest test db --local",
+    "supabase:test:rpc": "node scripts/test-supabase-rpc-smoke.mjs",
+    "supabase:test:rpc:remote": "node scripts/test-supabase-rpc-remote.mjs",
+    "supabase:test:concurrency": "node scripts/test-supabase-concurrency.mjs",
+    "supabase:lint": "npx supabase@latest db lint --local",
+    "supabase:types": "npx supabase@latest gen types --linked --lang=typescript --schema public > src/types/database.generated.ts",
+    "supabase:push:dry": "npx supabase@latest db push --dry-run"
   },
   "dependencies": {
     "@bryllim/workout-guide": "^1.0.0",

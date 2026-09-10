@@ -147,10 +147,10 @@ export default function OnboardingPage() {
     setStep((s) => Math.min(STEPS.length - 1, s + 1));
   };
 
-  const finish = () => {
+  const finish = async () => {
     if (!app) return;
     const profile: UserProfile = {
-      id: "demo-user",
+      id: app.snapshot.userId || "authenticated-user",
       name: draft.name.trim(),
       age: Number(draft.age),
       sex: draft.sex,
@@ -166,8 +166,7 @@ export default function OnboardingPage() {
       allergies: draft.allergies.split(",").map((item) => item.trim()).filter(Boolean),
       createdAt: new Date().toISOString(),
     };
-    app.actions.completeOnboarding(profile);
-    router.push("/");
+    if (await app.actions.completeOnboarding(profile)) router.push("/");
   };
 
   const preview =
@@ -505,18 +504,6 @@ export default function OnboardingPage() {
         )}
       </div>
 
-      {app ? (
-        <button
-          type="button"
-          onClick={() => {
-            app.actions.loadDemo();
-            router.push("/");
-          }}
-          className="text-center text-xs font-bold text-muted underline underline-offset-4"
-        >
-          Skip — explore the demo instead
-        </button>
-      ) : null}
     </div>
   );
 }

@@ -18,7 +18,7 @@ export function DayStrip({ selected, onSelect }: DayStripProps) {
   });
 
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Choose a day">
+    <div className="flex min-w-0 gap-1 overflow-x-auto pb-1" role="group" aria-label="Choose a day">
       {days.map((key) => {
         const active = key === selected;
         const isToday = key === today;
@@ -28,7 +28,7 @@ export function DayStrip({ selected, onSelect }: DayStripProps) {
             type="button"
             onClick={() => onSelect(key)}
             aria-pressed={active}
-            className={`flex min-w-12 flex-1 flex-col items-center rounded-2xl px-1 py-2 text-[11px] font-extrabold transition-colors ${
+            className={`flex min-w-11 shrink-0 flex-1 flex-col items-center rounded-2xl px-1 py-2 text-[11px] font-extrabold transition-colors ${
               active ? "bg-ink text-white" : "bg-white text-muted hover:bg-lav-50"
             }`}
           >
