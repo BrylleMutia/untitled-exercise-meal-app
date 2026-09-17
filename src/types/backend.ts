@@ -19,10 +19,28 @@ export type MutationErrorCode =
   | "retryable"
   | "internal";
 
+export type ExpectedVersions = {
+  profileRevision?: number;
+  goalVersion?: number;
+  targetVersion?: number;
+  workoutPlanVersion?: number;
+  mealPlanVersion?: number;
+  groceryRevision?: number;
+  recordRevision?: number;
+};
+
+export type ConflictDetails = {
+  entity: string;
+  expected?: number;
+  actual?: number;
+  refreshedSnapshotAvailable: boolean;
+};
+
 export type RepositoryError = {
   code: MutationErrorCode;
   message: string;
   retryable: boolean;
+  details?: ConflictDetails;
 };
 
 export type MutationOutcome = {
@@ -44,9 +62,16 @@ export type IdempotentInput = {
 export type OnboardingInput = IdempotentInput & {
   profile: UserProfile;
   currentSnapshot: AppSnapshot;
+  goal?: {
+    targetWeightKg?: number;
+    desiredRateKgPerWeek?: number;
+    targetDate?: string;
+    weeklyWorkoutTarget?: number;
+    skillTargets?: Record<string, number>;
+  };
 };
 
-export type ProfileUpdateInput = OnboardingInput;
+export type ProfileUpdateInput = OnboardingInput & { expectedVersions?: ExpectedVersions };
 
 export type UpdateUnitsInput = IdempotentInput & {
   units: UnitSystem;
@@ -76,6 +101,7 @@ export type NutritionInput = IdempotentInput & {
 
 export type DeleteNutritionInput = IdempotentInput & {
   id: string;
+  expectedVersions?: ExpectedVersions;
 };
 
 export type WeightInput = IdempotentInput & {
@@ -84,9 +110,9 @@ export type WeightInput = IdempotentInput & {
 };
 
 export type GroceryMutationInput =
-  | (IdempotentInput & { type: "toggle"; itemId: string })
-  | (IdempotentInput & { type: "quantity"; itemId: string; quantity: number })
-  | (IdempotentInput & { type: "remove"; itemId: string });
+  | (IdempotentInput & { type: "toggle"; itemId: string; expectedVersions?: ExpectedVersions })
+  | (IdempotentInput & { type: "quantity"; itemId: string; quantity: number; expectedVersions?: ExpectedVersions })
+  | (IdempotentInput & { type: "remove"; itemId: string; expectedVersions?: ExpectedVersions });
 
 export type AddCustomGroceryInput = IdempotentInput & {
   name: string;
@@ -108,8 +134,36 @@ export type ResetPlanInput = IdempotentInput & {
   currentSnapshot: AppSnapshot;
 };
 
+export type SavedMealLogInput = IdempotentInput & {
+  date: string;
+  slot: NutritionLog["slot"];
+  entries: Array<Omit<NutritionLog, "id" | "createdAt">>;
+};
+
+export type WorkoutPlanOverrideInput = IdempotentInput & {
+  slotKey: string;
+  plannedExerciseId?: string;
+  replacementExerciseId?: string;
+  sets?: number;
+  reps?: number;
+  holdSeconds?: number;
+  restSeconds?: number;
+  currentSnapshot: AppSnapshot;
+};
+
 export type SaveMealInput = IdempotentInput & {
   meal: Meal;
+  expectedVersions?: ExpectedVersions;
+};
+
+export type DraftEnvelope<T> = {
+  schemaVersion: number;
+  userId: string;
+  draftType: string;
+  baseVersions: ExpectedVersions;
+  updatedAt: string;
+  expiresAt: string;
+  payload: T;
 };
 
 export type ExportInput = IdempotentInput;

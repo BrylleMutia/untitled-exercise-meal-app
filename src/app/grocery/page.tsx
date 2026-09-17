@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
 import type { GroceryCategory } from "@/types/domain";
+import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
 
 const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", "Pantry", "Other"];
 
@@ -15,8 +16,40 @@ export default function GroceryPage() {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [unit, setUnit] = useState("pcs");
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftWasRestored, setDraftWasRestored] = useState(false);
+  const suppressDraftWriteRef = useRef(false);
 
   const list = snapshot.grocery;
+  const userId = snapshot.userId;
+  const draftType = "grocery-custom";
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    void readDraft<{ name: string; quantity: string; unit: string }>(userId, draftType).then((saved) => {
+      if (!active) return;
+      if (saved) {
+        setName(saved.payload.name);
+        setQuantity(saved.payload.quantity);
+        setUnit(saved.payload.unit);
+        setDraftWasRestored(true);
+      }
+      setDraftReady(true);
+    });
+    return () => { active = false; };
+  }, [draftType, userId]);
+
+  useEffect(() => {
+    if (!draftReady || !userId || suppressDraftWriteRef.current) return;
+    void writeDraft(createDraftEnvelope({
+      userId,
+      draftType,
+      payload: { name, quantity, unit },
+      baseVersions: { groceryRevision: list?.revision },
+      ttlMs: 7 * 24 * 60 * 60 * 1000,
+    }));
+  }, [draftReady, list?.revision, name, quantity, unit, userId]);
 
   if (!list || list.items.length === 0) {
     return (
@@ -45,25 +78,54 @@ export default function GroceryPage() {
           </Button>
         </div>
 
+        {draftWasRestored ? (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
+            <span>Custom-item draft restored from this device.</span>
+            <button
+              type="button"
+              className="shrink-0 underline underline-offset-2"
+              onClick={() => {
+                if (userId) void clearDraft(userId, draftType);
+                suppressDraftWriteRef.current = true;
+                setName("");
+                setQuantity("1");
+                setUnit("pcs");
+                setDraftWasRestored(false);
+              }}
+            >
+              Discard draft
+            </button>
+          </div>
+        ) : null}
+
         {/* Add custom item */}
         <div className="mt-4 flex gap-2">
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              suppressDraftWriteRef.current = false;
+              setName(e.target.value);
+            }}
             placeholder="Custom item (e.g. dish soap)"
             className="input flex-1"
             aria-label="Custom item name"
           />
           <input
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(e) => {
+              suppressDraftWriteRef.current = false;
+              setQuantity(e.target.value);
+            }}
             className="input w-16"
             inputMode="numeric"
             aria-label="Quantity"
           />
           <select
             value={unit}
-            onChange={(e) => setUnit(e.target.value)}
+            onChange={(e) => {
+              suppressDraftWriteRef.current = false;
+              setUnit(e.target.value);
+            }}
             className="input w-20"
             aria-label="Unit"
           >
@@ -74,10 +136,18 @@ export default function GroceryPage() {
           <Button
             className="!min-h-12 !px-4"
             disabled={!name.trim()}
-            onClick={() => {
-              actions.addCustomGrocery(name.trim(), Math.max(1, Number(quantity) || 1), unit);
+            onClick={async () => {
+              const saved = await actions.addCustomGrocery(
+                name.trim(),
+                Math.max(1, Number(quantity) || 1),
+                unit,
+              );
+              if (!saved) return;
+              if (userId) void clearDraft(userId, draftType);
+              suppressDraftWriteRef.current = true;
               setName("");
               setQuantity("1");
+              setDraftWasRestored(false);
             }}
           >
             <Plus className="h-4 w-4" aria-hidden />

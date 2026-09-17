@@ -293,6 +293,31 @@ async function run() {
       throw new Error("Concurrent plan update corrupted the current plan version set");
     }
 
+    // Two different idempotency keys with the same profile revision must not
+    // silently overwrite one another. One request commits; the other reports
+    // the typed stale_version conflict after the shared preflight lock.
+    const profileRevisionResult = await userA.client
+      .from("profiles")
+      .select("revision")
+      .eq("id", userA.userId)
+      .single();
+    assertOk(profileRevisionResult.error, "profile revision read failed");
+    const expectedProfileRevision = profileRevisionResult.data.revision;
+    const staleOne = onboardingPayload(userA.userId, "concurrency-stale-one", "stale-one");
+    const staleTwo = onboardingPayload(userA.userId, "concurrency-stale-two", "stale-two");
+    staleOne.profile.name = "Concurrency stale winner";
+    staleTwo.profile.name = "Concurrency stale loser";
+    staleOne.expectedVersions = { profileRevision: expectedProfileRevision };
+    staleTwo.expectedVersions = { profileRevision: expectedProfileRevision };
+    const staleResults = await Promise.all([
+      rawRpc(userA.client, "update_profile", staleOne),
+      rawRpc(userA.client, "update_profile", staleTwo),
+    ]);
+    const staleFailures = staleResults.filter((result) => result.error);
+    if (staleFailures.length !== 1 || !staleFailures[0].error.message.includes("stale_version")) {
+      throw new Error("Concurrent profile edits did not produce exactly one typed stale_version conflict");
+    }
+
     const mismatchPayloadOne = onboardingPayload(userA.userId, "concurrency-hash-mismatch");
     const mismatchPayloadTwo = onboardingPayload(userA.userId, "concurrency-hash-mismatch", "different");
     const mismatchResults = await Promise.all([
@@ -407,7 +432,7 @@ async function run() {
     assertOk(userBItem.error, "User B cross-user isolation read failed");
     if (userBItem.data.checked !== false) throw new Error("User B grocery state changed from User A request");
 
-    console.log("Supabase local concurrency checks passed (2 users, duplicate replay, hash mismatch, workout, grocery, isolation).");
+    console.log("Supabase local concurrency checks passed (2 users, duplicate replay, hash mismatch, stale profile conflict, workout, grocery, isolation).");
   } finally {
     await Promise.all([
       deleteLocalUser(userA, "User A"),

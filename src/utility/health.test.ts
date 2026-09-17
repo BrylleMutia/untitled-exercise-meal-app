@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   activityFactorFor,
   buildDailyTarget,
+  MIN_AUTOMATED_CALORIES,
+  UnsupportedTargetError,
   calculateBmi,
   calculateBmr,
   calculateTdee,
@@ -93,5 +95,49 @@ describe("health utilities", () => {
     expect(target.formula).toBe("mifflin-st-jeor");
     expect(target.effectiveDate).toBe("2026-09-07");
     expect(target.disclaimer).toContain("not medical");
+    expect(target.calculationVersion).toBe("calicoach-health-v1");
+    expect(target.safetyOutcome).toBe("supported");
+  });
+
+  it("does not silently clamp a low calorie estimate", () => {
+    expect(calorieTargetForGoal(1000, "lose")).toBeLessThan(MIN_AUTOMATED_CALORIES);
+    expect(() => buildDailyTarget({
+      id: "u-low",
+      name: "Low",
+      age: 100,
+      sex: "female",
+      heightCm: 120,
+      weightKg: 35,
+      units: "metric",
+      experience: "beginner",
+      equipment: ["none"],
+      daysPerWeek: 1,
+      sessionMinutes: 15,
+      goal: "lose",
+      dietaryPattern: "none",
+      allergies: [],
+      createdAt: new Date(0).toISOString(),
+    }, "2026-09-07")).toThrow(UnsupportedTargetError);
+  });
+
+  it("blocks automated targets for an unsupported screening outcome", () => {
+    expect(() => buildDailyTarget({
+      id: "u-screened",
+      name: "Screened",
+      age: 29,
+      sex: "female",
+      heightCm: 178,
+      weightKg: 76,
+      units: "metric",
+      experience: "beginner",
+      equipment: ["none"],
+      daysPerWeek: 3,
+      sessionMinutes: 45,
+      goal: "maintain",
+      dietaryPattern: "none",
+      allergies: [],
+      targetEligibility: "unsupported",
+      createdAt: new Date(0).toISOString(),
+    }, "2026-09-07")).toThrow("not available");
   });
 });

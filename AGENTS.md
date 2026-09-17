@@ -196,8 +196,9 @@ straightforward refactoring, or code review without external API behavior.
 ## Commands and Next.js Policy
 
 The Next.js project scripts are defined in `package.json` and can be used for
-the current app. Supabase CLI scripts remain prospective until the backend
-and local database workflow are added.
+the current app. Supabase CLI scripts are available for the existing backend;
+the new hardening migration must still be applied and verified locally before
+any linked push.
 
 - `npm run dev` - start the Next.js development server.
 - `npm run build` - create a production Next.js build.
@@ -205,7 +206,7 @@ and local database workflow are added.
 - `npm run typecheck` - strict TypeScript verification.
 - `npm run lint` - run the configured ESLint checks.
 - `npm run test:local` - local utility, repository, and service tests.
-- `npm run supabase:start`, `supabase:reset`, `supabase:test`, `supabase:lint`, and `supabase:types` - local database workflow when the backend exists.
+- `npm run supabase:start`, `supabase:reset`, `supabase:test`, `supabase:lint`, and `supabase:types` - local database workflow for the backend.
 - `npm run supabase:push:dry` - preview linked-project changes; push only when authorized.
 
 Use an available development-server port for automated browser checks and do
@@ -307,3 +308,13 @@ A feature is complete only when all applicable conditions are met:
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) owns stable client architecture, state/data ownership, security, persistence, testing, and delivery standards.
 - [`DESIGN.md`](DESIGN.md) owns current visual/design decisions, tokens, UX patterns, responsive/navigation model, and auth-first setup.
 - Source code, tests, migrations, generated types, and deployed configuration remain the final truth for current implementation behavior.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

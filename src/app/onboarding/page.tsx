@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronLeft, TriangleAlert } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
@@ -12,6 +12,7 @@ import {
   isAggressiveRate,
   validateProfileInput,
   buildDailyTarget,
+  ELIGIBILITY_SCREENING_VERSION,
   cmToIn,
   inToCm,
   kgToLb,
@@ -25,7 +26,9 @@ import type {
   SexForBmr,
   UnitSystem,
   UserProfile,
+  TargetEligibility,
 } from "@/types/domain";
+import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
 
 const STEPS = ["You", "Training", "Goal", "Your numbers"] as const;
 
@@ -62,6 +65,7 @@ interface Draft {
   targetWeight: string;
   targetWeeks: string;
   confirmAggressive: boolean;
+  targetEligibility: TargetEligibility;
 }
 
 const initialDraft: Draft = {
@@ -81,14 +85,65 @@ const initialDraft: Draft = {
   targetWeight: "",
   targetWeeks: "",
   confirmAggressive: false,
+  targetEligibility: "not_answered",
 };
 
 export default function OnboardingPage() {
   const app = useAppOptional();
   const router = useRouter();
+  const draftUserId = app?.snapshot.userId ?? "";
+  const draftStorageKey = draftUserId ? `calicoach:onboarding-draft:${draftUserId}` : "";
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState<Draft>(() => profileToDraft(app?.snapshot.profile));
+  const [draft, setDraft] = useState<Draft>(() => {
+    const base = profileToDraft(app?.snapshot.profile, app?.snapshot.goal);
+    if (typeof window === "undefined") return base;
+    try {
+      const saved = draftStorageKey ? window.localStorage.getItem(draftStorageKey) : null;
+      return saved ? { ...base, ...(JSON.parse(saved) as Partial<Draft>) } : base;
+    } catch {
+      return base;
+    }
+  });
   const [errors, setErrors] = useState<string[]>([]);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftWasRestored, setDraftWasRestored] = useState(false);
+  const suppressDraftWriteRef = useRef(false);
+
+  useEffect(() => {
+    if (!draftUserId) return;
+    let active = true;
+    void readDraft<Draft>(draftUserId, "onboarding").then((saved) => {
+      if (!active) return;
+      if (saved) {
+        setDraft((current) => ({ ...current, ...saved.payload }));
+        setDraftWasRestored(true);
+      }
+      setDraftReady(true);
+    });
+    return () => { active = false; };
+  }, [draftUserId]);
+
+  useEffect(() => {
+    if (!draftReady || !draftUserId) return;
+    if (suppressDraftWriteRef.current) {
+      suppressDraftWriteRef.current = false;
+      return;
+    }
+    void writeDraft(createDraftEnvelope({
+      userId: draftUserId,
+      draftType: "onboarding",
+      payload: draft,
+      baseVersions: {
+        profileRevision: app?.snapshot.profile?.revision,
+        goalVersion: app?.snapshot.goal?.version,
+        targetVersion: app?.snapshot.target?.version,
+        workoutPlanVersion: app?.snapshot.plan?.version,
+        mealPlanVersion: app?.snapshot.mealPlan?.version,
+        groceryRevision: app?.snapshot.grocery?.revision,
+      },
+      ttlMs: 30 * 24 * 60 * 60 * 1000,
+    }));
+  }, [app?.snapshot, draft, draftReady, draftStorageKey, draftUserId]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -127,6 +182,16 @@ export default function OnboardingPage() {
         }),
       ];
     }
+    if (step === 2 && draft.targetWeight) {
+      const targetKg = draft.units === "metric" ? Number(draft.targetWeight) : lbToKg(Number(draft.targetWeight));
+      if (!Number.isFinite(targetKg) || targetKg <= 0) return ["Enter a valid target weight or leave it blank."];
+      if (draft.targetWeeks && (!Number.isFinite(Number(draft.targetWeeks)) || Number(draft.targetWeeks) <= 0)) {
+        return ["Enter a positive number of weeks or leave it blank."];
+      }
+    }
+    if (step === 0 && draft.targetEligibility === "not_answered") {
+      return ["Choose an option for the health screening before previewing automated targets."];
+    }
     if (step === 2 && draft.targetWeight && draft.targetWeeks) {
       const targetKg =
         draft.units === "metric" ? Number(draft.targetWeight) : lbToKg(Number(draft.targetWeight));
@@ -164,14 +229,50 @@ export default function OnboardingPage() {
       goal: draft.goal,
       dietaryPattern: draft.dietaryPattern,
       allergies: draft.allergies.split(",").map((item) => item.trim()).filter(Boolean),
+      foodPreferences: app.snapshot.profile?.foodPreferences ?? [],
+      cookingTimeMinutes: app.snapshot.profile?.cookingTimeMinutes,
+      mealBudget: app.snapshot.profile?.mealBudget,
       createdAt: new Date().toISOString(),
+      targetEligibility: draft.targetEligibility,
+      eligibilityVersion: ELIGIBILITY_SCREENING_VERSION,
     };
-    if (await app.actions.completeOnboarding(profile)) router.push("/");
+    const targetWeeks = Number(draft.targetWeeks);
+    const validTargetWeeks = Number.isFinite(targetWeeks) && targetWeeks > 0;
+    const goalTargetKg = draft.targetWeight
+      ? draft.units === "metric" ? Number(draft.targetWeight) : lbToKg(Number(draft.targetWeight))
+      : undefined;
+    const validGoalTarget = goalTargetKg !== undefined && Number.isFinite(goalTargetKg);
+    const goal = {
+      targetWeightKg: draft.targetWeight
+        ? validGoalTarget ? goalTargetKg : undefined
+        : undefined,
+      desiredRateKgPerWeek:
+        validGoalTarget && validTargetWeeks && weightKg
+          ? Math.round((Math.abs(weightKg - (goalTargetKg ?? 0)) / targetWeeks) * 100) / 100
+          : undefined,
+      targetDate:
+        validTargetWeeks
+          ? new Date(Date.now() + targetWeeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+          : undefined,
+      weeklyWorkoutTarget: draft.daysPerWeek,
+    };
+    const saved = app.snapshot.profile
+      ? await app.actions.updateProfile(profile, goal)
+      : await app.actions.completeOnboarding(profile, goal);
+    if (saved) {
+      if (draftUserId) void clearDraft(draftUserId, "onboarding");
+      if (draftStorageKey) {
+        try { window.localStorage.removeItem(draftStorageKey); } catch { /* compatibility cleanup */ }
+      }
+      router.push("/");
+    }
   };
 
-  const preview =
-    step === 3
-      ? buildDailyTarget(
+  let preview: ReturnType<typeof buildDailyTarget> | null = null;
+  let previewError = "";
+  if (step === 3) {
+    try {
+      preview = buildDailyTarget(
           {
             id: "preview",
             name: draft.name,
@@ -187,11 +288,19 @@ export default function OnboardingPage() {
             goal: draft.goal,
             dietaryPattern: draft.dietaryPattern,
             allergies: draft.allergies.split(",").map((item) => item.trim()).filter(Boolean),
-            createdAt: new Date().toISOString(),
-          },
-          todayKey(),
-        )
-      : null;
+            foodPreferences: app?.snapshot.profile?.foodPreferences ?? [],
+            cookingTimeMinutes: app?.snapshot.profile?.cookingTimeMinutes,
+            mealBudget: app?.snapshot.profile?.mealBudget,
+             createdAt: new Date().toISOString(),
+             targetEligibility: draft.targetEligibility,
+             eligibilityVersion: ELIGIBILITY_SCREENING_VERSION,
+           },
+           todayKey(),
+      );
+    } catch (error) {
+      previewError = error instanceof Error ? error.message : "Automated targets are unavailable for these inputs.";
+    }
+  }
 
   return (
     <div className="grid gap-5">
@@ -209,6 +318,60 @@ export default function OnboardingPage() {
           ))}
         </div>
       </div>
+
+      {draftWasRestored ? (
+        <div className="flex items-center justify-between gap-2 rounded-2xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
+          <span>Onboarding draft restored from this device.</span>
+          <button
+            type="button"
+            className="shrink-0 underline underline-offset-2"
+            onClick={() => {
+              suppressDraftWriteRef.current = true;
+              if (draftUserId) void clearDraft(draftUserId, "onboarding");
+              if (draftStorageKey) {
+                try { window.localStorage.removeItem(draftStorageKey); } catch { /* compatibility cleanup */ }
+              }
+              setDraft(profileToDraft(app?.snapshot.profile, app?.snapshot.goal));
+              setDraftWasRestored(false);
+              setErrors([]);
+              setStep(0);
+            }}
+          >
+            Discard draft
+          </button>
+        </div>
+      ) : null}
+
+      {app?.error?.code === "stale_version" ? (
+        <Card tone="peach" role="alert">
+          <p className="font-extrabold">Your saved data changed elsewhere.</p>
+          <p className="mt-1 text-xs font-semibold text-muted">
+            Your form is still here. Review it against the refreshed account data,
+            then explicitly reapply or discard this draft.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button className="flex-1" onClick={() => void finish()}>
+              Reapply draft
+            </Button>
+            <Button
+              variant="soft"
+              onClick={() => {
+                suppressDraftWriteRef.current = true;
+                if (draftUserId) void clearDraft(draftUserId, "onboarding");
+                if (draftStorageKey) {
+                  try { window.localStorage.removeItem(draftStorageKey); } catch { /* compatibility cleanup */ }
+                }
+                setDraft(profileToDraft(app.snapshot.profile, app.snapshot.goal));
+                setDraftWasRestored(false);
+                setErrors([]);
+                app.actions.clearError();
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {errors.length > 0 ? (
         <div role="alert" className="rounded-3xl bg-coral-100 p-4">
@@ -254,6 +417,27 @@ export default function OnboardingPage() {
               </select>
             </Field>
           </div>
+          <Field label="Health screening for automated targets">
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => set("targetEligibility", "eligible")}
+                aria-pressed={draft.targetEligibility === "eligible"}
+                className={`min-h-12 rounded-2xl px-4 text-left text-sm font-bold ${draft.targetEligibility === "eligible" ? "bg-ink text-white" : "bg-lav-50 text-ink"}`}
+              >
+                None of the situations below apply to me
+              </button>
+              <button
+                type="button"
+                onClick={() => set("targetEligibility", "unsupported")}
+                aria-pressed={draft.targetEligibility === "unsupported"}
+                className={`min-h-12 rounded-2xl px-4 text-left text-sm font-bold ${draft.targetEligibility === "unsupported" ? "bg-ink text-white" : "bg-lav-50 text-ink"}`}
+              >
+                I am pregnant/postpartum, under 18, recovering from an eating disorder, managing a condition needing individualized care, or unsure
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-muted">We store only the outcome and screening version, not a reason or diagnosis.</p>
+          </Field>
           <Field label="Units">
             <div className="grid grid-cols-2 gap-2">
               {(["metric", "imperial"] as const).map((u) => (
@@ -486,6 +670,13 @@ export default function OnboardingPage() {
           </Card>
         </div>
       ) : null}
+      {step === 3 && !preview && previewError ? (
+        <Card tone="peach" role="alert">
+          <p className="font-extrabold">Automated target preview unavailable</p>
+          <p className="mt-1 text-sm font-semibold text-muted">{previewError}</p>
+          <p className="mt-2 text-xs font-semibold text-muted">You can still use manual workout and nutrition logging. Update the screening answer or inputs to continue.</p>
+        </Card>
+      ) : null}
 
       <div className="flex gap-3">
         {step > 0 ? (
@@ -498,8 +689,13 @@ export default function OnboardingPage() {
             Continue <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
         ) : (
-          <Button className="flex-1" onClick={finish}>
-            Create my plan <ArrowRight className="h-4 w-4" aria-hidden />
+          <Button
+            className="flex-1"
+            onClick={finish}
+            disabled={!preview && draft.targetEligibility !== "unsupported"}
+          >
+            {draft.targetEligibility === "unsupported" ? "Continue without automated targets" : "Create my plan"}
+            <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
         )}
       </div>
@@ -517,10 +713,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function profileToDraft(profile: UserProfile | null | undefined): Draft {
+function profileToDraft(profile: UserProfile | null | undefined, goal?: { targetWeightKg?: number; targetDate?: string } | null): Draft {
   if (!profile) return initialDraft;
   const displayHeight = profile.units === "metric" ? profile.heightCm : cmToDisplayIn(profile.heightCm);
   const displayWeight = profile.units === "metric" ? profile.weightKg : kgToDisplayLb(profile.weightKg);
+  const goalWeightKg = goal?.targetWeightKg;
   return {
     name: profile.name,
     age: String(profile.age),
@@ -535,9 +732,14 @@ function profileToDraft(profile: UserProfile | null | undefined): Draft {
     dietaryPattern: profile.dietaryPattern,
     allergies: profile.allergies.join(", "),
     goal: profile.goal,
-    targetWeight: "",
-    targetWeeks: "",
+    targetWeight: goalWeightKg === undefined
+      ? ""
+      : String(Math.round((profile.units === "metric" ? goalWeightKg : kgToDisplayLb(goalWeightKg)) * 10) / 10),
+    targetWeeks: goal?.targetDate
+      ? String(Math.max(1, Math.round((new Date(goal.targetDate).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000))))
+      : "",
     confirmAggressive: false,
+    targetEligibility: profile.targetEligibility ?? "not_answered",
   };
 }
 

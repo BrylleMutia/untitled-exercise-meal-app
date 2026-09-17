@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Download,
   Info,
@@ -17,7 +18,10 @@ import { signOutAction } from "@/app/auth/actions";
 
 export default function SettingsPage() {
   const { snapshot, actions } = useApp();
+  const router = useRouter();
   const [weight, setWeight] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const profile = snapshot.profile;
   const target = snapshot.target;
 
@@ -26,8 +30,12 @@ export default function SettingsPage() {
       ? kgToLb(profile.weightKg)
       : profile?.weightKg ?? 0;
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+  const exportData = async () => {
+    setExporting(true);
+    const data = await actions.exportData();
+    setExporting(false);
+    if (!data) return;
+    const blob = new Blob([JSON.stringify(data ?? null, null, 2) ?? "{}"], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -37,6 +45,21 @@ export default function SettingsPage() {
     anchor.click();
     URL.revokeObjectURL(url);
     actions.notify("Export downloaded.");
+  };
+
+  const deleteAccount = async () => {
+    if (!window.confirm("Delete your account and all saved data? This cannot be undone.")) return;
+    setDeleting(true);
+    const deleted = await actions.deleteAccount();
+    setDeleting(false);
+    if (deleted) {
+      try {
+        for (const key of Object.keys(window.localStorage)) {
+          if (key.startsWith("calicoach:onboarding-draft:") || key.startsWith("calicoach:session:")) window.localStorage.removeItem(key);
+        }
+      } catch { /* best-effort cleanup */ }
+      router.push("/auth/sign-in");
+    }
   };
 
   return (
@@ -135,18 +158,27 @@ export default function SettingsPage() {
       <Card>
         <h2 className="font-extrabold">Data controls</h2>
         <div className="mt-3 grid gap-2">
-          <Button variant="soft" onClick={exportData}>
+          <Button variant="soft" onClick={() => void exportData()} disabled={exporting}>
             <Download className="h-4 w-4" aria-hidden /> Export JSON
           </Button>
           <Button variant="soft" onClick={actions.resetPlan}>
             <RefreshCw className="h-4 w-4" aria-hidden />
             Regenerate plan from current profile
           </Button>
-          <form action={signOutAction}>
+          <form action={signOutAction} onSubmit={() => {
+            try {
+              for (const key of Object.keys(window.localStorage)) {
+                if (key.startsWith("calicoach:onboarding-draft:") || key.startsWith("calicoach:session:")) window.localStorage.removeItem(key);
+              }
+            } catch { /* best-effort cleanup */ }
+          }}>
             <Button type="submit" variant="danger" className="w-full">
               <LogOut className="h-4 w-4" aria-hidden /> Sign out
             </Button>
           </form>
+          <Button variant="danger" onClick={() => void deleteAccount()} disabled={deleting}>
+            Permanently delete account
+          </Button>
         </div>
       </Card>
 
@@ -169,8 +201,8 @@ export default function SettingsPage() {
           </li>
           <li className="flex gap-2">
             <Info className="h-4 w-4 shrink-0" aria-hidden />
-            Account deletion and export must use authorized server workflows
-            before production release.
+            Export and deletion use authorized server workflows; deletion is
+            permanent and removes your saved history.
           </li>
         </ul>
       </Card>

@@ -81,10 +81,15 @@ select ok((
 
 select ok((
   select count(*) = 16
-  from pg_constraint
-  where connamespace = 'public'::regnamespace
-    and contype = 'c'
-    and conname like '%app_id%'
+  from pg_constraint c
+  join pg_class t on t.oid = c.conrelid
+  join pg_namespace n on n.oid = t.relnamespace
+  join unnest(c.conkey) as key(attnum) on true
+  join pg_attribute a on a.attrelid = t.oid and a.attnum = key.attnum
+  where n.nspname = 'public'
+    and c.contype = 'c'
+    and c.conname like '%app_id%'
+    and a.attname = 'app_id'
 ), 'non-blank app_id constraints cover every application ID column');
 
 select ok((

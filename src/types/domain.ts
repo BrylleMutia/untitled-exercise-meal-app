@@ -7,6 +7,7 @@ export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 export type Confidence = "high" | "medium" | "low";
 export type MovementCategory = "push" | "pull" | "squat" | "hinge" | "core" | "mobility";
 export type GroceryCategory = "Produce" | "Protein" | "Dairy" | "Grains" | "Pantry" | "Other";
+export type TargetEligibility = "eligible" | "unsupported" | "not_answered";
 
 export interface UserProfile {
   id: string;
@@ -23,7 +24,28 @@ export interface UserProfile {
   goal: PrimaryGoal;
   dietaryPattern: string;
   allergies: string[];
+  foodPreferences?: string[];
+  cookingTimeMinutes?: number;
+  mealBudget?: number;
+  /** Optimistic concurrency revision supplied by the authoritative profile row. */
+  revision?: number;
+  /** Stored screening outcome; no sensitive screening explanation is retained. */
+  targetEligibility?: TargetEligibility;
+  eligibilityVersion?: string;
   createdAt: string;
+}
+
+export interface Goal {
+  id: string;
+  type: PrimaryGoal;
+  targetWeightKg?: number;
+  desiredRateKgPerWeek?: number;
+  targetDate?: string;
+  weeklyWorkoutTarget?: number;
+  skillTargets?: Record<string, number>;
+  effectiveDate: string;
+  version: number;
+  status: "active" | "archived" | "completed";
 }
 
 export interface DailyTarget {
@@ -40,6 +62,12 @@ export interface DailyTarget {
   formula: string;
   activityFactor: number;
   disclaimer: string;
+  calculationAssumptions?: string;
+  calculationVersion?: string;
+  rawCalories?: number;
+  goalAdjustment?: number;
+  safetyOutcome?: "supported" | "below_floor" | "unsupported_population";
+  goalId?: string;
 }
 
 export interface Exercise {
@@ -65,6 +93,8 @@ export interface PlannedExercise {
   reps?: number;
   holdSeconds?: number;
   restSeconds: number;
+  sortOrder?: number;
+  slotKey?: string;
 }
 
 export interface PlannedWorkout {
@@ -83,11 +113,28 @@ export interface WorkoutPlan {
   version: number;
   createdAt: string;
   targetId: string;
+  effectiveDate?: string;
   workouts: PlannedWorkout[];
+}
+
+export interface WorkoutPlanOverride {
+  id: string;
+  slotKey: string;
+  plannedExerciseId?: string;
+  replacementExerciseId?: string;
+  measure?: "reps" | "hold";
+  sets?: number;
+  reps?: number;
+  holdSeconds?: number;
+  restSeconds?: number;
+  active: boolean;
+  effectiveAt: string;
+  endedAt?: string;
 }
 
 export interface ExerciseLog {
   exerciseId: string;
+  plannedExerciseId?: string;
   planned: { sets: number; reps?: number; holdSeconds?: number };
   actual: { sets: number; reps?: number; holdSeconds?: number };
   status: "completed" | "skipped" | "modified";
@@ -140,7 +187,11 @@ export interface NutritionLog {
   estimated: boolean;
   confidence: Confidence;
   source: string;
+  sourceVersion?: string;
+  preparationBasis?: string;
+  fiberG?: number;
   assumptions?: string;
+  revision?: number;
   createdAt: string;
 }
 
@@ -155,6 +206,8 @@ export interface Meal {
   servings: number;
   notes?: string;
   ingredients: RecipeIngredient[];
+  revision?: number;
+  archivedAt?: string;
 }
 
 export interface PlannedMeal {
@@ -166,6 +219,16 @@ export interface PlannedMeal {
   label: string;
   servings: number;
   skipped?: boolean;
+  expectedCalories?: number;
+  expectedProteinG?: number;
+  expectedCarbsG?: number;
+  expectedFatG?: number;
+  expectedFiberG?: number;
+  source?: string;
+  sourceVersion?: string;
+  assumptions?: string;
+  confidence?: Confidence;
+  preparationBasis?: string;
 }
 
 export interface MealPlan {
@@ -198,6 +261,7 @@ export interface GroceryList {
   id: string;
   weekOf: string;
   items: GroceryItem[];
+  revision?: number;
 }
 
 export interface AppSnapshot {
@@ -205,8 +269,10 @@ export interface AppSnapshot {
   userId: string;
   onboarded: boolean;
   profile: UserProfile | null;
+  goal: Goal | null;
   target: DailyTarget | null;
   plan: WorkoutPlan | null;
+  workoutOverrides: WorkoutPlanOverride[];
   mealPlan: MealPlan | null;
   sessions: WorkoutSession[];
   nutritionLogs: NutritionLog[];
@@ -217,11 +283,14 @@ export interface AppSnapshot {
 
 export type SemanticEvent =
   | { type: "profile-updated" }
+  | { type: "goal-updated"; goalId: string }
   | { type: "target-updated"; targetId: string }
   | { type: "plan-generated"; planId: string }
+  | { type: "plan-edited"; planId: string }
   | { type: "workout-completed"; sessionId: string }
   | { type: "workout-partially-logged"; sessionId: string }
   | { type: "nutrition-entry-saved"; entryId: string }
+  | { type: "meal-logged"; entryIds: string[] }
   | { type: "weight-entry-added"; entryId: string }
   | { type: "grocery-list-updated"; listId: string }
   | { type: "data-exported" }

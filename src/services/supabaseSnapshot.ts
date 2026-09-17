@@ -17,6 +17,8 @@ import type {
   UserProfile,
   WorkoutPlan,
   WorkoutSession,
+  Goal,
+  WorkoutPlanOverride,
 } from "@/types/domain";
 
 type AppSupabaseClient = SupabaseClient<Database>;
@@ -37,6 +39,8 @@ type NutritionRow = Tables<"nutrition_logs">;
 type WeightRow = Tables<"weight_entries">;
 type GroceryListRow = Tables<"grocery_lists">;
 type GroceryItemRow = Tables<"grocery_items">;
+type GoalRow = Tables<"goals">;
+type OverrideRow = Tables<"workout_plan_overrides">;
 
 const isEquipment = (value: string): value is EquipmentId =>
   ["none", "pullup_bar", "bands", "dumbbells", "bench"].includes(value);
@@ -57,7 +61,28 @@ function mapProfile(row: ProfileRow): UserProfile {
     goal: row.goal as UserProfile["goal"],
     dietaryPattern: row.dietary_pattern,
     allergies: row.allergies,
+    ...(row.food_preferences ? { foodPreferences: row.food_preferences } : {}),
+    ...(row.cooking_time_minutes === null ? {} : { cookingTimeMinutes: row.cooking_time_minutes }),
+    ...(row.meal_budget === null ? {} : { mealBudget: Number(row.meal_budget) }),
+    revision: row.revision,
+    targetEligibility: row.eligibility_status as UserProfile["targetEligibility"],
+    eligibilityVersion: row.eligibility_version,
     createdAt: row.created_at,
+  };
+}
+
+function mapGoal(row: GoalRow): Goal {
+  return {
+    id: row.app_id,
+    type: row.goal_type as Goal["type"],
+    ...(row.target_weight_kg === null ? {} : { targetWeightKg: Number(row.target_weight_kg) }),
+    ...(row.desired_rate_kg_per_week === null ? {} : { desiredRateKgPerWeek: Number(row.desired_rate_kg_per_week) }),
+    ...(row.target_date === null ? {} : { targetDate: row.target_date }),
+    ...(row.weekly_workout_target === null ? {} : { weeklyWorkoutTarget: row.weekly_workout_target }),
+    ...(row.skill_targets === null ? {} : { skillTargets: row.skill_targets as unknown as Record<string, number> }),
+    effectiveDate: row.effective_date,
+    version: row.version,
+    status: row.status === "active" ? "active" : row.status === "completed" ? "completed" : "archived",
   };
 }
 
@@ -76,6 +101,11 @@ function mapTarget(row: TargetRow): DailyTarget {
     formula: row.formula,
     activityFactor: Number(row.activity_factor),
     disclaimer: row.disclaimer,
+    ...(row.calculation_assumptions ? { calculationAssumptions: row.calculation_assumptions } : {}),
+    calculationVersion: row.calculation_version,
+    rawCalories: Number(row.raw_calories),
+    goalAdjustment: Number(row.goal_adjustment),
+    safetyOutcome: row.safety_outcome as DailyTarget["safetyOutcome"],
   };
 }
 
@@ -123,6 +153,7 @@ function mapWorkoutPlan(
   workouts: PlannedWorkoutRow[],
   exercises: PlannedExerciseRow[],
   exercisesByRow: Map<number, ExerciseRow>,
+  overrides: OverrideRow[] = [],
 ): WorkoutPlan {
   const target = targetsByRow.get(row.target_row_id);
   const exercisesByWorkout = new Map<number, PlannedExerciseRow[]>();
@@ -145,14 +176,23 @@ function mapWorkoutPlan(
       estimatedMinutes: workout.estimated_minutes,
       exercises: (exercisesByWorkout.get(workout.row_id) ?? [])
         .sort((a, b) => a.sort_order - b.sort_order)
-        .map((exercise): PlannedExercise => ({
-          id: exercise.app_id,
-          exerciseId: exercisesByRow.get(exercise.exercise_row_id)?.app_id ?? "",
-          sets: exercise.sets,
-          ...(exercise.reps === null ? {} : { reps: exercise.reps }),
-          ...(exercise.hold_seconds === null ? {} : { holdSeconds: exercise.hold_seconds }),
-          restSeconds: exercise.rest_seconds,
-        })),
+        .map((exercise, exerciseIndex): PlannedExercise => {
+          const override = overrides.find((candidate) => candidate.planned_exercise_row_id === exercise.row_id && candidate.active);
+          const measure = override?.measure_override ?? exercise.measure_snapshot;
+          return {
+            id: exercise.app_id,
+            exerciseId: override?.replacement_exercise_row_id
+              ? exercisesByRow.get(override.replacement_exercise_row_id)?.app_id ?? exercisesByRow.get(exercise.exercise_row_id)?.app_id ?? ""
+              : exercisesByRow.get(exercise.exercise_row_id)?.app_id ?? "",
+            sets: override?.sets_override ?? exercise.sets,
+            ...(measure === "hold"
+              ? { holdSeconds: override?.hold_seconds_override ?? exercise.hold_seconds ?? 1 }
+              : { reps: override?.reps_override ?? exercise.reps ?? 1 }),
+            restSeconds: override?.rest_seconds_override ?? exercise.rest_seconds,
+            sortOrder: exercise.sort_order,
+            slotKey: `day:${workout.day_of_week}:exercise:${exerciseIndex + 1}`,
+          };
+        }),
     }));
 
   return {
@@ -192,6 +232,16 @@ function mapMealPlan(
           label: meal.label,
           servings: Number(meal.servings),
           ...(meal.skipped ? { skipped: true } : {}),
+          ...(meal.expected_calories === null ? {} : { expectedCalories: Number(meal.expected_calories) }),
+          ...(meal.expected_protein_g === null ? {} : { expectedProteinG: Number(meal.expected_protein_g) }),
+          ...(meal.expected_carbs_g === null ? {} : { expectedCarbsG: Number(meal.expected_carbs_g) }),
+          ...(meal.expected_fat_g === null ? {} : { expectedFatG: Number(meal.expected_fat_g) }),
+          ...(meal.expected_fiber_g === null ? {} : { expectedFiberG: Number(meal.expected_fiber_g) }),
+          ...(meal.source ? { source: meal.source } : {}),
+          ...(meal.source_version ? { sourceVersion: meal.source_version } : {}),
+          ...(meal.assumptions ? { assumptions: meal.assumptions } : {}),
+          ...(meal.confidence ? { confidence: meal.confidence as PlannedMeal["confidence"] } : {}),
+          ...(meal.preparation_basis ? { preparationBasis: meal.preparation_basis } : {}),
         };
       }),
   };
@@ -214,6 +264,7 @@ function mapSession(
     status: row.status as WorkoutSession["status"],
     logs: (logsBySession.get(row.row_id) ?? []).map((log): ExerciseLog => ({
       exerciseId: exercisesByRow.get(log.actual_exercise_row_id)?.app_id ?? "",
+      plannedExerciseId: log.planned_exercise_app_id,
       planned: {
         sets: log.planned_sets,
         ...(log.planned_reps === null ? {} : { reps: log.planned_reps }),
@@ -249,7 +300,11 @@ function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>): Nutr
     estimated: row.estimated,
     confidence: row.confidence as NutritionLog["confidence"],
     source: row.source,
+    ...(row.source_version ? { sourceVersion: row.source_version } : {}),
+    ...(row.preparation_basis ? { preparationBasis: row.preparation_basis } : {}),
+    ...(row.fiber_g === null ? {} : { fiberG: Number(row.fiber_g) }),
     ...(row.assumptions ? { assumptions: row.assumptions } : {}),
+    revision: row.revision,
     createdAt: row.created_at,
   };
 }
@@ -258,6 +313,7 @@ function mapGrocery(row: GroceryListRow, items: GroceryItemRow[]): AppSnapshot["
   return {
     id: row.app_id,
     weekOf: row.week_of,
+    revision: row.revision,
     items: items
       .filter((item) => item.grocery_list_row_id === row.row_id)
       .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
@@ -287,6 +343,8 @@ function mapMeal(
     name: row.name,
     servings: Number(row.servings),
     ...(row.notes ? { notes: row.notes } : {}),
+    revision: row.revision,
+    ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
     ingredients: (ingredientsByMeal.get(row.row_id) ?? [])
       .sort((a, b) => a.ingredient_order - b.ingredient_order)
       .flatMap((ingredient) => {
@@ -302,8 +360,10 @@ function emptySnapshot(userId: string): AppSnapshot {
     userId,
     onboarded: false,
     profile: null,
+    goal: null,
     target: null,
     plan: null,
+    workoutOverrides: [],
     mealPlan: null,
     sessions: [],
     nutritionLogs: [],
@@ -335,7 +395,7 @@ export async function loadAppSnapshot(
   const targetsByRow = new Map(targetRows.map((row) => [row.row_id, row]));
   const currentTarget = targetRows[0] ? mapTarget(targetRows[0]) : null;
 
-  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems] =
+  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides] =
     await Promise.all([
       required(client.from("exercises").select("*")),
       required(client.from("foods").select("*")),
@@ -348,6 +408,8 @@ export async function loadAppSnapshot(
       required(client.from("weight_entries").select("*").eq("user_id", userId).order("entry_date", { ascending: false })),
       required(client.from("grocery_lists").select("*").eq("user_id", userId).order("week_of", { ascending: false })),
       required(client.from("grocery_items").select("*").eq("user_id", userId)),
+      required(client.from("goals").select("*").eq("user_id", userId).order("version", { ascending: false })),
+      required(client.from("workout_plan_overrides").select("*").eq("user_id", userId).eq("active", true)),
     ]);
 
   const exerciseRows = exercises as ExerciseRow[];
@@ -361,17 +423,18 @@ export async function loadAppSnapshot(
   const weightRows = weights as WeightRow[];
   const groceryListRows = groceryLists as GroceryListRow[];
   const groceryItemRows = groceryItems as GroceryItemRow[];
+  const goalRows = goals as GoalRow[];
+  const overrideRows = overrides as OverrideRow[];
   const mealsByRow = new Map(mealRows.map((row) => [row.row_id, row]));
   const exercisesByRow = new Map(exerciseRows.map((row) => [row.row_id, row]));
   const foodsByRow = new Map(foodRows.map((row) => [row.row_id, row]));
-
   const currentPlan = planRows[0];
   const currentMealPlan = mealPlanRows[0];
-  const plannedWorkouts = currentPlan
-    ? await required(client.from("planned_workouts").select("*").eq("plan_row_id", currentPlan.row_id))
+  const plannedWorkouts = planRows.length
+    ? await required(client.from("planned_workouts").select("*").eq("user_id", userId))
     : [];
   const plannedWorkoutRows = plannedWorkouts as PlannedWorkoutRow[];
-  const plannedExercises = currentPlan && plannedWorkoutRows.length
+  const plannedExercises = plannedWorkoutRows.length
     ? await required(
         client
           .from("planned_exercises")
@@ -380,6 +443,7 @@ export async function loadAppSnapshot(
           .in("planned_workout_row_id", plannedWorkoutRows.map((row) => row.row_id)),
       )
     : [];
+  const plannedExercisesByRow = new Map((plannedExercises as PlannedExerciseRow[]).map((row) => [row.row_id, row]));
   const sessionLogs = sessionRows.length
     ? await required(
         client
@@ -407,7 +471,10 @@ export async function loadAppSnapshot(
   const snapshot = emptySnapshot(userId);
   snapshot.profile = profile ? mapProfile(profile as ProfileRow) : null;
   snapshot.onboarded = Boolean(snapshot.profile);
-  snapshot.target = currentTarget;
+  snapshot.goal = goalRows[0] ? mapGoal(goalRows[0]) : null;
+  // Unsupported screening outcomes may retain historical target rows for
+  // audit/export, but they are not surfaced as an active automated target.
+  snapshot.target = snapshot.profile?.targetEligibility === "unsupported" ? null : currentTarget;
   snapshot.plan = currentPlan
     ? mapWorkoutPlan(
         currentPlan,
@@ -415,6 +482,7 @@ export async function loadAppSnapshot(
         plannedWorkoutRows,
         plannedExercises as PlannedExerciseRow[],
         exercisesByRow,
+        overrideRows,
       )
     : null;
   snapshot.mealPlan = currentMealPlan
@@ -431,6 +499,20 @@ export async function loadAppSnapshot(
   snapshot.sessions = sessionRows.map((row) =>
     mapSession(row, workoutsByRow, logsBySession, exercisesByRow),
   );
+  snapshot.workoutOverrides = overrideRows.map((row): WorkoutPlanOverride => ({
+    id: row.app_id,
+    slotKey: `exercise:${row.planned_exercise_row_id}`,
+    plannedExerciseId: plannedExercisesByRow.get(row.planned_exercise_row_id)?.app_id,
+    ...(row.replacement_exercise_row_id ? { replacementExerciseId: exercisesByRow.get(row.replacement_exercise_row_id)?.app_id } : {}),
+    ...(row.measure_override ? { measure: row.measure_override as WorkoutPlanOverride["measure"] } : {}),
+    ...(row.sets_override === null ? {} : { sets: row.sets_override }),
+    ...(row.reps_override === null ? {} : { reps: row.reps_override }),
+    ...(row.hold_seconds_override === null ? {} : { holdSeconds: row.hold_seconds_override }),
+    ...(row.rest_seconds_override === null ? {} : { restSeconds: row.rest_seconds_override }),
+    active: row.active,
+    effectiveAt: row.effective_at,
+    ...(row.ended_at ? { endedAt: row.ended_at } : {}),
+  }));
   snapshot.nutritionLogs = nutritionRows.map((row) => mapNutrition(row, foodsByRow));
   snapshot.weights = weightRows.map((row) => ({
     id: row.app_id,

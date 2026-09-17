@@ -54,28 +54,27 @@ for current implementation behavior.
 
 ## Product Snapshot and Current Status
 
-The current scaffold is a **responsive Next.js auth-first application** with a
+The current release is a **responsive Next.js auth-first application** with a
 pastel, mobile-first interface. Authenticated users can set a profile and goal,
 receive an editable weekly workout and meal plan, complete a workout and log
-food, review progress, and adjust the next plan. Product persistence is waiting
-for the Supabase schema and authenticated repository; the app does not seed or
-fall back to dummy product data.
+food, review progress, and adjust the next plan. Supabase is authoritative for
+durable data; only recoverable browser drafts are local.
 
 - **Visual reference:** pastel palette and stat-focused, card-based mobile
   screens inspired by [`assets/ui_reference_01.jpg`](./assets/ui_reference_01.jpg).
-- **Repository boundary:** the current Context holds an empty, in-memory
-  snapshot until the authenticated Supabase repository is implemented. See
-  [Domain, State, and Setup Architecture](#domain-state-and-setup-architecture).
+- **Repository boundary:** Context actions call the authenticated Supabase
+  repository and expose pending/error states. See [Domain, State, and Setup
+  Architecture](#domain-state-and-setup-architecture).
 - **Supabase SSR boundary:** browser/server clients, session-refresh Proxy, PKCE
-  callback, auth pages, and auth actions are implemented. The durable MVP
-  schema, authenticated mutations, RLS/RPCs, migrations, and profile/plan/log
-  repository remain pending per [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md). See
-  [Implemented vs. Planned](#implemented-vs-planned).
+  callback, auth pages, auth actions, durable schema, authenticated mutations,
+  RLS/RPCs, migrations, and profile/plan/log repository are implemented. See
+  [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) for verification and release
+  dependencies.
 
 > **Boundary label:** Product routes require an authenticated Supabase session.
 > Without Supabase configuration, the app routes to the auth setup page instead
 > of showing dummy data. The footer keeps the health/nutrition estimate
-> disclaimer without claiming server persistence before the repository exists.
+> disclaimer and distinguishes estimates from user-provided values.
 
 ## Visual Direction and Reference
 

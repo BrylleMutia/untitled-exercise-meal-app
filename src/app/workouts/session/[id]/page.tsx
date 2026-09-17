@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { exerciseById } from "@/constants/exercises";
 import { secondsToClock } from "@/utility/dates";
 import type { ExerciseLog, WorkoutSession } from "@/types/domain";
+import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
 
 const RPE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -40,19 +41,48 @@ export default function SessionPage() {
   const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [pausedMilliseconds, setPausedMilliseconds] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [recoveredDraft, setRecoveredDraft] = useState<WorkoutSession | null>(null);
+  const [draftWasRecovered, setDraftWasRecovered] = useState(false);
+  const draftSessionRef = useRef<WorkoutSession | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Create the in-progress session once (StrictMode safe via ref).
   useEffect(() => {
     if (!workout || createdRef.current || creatingRef.current) return;
+    const existing = snapshot.sessions.find(
+      (candidate) => candidate.status === "in_progress" && candidate.plannedWorkoutId === workout.id,
+    );
+    if (existing) {
+      createdRef.current = existing.id;
+      void Promise.resolve().then(() => setSessionId(existing.id));
+      return;
+    }
     creatingRef.current = true;
     void actions.startSession(workout.id).then((id) => {
       if (!id) return;
       createdRef.current = id;
       setSessionId(id);
     });
-  }, [workout, actions]);
+  }, [workout, actions, snapshot.sessions]);
 
-  const session = snapshot.sessions.find((s) => s.id === sessionId);
+  const serverSession = snapshot.sessions.find((s) => s.id === sessionId);
+  const session = recoveredDraft ?? serverSession;
+
+  useEffect(() => {
+    if (!sessionId || !snapshot.userId) return;
+    let active = true;
+    void readDraft<WorkoutSession>(snapshot.userId, `workout-session:${sessionId}`).then((saved) => {
+      if (!active || !saved || saved.payload.status !== "in_progress") return;
+      setRecoveredDraft(saved.payload);
+      setDraftWasRecovered(true);
+      draftSessionRef.current = saved.payload;
+    });
+    return () => { active = false; };
+  }, [sessionId, snapshot.userId]);
+
+  useEffect(() => {
+    if (session) draftSessionRef.current = session;
+  }, [session]);
 
   useEffect(() => {
     if (!session || finished || paused) return;
@@ -90,11 +120,25 @@ export default function SessionPage() {
 
   const save = useCallback(
     (updater: (current: WorkoutSession) => WorkoutSession) => {
-      const current = snapshot.sessions.find((s) => s.id === sessionId);
+      const current = draftSessionRef.current ?? snapshot.sessions.find((s) => s.id === sessionId);
       if (!current) return;
-      void actions.saveSession(updater(current));
+      const next = updater(current);
+      draftSessionRef.current = next;
+      setRecoveredDraft(next);
+      if (sessionId && snapshot.userId) {
+        void writeDraft(createDraftEnvelope({
+          userId: snapshot.userId,
+          draftType: `workout-session:${sessionId}`,
+          payload: next,
+          baseVersions: { workoutPlanVersion: snapshot.plan?.version },
+          ttlMs: 30 * 24 * 60 * 60 * 1000,
+        }));
+      }
+      saveQueueRef.current = saveQueueRef.current
+        .catch(() => undefined)
+        .then(() => actions.saveSession(next));
     },
-    [snapshot.sessions, sessionId, actions],
+    [snapshot.sessions, snapshot.plan?.version, snapshot.userId, sessionId, actions],
   );
 
   const updateLog = useCallback(
@@ -137,13 +181,19 @@ export default function SessionPage() {
     if (!sessionId) return;
     if (await actions.finishSession(sessionId)) {
       setFinished(true);
+      if (snapshot.userId) void clearDraft(snapshot.userId, `workout-session:${sessionId}`);
+      try { window.localStorage.removeItem(`calicoach:session:${sessionId}`); } catch { /* compatibility cleanup */ }
       router.push("/workouts");
     }
   };
 
   const discard = async () => {
     if (!sessionId) return;
-    if (await actions.abandonSession(sessionId)) router.push("/workouts");
+    if (await actions.abandonSession(sessionId)) {
+      if (snapshot.userId) void clearDraft(snapshot.userId, `workout-session:${sessionId}`);
+      try { window.localStorage.removeItem(`calicoach:session:${sessionId}`); } catch { /* compatibility cleanup */ }
+      router.push("/workouts");
+    }
   };
 
   const togglePaused = () => {
@@ -185,6 +235,24 @@ export default function SessionPage() {
           {paused ? <Play className="h-4 w-4" aria-hidden /> : <Pause className="h-4 w-4" aria-hidden />}
         </Button>
       </div>
+
+      {draftWasRecovered ? (
+        <div className="flex items-center justify-between gap-2 rounded-2xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
+          <span>Unsaved session progress restored from this device.</span>
+          <button
+            type="button"
+            className="shrink-0 underline underline-offset-2"
+            onClick={() => {
+              if (snapshot.userId && sessionId) void clearDraft(snapshot.userId, `workout-session:${sessionId}`);
+              setRecoveredDraft(null);
+              draftSessionRef.current = serverSession ?? null;
+              setDraftWasRecovered(false);
+            }}
+          >
+            Discard draft
+          </button>
+        </div>
+      ) : null}
 
       <ol className="flex justify-center gap-1.5" aria-label="Exercise progress">
         {workout.exercises.map((pe, i) => (

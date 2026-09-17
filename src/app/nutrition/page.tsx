@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
@@ -12,6 +12,7 @@ import { parseMealText, type ParsedCandidate } from "@/utility/textMeal";
 import { dayStatus, entriesForDate, totalsForDate, foodMacros } from "@/utility/nutrition";
 import { todayKey } from "@/utility/dates";
 import type { Confidence, Food, MealSlot } from "@/types/domain";
+import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
 
 const SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
 const slotLabels: Record<MealSlot, string> = {
@@ -199,7 +200,7 @@ export default function NutritionPage() {
                 variant="soft"
                 className="!min-h-11 !px-3 text-xs"
                 onClick={() =>
-                  logMeal(actions, meal.ingredients, selected, "snack", meal.name)
+                  void logMeal(actions, meal.ingredients, selected, "snack", meal.name)
                 }
               >
                 Log it
@@ -287,9 +288,8 @@ export default function NutritionPage() {
             <li key={food.id}>
               <button
                 type="button"
-                onClick={() => {
-                  addFood(actions, slot, selected, food, 1);
-                  onDone();
+                onClick={async () => {
+                  if (await addFood(actions, slot, selected, food, 1)) onDone();
                 }}
                 className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold"
               >
@@ -321,6 +321,39 @@ export default function NutritionPage() {
     const [carbs, setCarbs] = useState("");
     const [fat, setFat] = useState("");
     const [assumption, setAssumption] = useState("");
+    const [restored, setRestored] = useState(false);
+    const [draftWasRestored, setDraftWasRestored] = useState(false);
+    const draftType = `nutrition-custom:${selected}:${slot}`;
+    const userId = snapshot.userId;
+    const profileRevision = snapshot.profile?.revision;
+    useEffect(() => {
+      if (!userId) return;
+      let active = true;
+      void readDraft<{ name: string; calories: string; protein: string; carbs: string; fat: string; assumption: string }>(userId, draftType).then((saved) => {
+        if (!active) return;
+        if (saved) {
+          setName(saved.payload.name);
+          setCalories(saved.payload.calories);
+          setProtein(saved.payload.protein);
+          setCarbs(saved.payload.carbs);
+          setFat(saved.payload.fat);
+          setAssumption(saved.payload.assumption);
+          setDraftWasRestored(true);
+        }
+        setRestored(true);
+      });
+      return () => { active = false; };
+    }, [draftType, userId]);
+    useEffect(() => {
+      if (!restored || !userId) return;
+      void writeDraft(createDraftEnvelope({
+        userId,
+        draftType,
+        payload: { name, calories, protein, carbs, fat, assumption },
+        baseVersions: { profileRevision },
+        ttlMs: 7 * 24 * 60 * 60 * 1000,
+      }));
+    }, [assumption, calories, carbs, draftType, fat, name, profileRevision, protein, restored, userId]);
     const numericFields = [calories, protein, carbs, fat];
     const validNumbers = numericFields.every(
       (value) => value === "" || (Number.isFinite(Number(value)) && Number(value) >= 0),
@@ -332,6 +365,22 @@ export default function NutritionPage() {
     );
     return (
       <div className="mt-3 grid gap-2">
+        {draftWasRestored ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
+            <span>Draft restored from this device.</span>
+            <button
+              type="button"
+              className="shrink-0 underline underline-offset-2"
+              onClick={() => {
+                if (snapshot.userId) void clearDraft(snapshot.userId, draftType);
+                setDraftWasRestored(false);
+                onDone();
+              }}
+            >
+              Discard draft
+            </button>
+          </div>
+        ) : null}
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -366,8 +415,8 @@ export default function NutritionPage() {
         />
         <Button
           disabled={!valid}
-          onClick={() => {
-            actions.logNutrition({
+          onClick={async () => {
+            const saved = await actions.logNutrition({
               date: selected,
               slot,
               customName: name.trim(),
@@ -379,9 +428,12 @@ export default function NutritionPage() {
               estimated: false,
               confidence: "high",
               source: "User-provided",
-              assumptions: assumption || undefined,
+             assumptions: assumption || undefined,
             });
-            onDone();
+            if (saved) {
+              if (snapshot.userId) void clearDraft(snapshot.userId, draftType);
+              onDone();
+            }
           }}
         >
           Save entry
@@ -402,6 +454,35 @@ export default function NutritionPage() {
   function TextParser({ slot, onDone }: { slot: MealSlot; onDone: () => void }) {
     const [text, setText] = useState("");
     const [candidates, setCandidates] = useState<ParsedCandidate[]>([]);
+    const [restored, setRestored] = useState(false);
+    const [draftWasRestored, setDraftWasRestored] = useState(false);
+    const draftType = `nutrition-text:${selected}:${slot}`;
+    const userId = snapshot.userId;
+    const profileRevision = snapshot.profile?.revision;
+    useEffect(() => {
+      if (!userId) return;
+      let active = true;
+      void readDraft<{ text: string; candidates: ParsedCandidate[] }>(userId, draftType).then((saved) => {
+        if (!active) return;
+        if (saved) {
+          setText(saved.payload.text);
+          setCandidates(saved.payload.candidates);
+          setDraftWasRestored(true);
+        }
+        setRestored(true);
+      });
+      return () => { active = false; };
+    }, [draftType, userId]);
+    useEffect(() => {
+      if (!restored || !userId) return;
+      void writeDraft(createDraftEnvelope({
+        userId,
+        draftType,
+        payload: { text, candidates },
+        baseVersions: { profileRevision },
+        ttlMs: 7 * 24 * 60 * 60 * 1000,
+      }));
+    }, [candidates, draftType, profileRevision, restored, text, userId]);
 
     const review = () => {
       setCandidates(parseMealText(text, FOODS));
@@ -409,6 +490,22 @@ export default function NutritionPage() {
 
     return (
       <div className="mt-3 grid gap-2">
+        {draftWasRestored ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
+            <span>Text draft restored from this device.</span>
+            <button
+              type="button"
+              className="shrink-0 underline underline-offset-2"
+              onClick={() => {
+                if (snapshot.userId) void clearDraft(snapshot.userId, draftType);
+                setDraftWasRestored(false);
+                onDone();
+              }}
+            >
+              Discard draft
+            </button>
+          </div>
+        ) : null}
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -450,9 +547,11 @@ export default function NutritionPage() {
                   <Button
                     variant="ghost"
                     className="!min-h-11 !px-3 text-xs"
-                    onClick={() => {
-                      addFood(actions, slot, selected, candidate.matched!, candidate.quantity);
-                      onDone();
+                    onClick={async () => {
+                      if (await addFood(actions, slot, selected, candidate.matched!, candidate.quantity)) {
+                        if (snapshot.userId) void clearDraft(snapshot.userId, draftType);
+                        onDone();
+                      }
                     }}
                   >
                     <Check className="h-4 w-4" aria-hidden /> Confirm & save
@@ -476,7 +575,7 @@ export default function NutritionPage() {
   }
 }
 
-function addFood(
+async function addFood(
   actions: ReturnType<typeof useApp>["actions"],
   slot: MealSlot,
   date: string,
@@ -484,7 +583,7 @@ function addFood(
   servings: number,
 ) {
   const macros = foodMacros(food, servings);
-  actions.logNutrition({
+  return actions.logNutrition({
     date,
     slot,
     foodId: food.id,
@@ -493,22 +592,44 @@ function addFood(
     proteinG: macros.proteinG,
     carbsG: macros.carbsG,
     fatG: macros.fatG,
+    ...(food.fiberG === undefined ? {} : { fiberG: Math.round(food.fiberG * servings * 10) / 10 }),
     estimated: food.estimated,
     confidence: food.confidence,
     source: `${food.source} ${food.sourceVersion}`,
+    sourceVersion: food.sourceVersion,
+    preparationBasis: "as-listed",
   });
 }
 
-function logMeal(
+async function logMeal(
   actions: ReturnType<typeof useApp>["actions"],
   ingredients: { foodId: string; servings: number }[],
   date: string,
   slot: MealSlot,
   mealName: string,
 ) {
+  const entries = [];
   for (const ing of ingredients) {
     const food = FOODS.find((f) => f.id === ing.foodId);
-    if (food) addFood(actions, slot, date, food, ing.servings);
+    if (!food) continue;
+    const macros = foodMacros(food, ing.servings);
+    entries.push({
+      date,
+      slot,
+      foodId: food.id,
+      servings: ing.servings,
+      calories: macros.calories,
+      proteinG: macros.proteinG,
+      carbsG: macros.carbsG,
+      fatG: macros.fatG,
+      ...(food.fiberG === undefined ? {} : { fiberG: Math.round(food.fiberG * ing.servings * 10) / 10 }),
+      estimated: food.estimated,
+      confidence: food.confidence,
+      source: `${food.source} ${food.sourceVersion}`,
+      sourceVersion: food.sourceVersion,
+      preparationBasis: "as-listed",
+    });
   }
+  await actions.logSavedMeal(date, slot, entries);
   void mealName;
 }

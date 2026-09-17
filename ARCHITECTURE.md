@@ -22,11 +22,12 @@ but it is not a competing source of truth.
 
 The initialized scaffold requires a configured Supabase project and authenticated
 identity before product routes are available. The browser/server clients,
-session-refresh Proxy, PKCE callback route, auth pages, and auth actions are
-implemented. Durable profile/plan/log persistence, schema migrations, RLS,
-RPCs, generated database types, and the authenticated repository remain pending
-backend implementation. The app does not fall back to dummy or localStorage
-product data when Supabase is unavailable.
+session-refresh Proxy, PKCE callback route, auth pages, authenticated RPC
+repository, RLS migrations, snapshot hydration, export, deletion, and the
+atomic saved-meal logging path are implemented. Browser storage is limited to
+recoverable onboarding/session drafts and never replaces Supabase authority.
+Trusted production nutrition data, protected AI extraction, and linked remote
+smoke verification remain release dependencies.
 
 ### Client
 
@@ -285,6 +286,27 @@ type MutationOutcome = {
 
 The exact union should grow only as implemented behavior requires. Components
 must not infer business events by comparing arbitrary snapshots.
+
+### MVP-0 concurrency and draft contracts
+
+- Mutable profile, saved-meal, nutrition-log, and grocery-list rows expose an
+  integer `revision`. Immutable goal, target, workout-plan, and meal-plan
+  snapshots continue to use their existing version numbers.
+- Repository intents carry optional `ExpectedVersions`; the authenticated RPC
+  preflight locks aggregates in the order idempotency, profile, goal/target,
+  workout plan, meal plan, grocery list, then child record. Mismatches return a
+  typed `stale_version` detail before domain rows are changed.
+- The Context refreshes the authoritative snapshot after a stale result while
+  keeping the user draft and retry intent. Reapplication is explicit and uses a
+  new idempotency key; an unchanged transport retry reuses the original key.
+- `src/services/draftStore.ts` is the single versioned browser draft boundary.
+  It uses IndexedDB when available, falls back to user-scoped localStorage,
+  expires envelopes by draft type, and clears account drafts on deletion.
+
+Automated target calculations use policy version `calicoach-health-v1`. The
+eligibility outcome (`eligible`, `unsupported`, or `not_answered`) and screening
+version are stored without sensitive reasons. Unsupported screening outcomes and
+raw estimates below the supported calorie floor do not create automated targets.
 
 ## Supabase Security and Database Rules
 

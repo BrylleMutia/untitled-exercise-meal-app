@@ -63,6 +63,12 @@ recommendations:
 - Cooking time and meal budget
 - Target weight, desired rate of change, and target date when relevant
 
+Before showing automated calorie, macro, or personalized progression targets,
+the user must answer a brief health screen. Store only `eligible`, `unsupported`,
+or `not_answered` plus the screening policy version; do not store a sensitive
+free-text reason. Unsupported or unanswered screening blocks automated target
+creation while preserving the user’s inputs for manual logging or later review.
+
 The initial onboarding path should not require every optional preference. A user
 must be able to reach the first plan in under five minutes, then complete or
 edit the remaining profile fields from Settings.
@@ -91,6 +97,9 @@ assumptions. It must not silently change formulas or clamp invalid inputs.
 - Display calorie and macro results as estimates or ranges with their assumptions, source, effective date, and disclaimer.
 - Warn when a requested rate or target is unusually aggressive, require explicit confirmation, and never present it as recommended care.
 - Preserve the calculation and target version that was used for historical plans and summaries.
+- The current policy identifier is `calicoach-health-v1`. Raw estimates below
+  the supported safety floor return an unsupported outcome; the app never
+  silently substitutes a 1,200-kcal value.
 
 ### 2. Goals and Targets
 
@@ -526,3 +535,18 @@ generated grocery quantities separately from user-adjusted quantities.
 Do not start with AI-generated plans or photo recognition. First make the
 underlying exercise, food, serving, and progression data reliable; AI should
 make input faster without becoming the authority for calculations or safety.
+
+## Implementation status note (2026-09-17)
+
+The current implementation persists onboarding goal fields and profile food
+preferences, hydrates historical workout plans and sessions, supports
+per-exercise-slot workout overrides, carries planned-meal nutrition metadata,
+logs saved meals atomically, and routes export/account deletion through
+authorized Supabase mutations. Onboarding and in-progress session drafts are
+  recoverable in the versioned IndexedDB/localStorage draft repository and are
+  never treated as durable until the Supabase mutation succeeds. MVP-0 now also
+includes revision-aware stale conflict handling, health eligibility metadata,
+RPC preflight validation, and profile-only onboarding for unsupported health
+screening outcomes (manual logging remains available). Trusted production nutrition data, server-side AI
+extraction, nutrition correction controls, and full staging verification remain
+release work.

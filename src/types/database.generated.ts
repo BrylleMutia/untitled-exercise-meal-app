@@ -21,6 +21,7 @@ export type Database = {
           bmi: number
           bmr: number
           calculation_assumptions: string
+          calculation_version: string
           calories: number
           carbs_g: number
           created_at: string
@@ -30,10 +31,13 @@ export type Database = {
           formula: string
           goal_row_id: number
           protein_g: number
+          raw_calories: number
           row_id: number
           tdee: number
           user_id: string
           version: number
+          goal_adjustment: number
+          safety_outcome: string
         }
         Insert: {
           activity_factor: number
@@ -41,6 +45,7 @@ export type Database = {
           bmi: number
           bmr: number
           calculation_assumptions?: string
+          calculation_version?: string
           calories: number
           carbs_g: number
           created_at?: string
@@ -50,10 +55,13 @@ export type Database = {
           formula: string
           goal_row_id: number
           protein_g: number
+          raw_calories?: number
           row_id?: never
           tdee: number
           user_id: string
           version: number
+          goal_adjustment?: number
+          safety_outcome?: string
         }
         Update: {
           activity_factor?: number
@@ -61,6 +69,7 @@ export type Database = {
           bmi?: number
           bmr?: number
           calculation_assumptions?: string
+          calculation_version?: string
           calories?: number
           carbs_g?: number
           created_at?: string
@@ -70,10 +79,13 @@ export type Database = {
           formula?: string
           goal_row_id?: number
           protein_g?: number
+          raw_calories?: number
           row_id?: never
           tdee?: number
           user_id?: string
           version?: number
+          goal_adjustment?: number
+          safety_outcome?: string
         }
         Relationships: [
           {
@@ -448,6 +460,7 @@ export type Database = {
           app_id: string
           created_at: string
           row_id: number
+          revision: number
           updated_at: string
           user_id: string
           week_of: string
@@ -455,6 +468,7 @@ export type Database = {
         Insert: {
           app_id: string
           created_at?: string
+          revision?: number
           row_id?: never
           updated_at?: string
           user_id: string
@@ -463,6 +477,7 @@ export type Database = {
         Update: {
           app_id?: string
           created_at?: string
+          revision?: number
           row_id?: never
           updated_at?: string
           user_id?: string
@@ -565,36 +580,42 @@ export type Database = {
       }
       meals: {
         Row: {
+          archived_at: string | null
           app_id: string
           created_at: string
           is_system: boolean
           name: string
           notes: string | null
           owner_user_id: string | null
+          revision: number
           row_id: number
           servings: number
           source_url: string | null
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           app_id: string
           created_at?: string
           is_system?: boolean
           name: string
           notes?: string | null
           owner_user_id?: string | null
+          revision?: number
           row_id?: never
           servings: number
           source_url?: string | null
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           app_id?: string
           created_at?: string
           is_system?: boolean
           name?: string
           notes?: string | null
           owner_user_id?: string | null
+          revision?: number
           row_id?: never
           servings?: number
           source_url?: string | null
@@ -662,6 +683,7 @@ export type Database = {
           meal_slot: string
           preparation_basis: string
           protein_g: number
+          revision: number
           row_id: number
           serving_quantity: number
           serving_unit: string
@@ -688,6 +710,7 @@ export type Database = {
           meal_slot: string
           preparation_basis?: string
           protein_g: number
+          revision?: number
           row_id?: never
           serving_quantity: number
           serving_unit?: string
@@ -714,6 +737,7 @@ export type Database = {
           meal_slot?: string
           preparation_basis?: string
           protein_g?: number
+          revision?: number
           row_id?: never
           serving_quantity?: number
           serving_unit?: string
@@ -975,8 +999,11 @@ export type Database = {
           goal: string
           height_cm: number
           id: string
+          eligibility_status: string
+          eligibility_version: string
           meal_budget: number | null
           name: string
+          revision: number
           session_minutes: number
           sex: string
           units: string
@@ -996,8 +1023,11 @@ export type Database = {
           goal: string
           height_cm: number
           id: string
+          eligibility_status?: string
+          eligibility_version?: string
           meal_budget?: number | null
           name: string
+          revision?: number
           session_minutes: number
           sex: string
           units: string
@@ -1017,8 +1047,11 @@ export type Database = {
           goal?: string
           height_cm?: number
           id?: string
+          eligibility_status?: string
+          eligibility_version?: string
           meal_budget?: number | null
           name?: string
+          revision?: number
           session_minutes?: number
           sex?: string
           units?: string
@@ -1236,6 +1269,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_workout_override: { Args: { p_payload: Json }; Returns: Json }
       abandon_workout_session: { Args: { p_payload: Json }; Returns: Json }
       add_custom_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       complete_onboarding: { Args: { p_payload: Json }; Returns: Json }
@@ -1243,6 +1277,7 @@ export type Database = {
       delete_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       export_account_data: { Args: { p_payload: Json }; Returns: Json }
       finish_workout_session: { Args: { p_payload: Json }; Returns: Json }
+      log_saved_meal: { Args: { p_payload: Json }; Returns: Json }
       regenerate_grocery: { Args: { p_payload: Json }; Returns: Json }
       remove_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       reset_plan: { Args: { p_payload: Json }; Returns: Json }

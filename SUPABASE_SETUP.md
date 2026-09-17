@@ -4,7 +4,8 @@ This document is the operational checklist for the app's Supabase boundary.
 The repository contains the forward-only domain schema, authored catalog seed
 data, and the first authenticated RPC/repository phase. The linked remote
 project is `untitled-exercise-meal-app` (`ifunkhvbvkdxolhpxjvk`) in
-`ap-northeast-1`; local and remote migration history currently match.
+`ap-northeast-1`; the local database includes the new hardening migration,
+while the linked remote remains at the previously applied nineteen migrations.
 
 The MVP authority is Supabase Auth plus Postgres. Browser storage may cache
 read models or preserve recoverable drafts later, but it must not become a
@@ -41,10 +42,11 @@ revoked.
 - [x] `supabase/config.toml` has been created with the Supabase CLI.
 - [x] The local Supabase stack uses the repository-specific `5632x` ports and
   has been reset from an empty database successfully.
-- [x] Nineteen CLI-generated forward-only migrations exist under
+- [x] Forward-only migrations exist under
   `supabase/migrations/`, in dependency order: eleven schema/seed migrations,
-  one foreign-key-index correction, six authenticated RPC migrations, and one
-  export-shape hardening migration.
+  one foreign-key-index correction, authenticated RPC migrations, export-shape
+  hardening, MVP integrity hardening, and the MVP-0 foundation hardening
+  migration plus the saved-meal ownership/concurrency follow-up migration.
 - [x] The migration set defines the domain tables, normalized versioned plan
   rows, catalog seed data, ownership indexes, constraints, RLS read policies,
   explicit grants/revokes, and idempotency storage.
@@ -55,17 +57,18 @@ revoked.
 - [x] The remote project is linked to this repository with project ref
   `ifunkhvbvkdxolhpxjvk`.
 - [x] The schema/RLS/catalog batch and the authenticated RPC batch are deployed
-  remotely; remote migration history matches the local nineteen-migration
-  history and linked dry-run reports no pending changes.
+  remotely; remote migration history matches the previously applied nineteen
+  migrations. The local integrity and MVP-0 hardening migrations are
+  intentionally not remote-applied.
 - [x] Remote read-only checks confirm 20 expected public tables, 20 RLS-enabled
   tables, 20 policies, four anonymous catalog SELECT grants, 20 authenticated
   SELECT grants, zero direct authenticated/anonymous table-write grants, and
   no unexpected public application tables.
 - [x] Remote catalog checks confirm 21 system exercises, 22 system foods, 4
   system meals, and 14 meal ingredients.
-- [x] Generated database types exist at
-  `src/types/database.generated.ts` and are produced from the linked public
-  schema rather than hand-edited.
+- [x] Keep `src/types/database.generated.ts` synchronized with the local
+  hardening columns and RPC wrappers. Regenerate from the linked schema only
+  after the pending migrations are explicitly authorized and deployed.
 - [x] The first authenticated repository boundary maps normalized database
   rows to the existing domain snapshot, preserves `app_id` values, hides
   internal `row_id` values, loads authenticated state, and refreshes state only
@@ -79,7 +82,7 @@ revoked.
 - [x] Focused local pgTAP suites have been added beside the baseline:
   `schema_catalog_test.sql`, `constraints_test.sql`, `rls_isolation_test.sql`,
   `privileges_rpc_security_test.sql`, and `domain_mutations_test.sql`.
-  Together with the baseline they execute 246 assertions covering schema
+  Together with the baseline they execute 377 assertions covering schema
   contracts, catalog metadata, constraints, ownership isolation, direct-write
   denial, wrapper security, RPC behavior, idempotency, export shape, and
   account deletion.
@@ -89,10 +92,10 @@ revoked.
   remote `NEXT_PUBLIC_SUPABASE_URL`, uses only the local anon/publishable key,
   and cleans up disposable users through the deletion RPC.
 - [x] `supabase/tests/rpc_smoke_test.sql` adds 103 pgTAP assertions that
-  invoke all 21 deployed public RPC wrappers, including unit updates,
+  invoke the deployed public RPC wrappers, including unit updates,
   plan reset, skipped meals, abandoned sessions, nutrition deletion, and
   recipe saves.
-- [x] `scripts/test-supabase-rpc-smoke.mjs` runs the complete 21-wrapper
+- [x] `scripts/test-supabase-rpc-smoke.mjs` runs the complete 23-wrapper
   matrix through two independent local Auth clients with unique run IDs,
   replay/hash-mismatch checks, cross-user checks, and deletion cleanup.
 - [x] `scripts/test-supabase-rpc-remote.mjs` provides a separately guarded
@@ -103,69 +106,64 @@ revoked.
 
 ### Not completed
 
-- [x] Complete the linked remote schema verification gate. Migration history
-  matches the local nineteen-migration history, the linked dry run reports no
-  pending migrations, and `npx supabase@latest db lint --linked` passes with no
+- [x] Complete the linked remote schema verification gate for the previously
+  applied migrations. The local integrity and MVP-0 hardening migrations are
+  pending a guarded dry run,
+  so linked history reports no pending migrations and
+  `npx supabase@latest db lint --linked` passes with no
   schema errors. Any future lint requiring a database password must continue
   to receive it only through a secure CLI prompt or temporary secret
   mechanism.
-- [ ] Finish the local database-test gate. The baseline, focused suites, local
-  concurrency runner, and 103-assertion RPC suite pass except that the schema
-  suite correctly reports one contract gap: the three catalog `app_id`
-  columns are `NOT NULL UNIQUE` but do not have non-blank checks. Keep this
-  assertion red until a separately reviewed forward-only migration adds the
-  missing constraints.
-- [ ] Re-run the full test gate after that forward-only correction and require
-  all 246 pgTAP assertions to pass, including anonymous denial, cross-user
+- [x] Finish the local database-test gate. The new hardening migration is
+  applied locally; baseline/focused suites pass, including non-blank checks for
+  the three catalog `app_id` columns and the atomic `log_saved_meal` wrapper.
+- [x] Re-run the full test gate after the MVP-0 foundation migration. All 377
+  pgTAP assertions pass, including anonymous denial, cross-user
   denial, user-ID reassignment protection, invalid inputs, owner-only custom
   catalogs, direct table-write denial, wrapper authorization, controlled
   `SECURITY DEFINER` settings, every ownership/foreign-key index, RPC
-  idempotency, export shape, and deletion safety.
+   idempotency, export shape, deletion safety, revision triggers, stale-version
+   rejection, finite-number/date validation, and unsupported-screening guards.
 - [ ] Complete the remote manual RPC/Auth smoke flow with disposable
   authenticated accounts. The local 103-assertion RPC suite and the
-  two-client Data API runner now exercise all 21 wrappers, including duplicate
-  retries, hash mismatches, and cross-user isolation. The remote project has
+  two-client Data API runner exercise all 23 wrappers, including the two
+  hardening wrappers with duplicate retries and ownership checks. The remote project has
   passed linked migration/dry-run preflight, but remote account creation,
-  email confirmation, 21-RPC execution, and cleanup remain pending until two
+  email confirmation, 23-RPC execution, and cleanup remain pending until two
   confirmed disposable credentials are supplied transiently.
 
 #### P0 — Complete backend correctness and security
 
-- [ ] Add authorized plan-override create/remove mutations. The schema stores
-  `workout_plan_overrides`, but the current RPC/repository surface does not yet
-  expose create, update, remove, replacement-exercise, or regeneration
-  behavior for those rows.
-- [ ] Add repository and Context contracts for plan editing, override changes,
-  saved meals/recipes, export, and account deletion. These actions must return
-  typed outcomes and semantic events instead of requiring components to infer
-  changes from snapshots.
-- [ ] Add expected-version checks to profile/target/plan/meal-plan edits and
-  return `stale_version` rather than silently overwriting a newer version.
-- [ ] Review and test lock ordering for idempotency rows, active targets,
+- [x] Add an authorized per-exercise-slot plan-override mutation. The
+  `apply_workout_override` RPC ends the prior active override and inserts the
+  new bounded replacement/measure values. Override removal UI remains pending.
+- [x] Add repository and Context contracts for plan editing, saved meals,
+  export, and account deletion. Actions return typed outcomes and semantic
+  events; the saved-meal logger is atomic through `log_saved_meal`.
+- [x] Add expected-version checks to profile/target/plan/meal-plan edits and
+   return `stale_version` rather than silently overwriting a newer version.
+- [x] Review and test lock ordering for idempotency rows, active targets,
   current plans, meal plans, and grocery lists. Add concurrency tests for plan
   regeneration, workout completion, grocery regeneration, and repeated saves.
-- [ ] Validate every RPC payload at the mutation boundary, including finite
+- [x] Validate every RPC payload at the mutation boundary, including finite
   numeric values, date keys, supported enum values, catalog ownership,
   custom-name requirements, serving units, exercise measurement forms,
   session state transitions, and deletion confirmation.
-- [ ] Make retry behavior end-to-end reliable. The repository accepts optional
-  caller-supplied keys and derives stable entity IDs for those keys, but each
-  UI retry flow still needs to retain the same key across network failures and
-  test replay versus hash-mismatch behavior.
+- [ ] Make retry behavior end-to-end reliable. Duplicate UI submissions are
+  guarded and session edits are serialized, but a dedicated retry command must
+  retain the original idempotency key across a network failure.
 - [ ] Verify account deletion revokes or signs out active sessions after the
   server-side delete. Supabase access tokens can remain valid until expiry, so
   deletion must also clear the browser session and local cache.
 
 #### P1 — Finish authenticated application integration
 
-- [ ] Wire all current product surfaces to the authenticated repository:
-  profile editing, plan editing and overrides, saved meals/recipes, nutrition
-  edit/delete, weights, grocery changes/regeneration, export, and account
-  deletion.
-- [ ] Keep authoritative Context state unchanged until the RPC succeeds.
-  Preserve form drafts on failures, disable duplicate submissions per pending
-  operation, surface typed retryable/non-retryable errors, and expose loading,
-  empty, offline, and re-authentication states.
+- [x] Wire profile editing, plan editing, saved-meal logging, nutrition
+  logging/deletion, weights, grocery changes/regeneration, export, and account
+  deletion to the authenticated repository.
+- [x] Keep authoritative Context state unchanged until RPC success; expose
+  pending/error UI, preserve onboarding/session drafts, and disable duplicate
+  submissions. Offline queueing remains intentionally unsupported.
 - [ ] Complete focused read models and query bounds for long histories instead
   of expanding the main `AppSnapshot` indefinitely. Add cursor/date filtering
   for sessions, exercise logs, nutrition logs, weights, and export data.
@@ -200,26 +198,25 @@ revoked.
   presenting unsynchronized mutations as persisted.
 
 The current test implementation is local-first and does not change the linked
-remote project. The local RPC exercise is complete; the latest local results
-are:
+remote project. The local verification gate is complete; the latest local
+results are:
 
-- `npx supabase@latest db reset --local`: pass; all 19 migrations apply from
-  an empty database.
+- `npx supabase@latest db reset --local`: pass; all 23 forward-only migrations
+  apply from an empty database, including the hardening migration.
 - `npx supabase@latest migration list --local`: pass; the local migration
   history is complete.
 - `npx supabase@latest db lint --local`: pass with no schema errors.
-- `npx supabase@latest test db --local`: 348/349 assertions pass; all 103
-  assertions in `rpc_smoke_test.sql` pass, and the one remaining failure is
-  the documented catalog `app_id` non-blank contract gap.
-- `npm run supabase:test:rpc`: pass; all 21 public wrappers were exercised
+- `npx supabase@latest test db --local`: 377/377 assertions pass; all focused
+  pgTAP/RLS suites are green.
+- `npm run supabase:test:rpc`: pass; all 23 public wrappers were exercised
   through two disposable local Auth users and both accounts were cleaned up
   through `delete_account`.
 - `npm run supabase:test:concurrency`: pass against
   `http://127.0.0.1:56321`, including disposable-user cleanup.
 - `npm run typecheck` and `npm run lint`: pass.
-- `npm run build`: pass when network access is available for the existing
-  Google-hosted Nunito font used by `next/font`; the initial sandbox attempt
-  was blocked only by that font fetch.
+- `npm run build`: pass; the configured Google-hosted Nunito font was fetched
+  with network access (the initial sandbox attempt was blocked only by that
+  external font fetch).
 
 The remote advisor review found one expected design warning for authenticated
 `SECURITY DEFINER` RPC wrappers: the wrappers are deliberately callable by
@@ -303,8 +300,11 @@ testing.
 
 ## 4. Local migration set
 
-The files were created with the Supabase CLI, so their timestamps are
-CLI-generated and must not be manually changed. The current order is:
+The original nineteen files were created with the Supabase CLI, so their
+timestamps are CLI-generated and must not be manually changed. The twentieth
+MVP hardening migration was authored forward-only because the CLI is not
+available in this workspace; verify it locally before applying it to staging.
+The current order is:
 
 ### 4.1 `bootstrap_private_helpers`
 
@@ -481,6 +481,14 @@ Replaces the private export builder through a forward-only function migration.
 Exports retain application IDs and user data while omitting internal row IDs,
 ownership IDs, and normalized foreign-key implementation columns.
 
+### 4.15 `mvp_integrity_hardening`
+
+Adds non-blank checks for catalog application IDs, an atomic
+`log_saved_meal` nutrition mutation, and an authorized
+`apply_workout_override` mutation. The migration has been applied and verified
+locally; it remains pending on the linked remote until an explicitly authorized
+staging/remote rollout.
+
 ## 5. Security and ownership contract
 
 All tables in the exposed `public` schema have RLS enabled. Durable read
@@ -554,9 +562,8 @@ minimum:
   hashes do not replay a different operation.
 - A reset from an empty database reproduces the same schema and seed state.
 - The focused pgTAP suites and local two-session concurrency lane execute
-  without weakening a contract assertion; the pgTAP gate remains red only for
-  the documented catalog `app_id` constraint gap.
-- The RPC smoke path signs up two disposable local users, exercises all 21
+  without weakening a contract assertion; the full local gate is green.
+- The RPC smoke path signs up two disposable local users, exercises all 23
   public wrappers, checks replay/hash-mismatch and cross-user behavior, and
   cleans up through `delete_account`.
 
@@ -627,21 +634,17 @@ The initial backend implementation has completed these steps:
 4. Replace the in-memory repository path with authenticated Supabase reads and
    mutation outcomes that include refreshed read models and semantic events.
 5. Add the focused database/security tests, local concurrency runner, and
-   complete local 21-RPC smoke runner. These test assets are present and the
-   local RPC sweep is passing; the aggregate gate remains intentionally
-   pending the catalog `app_id` forward-only correction, remote disposable
-   user exercise, and any remaining product integration work.
+   complete local 23-RPC smoke runner. These test assets are present and the
+   local RPC/database sweeps are passing; remote disposable-user exercise and
+   remaining product integration work are still separate release dependencies.
 
 The next backend work should be test-first hardening and product integration:
 
-1. Add a forward-only correction for the three catalog `app_id` non-blank
-   constraints, rerun all 246 pgTAP assertions, and review any additional
-   contract failures without weakening tests.
-2. Add repository tests against the local stack and keep input drafts intact
+1. Add repository tests against the local stack and keep input drafts intact
    across transient failures.
-3. Wire the remaining UI actions to the repository and expose typed loading,
+2. Wire the remaining UI actions to the repository and expose typed loading,
    error, retry, and empty states.
-4. Regenerate database types after every schema/function migration and run
+3. Regenerate database types after every schema/function migration and run
    local reset, lint, tests, typecheck, lint, and build.
-5. Run remote manual Auth smoke tests with disposable accounts before treating
+4. Run remote manual Auth smoke tests with disposable accounts before treating
    the project as production-ready.

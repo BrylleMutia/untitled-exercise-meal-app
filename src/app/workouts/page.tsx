@@ -1,19 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Play, Timer } from "lucide-react";
+import { useState } from "react";
+import { Check, Pencil, Play, Timer } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { ExerciseIllustration } from "@/components/ExerciseIllustration";
-import { exerciseById } from "@/constants/exercises";
+import { EXERCISES, exerciseById } from "@/constants/exercises";
 import { startOfWeek, todayKey, weekDates, formatDay } from "@/utility/dates";
 
 const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function WorkoutsPage() {
-  const { snapshot } = useApp();
+  const { snapshot, actions } = useApp();
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  const [replacementId, setReplacementId] = useState("");
+  const [replacementSets, setReplacementSets] = useState("");
+  const [replacementMeasure, setReplacementMeasure] = useState("");
   const plan = snapshot.plan;
+  const availableExercises = EXERCISES.filter((candidate) =>
+    candidate.equipment.every((equipment) => equipment === "none" || snapshot.profile?.equipment.includes(equipment)),
+  );
   const today = todayKey();
   const weekOf = startOfWeek(today);
   const dates = weekDates(weekOf);
@@ -23,8 +31,7 @@ export default function WorkoutsPage() {
         (s) =>
           s.status === "completed" &&
           s.date >= weekOf &&
-          s.date <= dates[6] &&
-          s.plannedPlanVersion === snapshot.plan?.version,
+          s.date <= dates[6],
       )
       .map((s) => s.plannedWorkoutId),
   );
@@ -86,11 +93,49 @@ export default function WorkoutsPage() {
               ) : null}
 
               <ul className="mt-4 grid gap-1 text-sm font-semibold">
-                {workout.exercises.map((pe) => {
+                {workout.exercises.map((pe, exerciseIndex) => {
                   const e = exerciseById(pe.exerciseId);
+                  const slotKey = pe.slotKey ?? `day:${workout.dayOfWeek}:exercise:${pe.sortOrder ?? exerciseIndex + 1}`;
+                  const editing = editingSlot === slotKey;
                   return (
-                    <li key={pe.id} className="flex items-center justify-between rounded-xl bg-white/60 px-3 py-1.5">
+                    <li key={pe.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/60 px-3 py-1.5">
                       <span>{e?.name ?? "Exercise"}</span>
+                      <button
+                        type="button"
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white"
+                        aria-label={`Edit ${e?.name ?? "exercise"}`}
+                        onClick={() => {
+                          setEditingSlot(editing ? null : slotKey);
+                          setReplacementId(pe.exerciseId);
+                          setReplacementSets(String(pe.sets));
+                          setReplacementMeasure(String(pe.reps ?? pe.holdSeconds ?? ""));
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                      {editing ? (
+                        <div className="flex items-center gap-1">
+                          <select className="input !min-h-9 max-w-36 text-xs" value={replacementId} onChange={(event) => setReplacementId(event.target.value)} aria-label="Replacement exercise">
+                            {availableExercises.filter((candidate) => candidate.category === e?.category).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+                          </select>
+                          <input className="input !min-h-9 w-16 text-xs" inputMode="numeric" value={replacementSets} onChange={(event) => setReplacementSets(event.target.value)} aria-label="Sets" />
+                          <input className="input !min-h-9 w-16 text-xs" inputMode="numeric" value={replacementMeasure} onChange={(event) => setReplacementMeasure(event.target.value)} aria-label="Reps or hold seconds" />
+                          <button type="button" className="min-h-9 rounded-xl bg-ink px-2 text-[11px] font-extrabold text-white" onClick={() => {
+                            const candidate = EXERCISES.find((item) => item.id === replacementId);
+                            void actions.applyWorkoutOverride({
+                              slotKey,
+                              plannedExerciseId: pe.id,
+                              replacementExerciseId: replacementId,
+                              sets: Math.max(1, Number(replacementSets) || pe.sets),
+                              ...(candidate?.measure === "hold"
+                                ? { holdSeconds: Math.max(1, Number(replacementMeasure) || pe.holdSeconds || 1) }
+                                : { reps: Math.max(1, Number(replacementMeasure) || pe.reps || 1) }),
+                              restSeconds: pe.restSeconds,
+                            });
+                            setEditingSlot(null);
+                          }}>Save</button>
+                        </div>
+                      ) : null}
                       <span className="tabular-nums text-ink-soft">
                         {pe.sets} × {pe.reps ?? `${pe.holdSeconds}s`}
                       </span>

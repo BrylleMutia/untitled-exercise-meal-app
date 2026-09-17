@@ -24,7 +24,7 @@ function logsFor(exerciseId: string, sessions: WorkoutSession[]): ExerciseLog[] 
     .filter((s) => s.status === "completed")
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     .flatMap((s) => s.logs)
-    .filter((l) => l.exerciseId === exerciseId);
+    .filter((l) => l.exerciseId === exerciseId || l.plannedExerciseId === exerciseId);
 }
 
 /**

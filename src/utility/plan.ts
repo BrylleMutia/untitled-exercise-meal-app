@@ -97,6 +97,8 @@ export function generateWorkoutPlan(
       exercises.push({
         id: `pe-${i}-${found.slug}`,
         exerciseId: found.id,
+        sortOrder: exercises.length + 1,
+        slotKey: `day:${dayOfWeek}:exercise:${exercises.length + 1}`,
         sets: dose.sets,
         ...(found.measure === "reps" ? { reps: dose.reps } : { holdSeconds: dose.hold }),
         restSeconds: dose.rest,
@@ -110,6 +112,8 @@ export function generateWorkoutPlan(
       exercises.push({
         id: `pe-${i}-${e.slug}`,
         exerciseId: e.id,
+        sortOrder: exercises.length + 1,
+        slotKey: `day:${dayOfWeek}:exercise:${exercises.length + 1}`,
         sets: dose.sets,
         ...(e.measure === "reps" ? { reps: dose.reps } : { holdSeconds: dose.hold }),
         restSeconds: dose.rest,

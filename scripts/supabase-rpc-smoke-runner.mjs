@@ -12,9 +12,11 @@ export const EXPECTED_RPCS = [
   "finish_workout_session",
   "abandon_workout_session",
   "save_nutrition_log",
+  "log_saved_meal",
   "delete_nutrition_log",
   "save_weight_entry",
   "save_saved_meal",
+  "apply_workout_override",
   "save_recipe",
   "toggle_grocery_item",
   "set_grocery_quantity",
@@ -385,7 +387,9 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     assert(originalMeal.skipped === false, `${label} skip_planned_meal changed the original plan`);
 
     const plannedWorkoutId = skippedPlan.plan.workouts[0].id;
-    const plannedExerciseId = skippedPlan.plan.workouts[0].exercises[0].id;
+    const plannedExercise = skippedPlan.plan.workouts[0].exercises[0];
+    const plannedExerciseId = plannedExercise.id;
+    const slotKey = plannedExercise.slotKey ?? `exercise:${plannedExerciseId}`;
     const sessionId = id("session");
     const startPayload = {
       session: {
@@ -527,6 +531,116 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     );
     const nutritionReplay = await rpc(userA.client, "save_nutrition_log", nutritionPayload, `${label} nutrition replay`, calls);
     assert(nutritionReplay.replayed === true, `${label} nutrition replay was not marked replayed`);
+
+    const savedMealLogPayload = {
+      date: "2026-09-10",
+      slot: "dinner",
+      entries: [
+        {
+          id: id("saved-meal-log-egg"),
+          date: "2026-09-10",
+          slot: "dinner",
+          foodId: "food-egg",
+          servings: 2,
+          servingQuantity: 2,
+          servingUnit: "piece",
+          calories: 144,
+          proteinG: 12.6,
+          carbsG: 0.8,
+          fatG: 9.6,
+          fiberG: 0,
+          estimated: true,
+          confidence: "high",
+          source: "Starter Food Catalog",
+          sourceVersion: "2026.09",
+          preparationBasis: "as_labeled",
+          assumptions: "fixture",
+        },
+        {
+          id: id("saved-meal-log-milk"),
+          date: "2026-09-10",
+          slot: "dinner",
+          foodId: "food-milk",
+          servings: 1,
+          servingQuantity: 1,
+          servingUnit: "serving",
+          calories: 122,
+          proteinG: 8,
+          carbsG: 12,
+          fatG: 4.8,
+          fiberG: 0,
+          estimated: true,
+          confidence: "high",
+          source: "Starter Food Catalog",
+          sourceVersion: "2026.09",
+          preparationBasis: "as_labeled",
+          assumptions: "fixture",
+        },
+      ],
+      idempotencyKey: id("saved-meal-log"),
+    };
+    const savedMealLogResult = await rpc(
+      userA.client,
+      "log_saved_meal",
+      savedMealLogPayload,
+      `${label} log saved meal`,
+      calls,
+    );
+    assert(
+      (await countRows(userA.client, "nutrition_logs", "user_id", userA.userId, `${label} saved meal log rows`)) >= 3,
+      `${label} saved meal log did not persist all entries`,
+    );
+    const savedMealLogReplay = await rpc(
+      userA.client,
+      "log_saved_meal",
+      savedMealLogPayload,
+      `${label} saved meal log replay`,
+      calls,
+    );
+    assert(savedMealLogResult.result_refs?.nutrition_log_ids?.length === 2, `${label} saved meal log returned incomplete references`);
+    assert(savedMealLogReplay.replayed === true, `${label} saved meal log replay was not marked replayed`);
+
+    const overridePayload = {
+      slotKey,
+      plannedExerciseId,
+      replacementExerciseId: "ex-push-up",
+      sets: 4,
+      reps: 10,
+      restSeconds: 75,
+      idempotencyKey: id("workout-override"),
+    };
+    const overrideResult = await rpc(
+      userA.client,
+      "apply_workout_override",
+      overridePayload,
+      `${label} workout override`,
+      calls,
+    );
+    const overrideId = overrideResult.result_refs?.override_id;
+    assert(typeof overrideId === "string" && overrideId.length > 0, `${label} workout override returned no reference`);
+    const overrideRow = await selectOne(
+      userA.client,
+      "workout_plan_overrides",
+      "sets_override, reps_override, rest_seconds_override, active",
+      "app_id",
+      overrideId,
+      `${label} workout override snapshot`,
+    );
+    assert(
+      Number(overrideRow.sets_override) === 4 &&
+        Number(overrideRow.reps_override) === 10 &&
+        Number(overrideRow.rest_seconds_override) === 75 &&
+        overrideRow.active === true,
+      `${label} workout override values were not persisted`,
+    );
+    const overrideReplay = await rpc(
+      userA.client,
+      "apply_workout_override",
+      overridePayload,
+      `${label} workout override replay`,
+      calls,
+    );
+    assert(overrideReplay.replayed === true, `${label} workout override replay was not marked replayed`);
 
     const customNutritionId = id("nutrition-custom");
     await rpc(

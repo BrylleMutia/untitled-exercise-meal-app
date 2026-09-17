@@ -15,7 +15,7 @@ export default function ProgressPage() {
   const [month] = useState(today);
 
   const completedSessions = snapshot.sessions.filter(
-    (s) => s.status === "completed" && s.plannedPlanVersion === snapshot.plan?.version,
+    (s) => s.status === "completed",
   );
   const weekOf = startOfWeek(today);
   const scheduled = snapshot.plan?.workouts.length ?? 0;

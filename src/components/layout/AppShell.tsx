@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Bell, Settings } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
 import { BottomNav } from "./BottomNav";
@@ -26,8 +27,22 @@ const NAV_LINKS = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const app = useAppOptional();
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const isOnboarding = pathname.startsWith("/onboarding");
   const isAuthRoute = pathname.startsWith("/auth");
+
+  useEffect(() => {
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   if (!app?.hydrated) {
     return (
@@ -114,6 +129,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="mx-auto w-full max-w-3xl px-4 pb-32 pt-5 md:pb-14 lg:max-w-5xl">
+        {!online ? (
+          <div className="mb-3 rounded-2xl bg-peach-100 px-3 py-2 text-xs font-bold text-ink-soft" role="status">
+            You’re offline. Existing data remains available; keep your draft and retry saves after reconnecting.
+          </div>
+        ) : null}
+        {app.pendingMutation ? (
+          <div className="mb-3 rounded-2xl bg-lav-50 px-3 py-2 text-xs font-bold text-ink-soft" role="status">
+            Saving {app.pendingMutation.replace(/_/g, " ")}…
+          </div>
+        ) : null}
+        {app.error ? (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-coral-100 px-3 py-2 text-xs font-bold text-ink" role="alert">
+            <span>
+              {app.error.message}
+              {app.error.code === "stale_version" ? " Review the current form and submit again to reapply your draft." : ""}
+            </span>
+            {app.error.retryable ? (
+              <button type="button" className="underline" onClick={() => void app.actions.retryLast().then((retried) => { if (!retried) window.location.reload(); })}>
+                Retry
+              </button>
+            ) : app.error.code === "stale_version" ? (
+              <button type="button" className="shrink-0 underline" onClick={app.actions.clearError}>
+                Dismiss
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {children}
       </main>
 

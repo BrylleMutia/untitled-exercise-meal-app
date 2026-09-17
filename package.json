@@ -2,7 +2,7 @@
   "name": "calisthenics-nutrition-coach",
   "version": "0.1.0",
   "private": true,
-  "description": "Calisthenics and Nutrition Coach — responsive Next.js web app (demo-mode mockup)",
+  "description": "Calisthenics and Nutrition Coach — authenticated responsive Next.js web app",
   "scripts": {
     "dev": "node scripts/copy-exercise-assets.mjs && next dev",
     "build": "node scripts/copy-exercise-assets.mjs && next build",

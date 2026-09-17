@@ -69,8 +69,7 @@ export default function HomePage() {
         (s) =>
           s.status === "completed" &&
           s.date >= weekOf &&
-          s.date <= today &&
-          s.plannedPlanVersion === snapshot.plan?.version,
+          s.date <= today,
       )
       .map((s) => `${s.plannedWorkoutId}:${s.date}`),
   );
@@ -79,6 +78,7 @@ export default function HomePage() {
   const weekPct = scheduledThisWeek > 0 ? completedThisWeek / scheduledThisWeek : 0;
 
   const suggestion =
+    snapshot.profile?.targetEligibility !== "unsupported" &&
     todaysWorkout && snapshot.sessions.length > 0
       ? suggestProgression(todaysWorkout.exercises[0]?.exerciseId ?? "", snapshot.sessions)
       : null;

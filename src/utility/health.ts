@@ -1,9 +1,12 @@
-import type { DailyTarget, PrimaryGoal, SexForBmr, UserProfile } from "@/types/domain";
+import type { DailyTarget, PrimaryGoal, SexForBmr, TargetEligibility, UserProfile } from "@/types/domain";
 
 export const HEALTH_DISCLAIMER =
   "Estimates for healthy adults only. This app is not medical, dietary, or exercise care.";
 
 export const BMR_FORMULA = "mifflin-st-jeor";
+export const HEALTH_POLICY_VERSION = "calicoach-health-v1";
+export const ELIGIBILITY_SCREENING_VERSION = "calicoach-eligibility-v1";
+export const MIN_AUTOMATED_CALORIES = 1200;
 
 /** Documented activity-factor table keyed by weekly training days. */
 export const ACTIVITY_TABLE: ReadonlyArray<{ maxDays: number; factor: number; label: string }> = [
@@ -52,7 +55,23 @@ const GOAL_ADJUSTMENT: Record<PrimaryGoal, number> = {
 };
 
 export function calorieTargetForGoal(tdee: number, goal: PrimaryGoal): number {
-  return Math.max(1200, Math.round((tdee * (1 + GOAL_ADJUSTMENT[goal])) / 25) * 25);
+  return Math.round((tdee * (1 + GOAL_ADJUSTMENT[goal])) / 25) * 25;
+}
+
+export function goalAdjustmentFor(goal: PrimaryGoal): number {
+  return GOAL_ADJUSTMENT[goal];
+}
+
+export class UnsupportedTargetError extends Error {
+  readonly code = "unsupported_target" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "UnsupportedTargetError";
+  }
+}
+
+export function targetEligibilityFor(profile: Pick<UserProfile, "targetEligibility">): TargetEligibility {
+  return profile.targetEligibility ?? "eligible";
 }
 
 export function macroTargets(
@@ -109,10 +128,23 @@ export function isAggressiveRate(
 let targetSeq = 0;
 
 export function buildDailyTarget(profile: UserProfile, effectiveDate: string): DailyTarget {
+  const eligibility = targetEligibilityFor(profile);
+  if (eligibility !== "eligible") {
+    throw new UnsupportedTargetError(
+      eligibility === "not_answered"
+        ? "Complete the health screening before previewing automated targets."
+        : "Automated targets are not available for this health situation. You can still log food and workouts manually.",
+    );
+  }
   const bmr = calculateBmr(profile);
   const factor = activityFactorFor(profile.daysPerWeek);
   const tdee = calculateTdee(bmr, factor);
   const calories = calorieTargetForGoal(tdee, profile.goal);
+  if (calories < MIN_AUTOMATED_CALORIES) {
+    throw new UnsupportedTargetError(
+      "This estimate is below the supported safety floor, so an automated target was not created.",
+    );
+  }
   const macros = macroTargets(calories, profile.weightKg, profile.goal);
   targetSeq += 1;
   return {
@@ -127,5 +159,10 @@ export function buildDailyTarget(profile: UserProfile, effectiveDate: string): D
     formula: BMR_FORMULA,
     activityFactor: factor,
     disclaimer: HEALTH_DISCLAIMER,
+    calculationAssumptions: `Policy ${HEALTH_POLICY_VERSION}; Mifflin–St Jeor; activity factor ${factor}; goal adjustment ${GOAL_ADJUSTMENT[profile.goal]}.`,
+    calculationVersion: HEALTH_POLICY_VERSION,
+    rawCalories: calories,
+    goalAdjustment: GOAL_ADJUSTMENT[profile.goal],
+    safetyOutcome: "supported",
   };
 }
