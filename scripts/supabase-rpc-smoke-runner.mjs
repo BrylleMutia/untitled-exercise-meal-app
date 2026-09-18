@@ -7,6 +7,7 @@ export const EXPECTED_RPCS = [
   "update_units",
   "reset_plan",
   "skip_planned_meal",
+  "edit_meal_plan",
   "start_workout_session",
   "save_workout_session",
   "finish_workout_session",
@@ -17,7 +18,10 @@ export const EXPECTED_RPCS = [
   "save_weight_entry",
   "save_saved_meal",
   "apply_workout_override",
+  "remove_workout_override",
+  "apply_progression_decision",
   "save_recipe",
+  "archive_saved_meal",
   "toggle_grocery_item",
   "set_grocery_quantity",
   "remove_grocery_item",
@@ -348,7 +352,7 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
       calls
     );
     assert(
-      (await countRows(userA.client, "workout_plans", "user_id", userA.userId, `${label} plan history`)) >= 4,
+      (await countRows(userA.client, "workout_plans", "user_id", userA.userId, `${label} plan history`)) >= 3,
       `${label} reset plan did not preserve earlier plan versions`
     );
 
@@ -389,7 +393,7 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     const plannedWorkoutId = skippedPlan.plan.workouts[0].id;
     const plannedExercise = skippedPlan.plan.workouts[0].exercises[0];
     const plannedExerciseId = plannedExercise.id;
-    const slotKey = plannedExercise.slotKey ?? `exercise:${plannedExerciseId}`;
+    const slotKey = plannedExercise.slotKey ?? `day:${skippedPlan.plan.workouts[0].dayOfWeek}:exercise:${plannedExercise.sortOrder ?? 1}`;
     const sessionId = id("session");
     const startPayload = {
       session: {
@@ -409,7 +413,7 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
         plannedExerciseId,
         actualExerciseId: "ex-push-up",
         status: "completed",
-        actual: { sets: 3, reps: 6 },
+        actual: { sets: 3, reps: 6, load: 42.5, loadUnit: "kg" },
         rpe: 6,
         manageable: true,
         pain: false,
@@ -424,7 +428,7 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     const savedLog = await selectOne(
       userA.client,
       "exercise_logs",
-      "actual_exercise_row_id, planned_sets, actual_sets, planned_reps, actual_reps",
+      "actual_exercise_row_id, planned_sets, actual_sets, planned_reps, actual_reps, actual_load, actual_load_unit",
       "user_id",
       userA.userId,
       `${label} saved exercise log`
@@ -433,6 +437,10 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     assert(
       savedLog.planned_sets !== savedLog.actual_sets || savedLog.planned_reps !== savedLog.actual_reps,
       `${label} planned and actual exercise values were merged`
+    );
+    assert(
+      Number(savedLog.actual_load) === 42.5 && savedLog.actual_load_unit === "kg",
+      `${label} actual load was not preserved`
     );
 
     const finishPayload = {
@@ -642,6 +650,33 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     );
     assert(overrideReplay.replayed === true, `${label} workout override replay was not marked replayed`);
 
+    await rpc(
+      userA.client,
+      "remove_workout_override",
+      { slotKey, plannedExerciseId, idempotencyKey: id("remove-workout-override") },
+      `${label} remove workout override`,
+      calls,
+    );
+
+    const progressionResult = await rpc(
+      userA.client,
+      "apply_progression_decision",
+      {
+        slotKey,
+        plannedExerciseId,
+        action: "progress",
+        decision: "accepted",
+        ruleVersion: "mvp1-rpe-v1",
+        sourceSessionIds: [],
+        reps: 12,
+        restSeconds: 75,
+        idempotencyKey: id("progression-decision"),
+      },
+      `${label} accept progression decision`,
+      calls,
+    );
+    assert(typeof progressionResult.result_refs?.decision_id === "string", `${label} progression decision returned no reference`);
+
     const customNutritionId = id("nutrition-custom");
     await rpc(
       userA.client,
@@ -759,6 +794,101 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     assert(recipeResult.operation === "save_saved_meal", `${label} save_recipe alias changed unexpectedly`);
     const recipeReplay = await rpc(userA.client, "save_recipe", recipePayload, `${label} recipe replay`, calls);
     assert(recipeReplay.replayed === true, `${label} recipe replay was not marked replayed`);
+
+    const currentMealPlan = await userA.client
+      .from("meal_plans")
+      .select("row_id, version")
+      .eq("app_id", skippedPlan.mealPlan.id)
+      .order("version", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(currentMealPlan, `${label} current meal plan version`);
+    const currentGrocery = await userA.client
+      .from("grocery_lists")
+      .select("revision")
+      .eq("user_id", userA.userId)
+      .order("row_id", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(currentGrocery, `${label} current grocery revision`);
+    const editedMealPlanPayload = {
+      mealPlan: {
+        ...skippedPlan.mealPlan,
+        meals: skippedPlan.mealPlan.meals.map((meal) => ({
+          ...meal,
+          foodId: "food-milk",
+          mealId: undefined,
+          label: "Edited smoke-test breakfast",
+          servings: 2,
+          expectedCalories: 244,
+          expectedProteinG: 16,
+          expectedCarbsG: 24,
+          expectedFatG: 9.6,
+          preparationBasis: "as_labeled",
+        })),
+      },
+      grocery: {
+        ...skippedPlan.grocery,
+        items: skippedPlan.grocery.items.map((item) => ({ ...item, generatedQuantity: 3, quantity: 3 })),
+      },
+      expectedVersions: {
+        mealPlanVersion: currentMealPlan.data.version,
+        groceryRevision: currentGrocery.revision,
+      },
+      idempotencyKey: id("edit-meal-plan"),
+    };
+    await rpc(userA.client, "edit_meal_plan", editedMealPlanPayload, `${label} edit meal plan`, calls);
+    const editedMealPlanRow = await userA.client
+      .from("meal_plans")
+      .select("row_id")
+      .eq("app_id", skippedPlan.mealPlan.id)
+      .order("version", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(editedMealPlanRow, `${label} edited meal plan row`);
+    const editedMealResult = await userA.client
+      .from("planned_meals")
+      .select("label, servings, food_row_id, meal_row_id")
+      .eq("meal_plan_row_id", editedMealPlanRow.data.row_id)
+      .eq("app_id", skippedPlan.mealPlan.meals[0].id)
+      .single();
+    assertOk(editedMealResult, `${label} edited meal`);
+    const editedMeal = editedMealResult.data;
+    assert(
+      editedMeal.label === "Edited smoke-test breakfast" &&
+        Number(editedMeal.servings) === 2 &&
+        editedMeal.food_row_id !== null &&
+        editedMeal.meal_row_id === null,
+      `${label} edit_meal_plan did not persist the replacement`,
+    );
+    const editReplay = await rpc(userA.client, "edit_meal_plan", editedMealPlanPayload, `${label} edit meal plan replay`, calls);
+    assert(editReplay.replayed === true, `${label} edit meal plan replay was not marked replayed`);
+
+    const recipeRow = await selectOne(
+      userA.client,
+      "meals",
+      "revision",
+      "app_id",
+      recipePayload.meal.id,
+      `${label} recipe revision`,
+    );
+    const archiveRecipePayload = {
+      mealId: recipePayload.meal.id,
+      expectedVersions: { recordRevision: recipeRow.revision },
+      idempotencyKey: id("archive-recipe"),
+    };
+    await rpc(userA.client, "archive_saved_meal", archiveRecipePayload, `${label} archive recipe`, calls);
+    const archivedRecipe = await selectOne(
+      userA.client,
+      "meals",
+      "archived_at",
+      "app_id",
+      recipePayload.meal.id,
+      `${label} archived recipe`,
+    );
+    assert(archivedRecipe.archived_at !== null, `${label} archive_saved_meal did not archive the recipe`);
+    const archiveReplay = await rpc(userA.client, "archive_saved_meal", archiveRecipePayload, `${label} archive recipe replay`, calls);
+    assert(archiveReplay.replayed === true, `${label} archive recipe replay was not marked replayed`);
 
     const systemMeal = await rawRpc(
       userA.client,

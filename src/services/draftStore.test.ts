@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clearDraft,
+  clearUserDrafts,
   createDraftEnvelope,
+  draftTtlMs,
+  listDrafts,
   readDraft,
   writeDraft,
 } from "./draftStore";
@@ -66,5 +69,48 @@ describe("draftStore", () => {
 
     expect(await readDraft("user-a", "one")).toBeNull();
     expect((await readDraft<number>("user-a", "two"))?.payload).toBe(2);
+  });
+
+  it("uses the documented lifetimes and lists only the current account", async () => {
+    installLocalStorage();
+    await writeDraft(createDraftEnvelope({ userId: "user-a", draftType: "recipe:one", payload: { name: "A" }, ttlMs: draftTtlMs("recipe:one") }));
+    await writeDraft(createDraftEnvelope({ userId: "user-b", draftType: "recipe:one", payload: { name: "B" }, ttlMs: draftTtlMs("recipe:one") }));
+
+    expect(draftTtlMs("onboarding")).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(draftTtlMs("workout-session:session-1")).toBe(Number.POSITIVE_INFINITY);
+    expect(draftTtlMs("nutrition-custom:2026-09-18:breakfast")).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(await listDrafts("user-a")).toHaveLength(1);
+    expect((await listDrafts("user-a"))[0]?.payload).toEqual({ name: "A" });
+
+    await clearUserDrafts("user-a");
+    expect(await listDrafts("user-a")).toHaveLength(0);
+    expect(await listDrafts("user-b")).toHaveLength(1);
+  });
+
+  it("normalizes optional base versions and fails closed for malformed versions", async () => {
+    const values = installLocalStorage();
+    const envelope = createDraftEnvelope({
+      userId: "user-a",
+      draftType: "profile",
+      payload: { name: "A" },
+      baseVersions: { profileRevision: 2, goalVersion: undefined },
+      ttlMs: 60_000,
+    });
+    expect(await writeDraft(envelope)).toBe(true);
+    expect((await readDraft<{ name: string }>("user-a", "profile"))?.baseVersions).toEqual({ profileRevision: 2 });
+
+    values.set(
+      "calicoach:draft:v1:user-a:broken",
+      JSON.stringify({ ...envelope, draftType: "broken", baseVersions: { profileRevision: 1.5 } }),
+    );
+    expect(await readDraft("user-a", "broken")).toBeNull();
+  });
+
+  it("reports when no browser storage accepts a draft", async () => {
+    const values = installLocalStorage();
+    const storage = (window as Window & typeof globalThis).localStorage;
+    storage.setItem = () => { throw new Error("quota"); };
+    values.clear();
+    expect(await writeDraft(createDraftEnvelope({ userId: "user-a", draftType: "profile", payload: {}, ttlMs: 60_000 }))).toBe(false);
   });
 });

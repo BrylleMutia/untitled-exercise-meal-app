@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Bell, Settings } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
 import { BottomNav } from "./BottomNav";
@@ -24,25 +24,27 @@ const NAV_LINKS = [
   { href: "/progress", label: "Progress" },
 ];
 
+function subscribeToOnlineStatus(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
+
+function getOnlineStatus() {
+  return navigator.onLine;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const app = useAppOptional();
-  const [online, setOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  // The server snapshot stays true so the first client render matches SSR;
+  // browser connectivity is read by the external-store subscription after hydration.
+  const online = useSyncExternalStore(subscribeToOnlineStatus, getOnlineStatus, () => true);
   const isOnboarding = pathname.startsWith("/onboarding");
   const isAuthRoute = pathname.startsWith("/auth");
-
-  useEffect(() => {
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
 
   if (!app?.hydrated) {
     return (
@@ -143,15 +145,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-coral-100 px-3 py-2 text-xs font-bold text-ink" role="alert">
             <span>
               {app.error.message}
-              {app.error.code === "stale_version" ? " Review the current form and submit again to reapply your draft." : ""}
+              {app.error.code === "stale_version"
+                ? app.error.details?.refreshedSnapshotAvailable === false
+                  ? " The latest account data is not loaded yet; keep your draft and refresh before applying it."
+                  : " Review the current form and explicitly reapply your draft."
+                : ""}
             </span>
             {app.error.retryable ? (
               <button type="button" className="underline" onClick={() => void app.actions.retryLast().then((retried) => { if (!retried) window.location.reload(); })}>
                 Retry
               </button>
+            ) : app.error.code === "stale_version" && app.error.details?.refreshedSnapshotAvailable === false ? (
+              <button
+                type="button"
+                className="shrink-0 underline"
+                onClick={() => void app.actions.refreshSnapshot()}
+              >
+                Refresh data
+              </button>
             ) : app.error.code === "stale_version" ? (
-              <button type="button" className="shrink-0 underline" onClick={app.actions.clearError}>
-                Dismiss
+              <button
+                type="button"
+                className="shrink-0 underline"
+                onClick={() => void app.actions.retryLast()}
+              >
+                Reapply draft
               </button>
             ) : null}
           </div>

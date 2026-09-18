@@ -1,6 +1,6 @@
 begin;
 
-select plan(32);
+select plan(33);
 
 select has_schema('private', 'private helper schema exists');
 
@@ -24,6 +24,7 @@ select has_table('public', 'weight_entries', 'weight entries table exists');
 select has_table('public', 'grocery_lists', 'grocery lists table exists');
 select has_table('public', 'grocery_items', 'grocery items table exists');
 select has_table('public', 'mutation_idempotency', 'idempotency table exists');
+select has_table('public', 'progression_decisions', 'progression decisions table exists');
 
 select is((select count(*)::int from public.exercises where is_system), 21, 'starter exercise count');
 select is((select count(*)::int from public.foods where is_system), 22, 'starter food count');
@@ -35,9 +36,9 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 20, 'every public application table has RLS enabled');
+), 21, 'every public application table has RLS enabled');
 
-select is((select count(*)::int from pg_policies where schemaname = 'public'), 20, 'owner/catalog policies are present');
+select is((select count(*)::int from pg_policies where schemaname = 'public'), 21, 'owner/catalog policies are present');
 
 select is((
   select count(*)::int
@@ -57,7 +58,7 @@ select is((
   select count(*)::int
   from information_schema.role_table_grants
   where table_schema = 'public' and grantee = 'authenticated' and privilege_type = 'SELECT'
-), 20, 'authenticated reads are granted');
+), 21, 'authenticated reads are granted');
 
 select is((
   select count(*)::int

@@ -25,7 +25,7 @@ identity before product routes are available. The browser/server clients,
 session-refresh Proxy, PKCE callback route, auth pages, authenticated RPC
 repository, RLS migrations, snapshot hydration, export, deletion, and the
 atomic saved-meal logging path are implemented. Browser storage is limited to
-recoverable onboarding/session drafts and never replaces Supabase authority.
+recoverable form/session drafts and never replaces Supabase authority.
 Trusted production nutrition data, protected AI extraction, and linked remote
 smoke verification remain release dependencies.
 
@@ -167,8 +167,18 @@ unconfirmed AI candidates in the durable app snapshot.
 - `UserProfile` stores user inputs and preferences, not derived health values.
 - `Goal` and `DailyTarget` retain the assumptions and effective dates used to create a target.
 - Updating a target creates a new target version and does not rewrite historical summaries.
+- Name and display-unit edits use the profile-only mutation path: they bump the
+  profile revision without regenerating targets or plan snapshots. Body, goal,
+  training, or nutrition-preference changes create only the affected future
+  versions.
 - `WorkoutPlan`, `PlannedWorkout`, and `PlannedExercise` represent a versioned prescription.
 - Generating or editing a future plan creates a new plan version or immutable snapshot.
+- Planned exercise and planned meal slots carry stable `slotKey`/order values;
+  overrides and same-slot meal additions follow those identities across
+  versions rather than internal row IDs.
+- Accepted/rejected progression decisions retain a rule version and source
+  session IDs. Applying or removing an override clones a future plan and never
+  rewrites completed session snapshots.
 - `WorkoutSession` and `ExerciseLog` retain the planned value shown at the time and the actual value recorded by the user.
 - Nutrition records retain source, source version, assumptions, confidence, serving units, preparation basis, and date.
 - Weight entries retain the original user-entered value and unit; trends do not replace observations.
@@ -222,6 +232,17 @@ Rules:
 - Use functional, immutable state updates.
 - Keep active form drafts, selected chart ranges, modal visibility, and open screens out of durable domain state.
 - Keep unconfirmed AI extraction results in feature-local draft state. A separate confirmed intent must create a nutrition record.
+- Planned-meal editing is a versioned snapshot mutation: `editMealPlan` sends
+  trusted food/meal references and expected meal-plan/grocery versions, while
+  the RPC recalculates persisted nutrition metadata and returns a refreshed
+  snapshot. It never rewrites completed nutrition logs.
+- Saved-meal edits use `saveMeal`; when the active grocery read model is
+  supplied, recipe persistence and grocery reconciliation commit in the same
+  authorized transaction. `archiveMeal` soft-deletes owned recipes so
+  historical planned references remain resolvable.
+- Progress/history surfaces use bounded repository read models when available;
+  the initial focused history query is limited to 366 days and 50/100-row
+  cursors, while complete export remains a separate authoritative path.
 
 ## Repository Boundary and Supabase Authority
 
@@ -239,6 +260,9 @@ For every new durable mutation:
 - Return a typed domain outcome and refreshed state.
 - Update cache behavior deliberately.
 - Preserve an idempotency strategy for session completion, nutrition save, plan generation, grocery regeneration, export, and deletion.
+- Preserve the same idempotency and expected-version strategy for planned-meal
+  edits, saved-meal saves, and recipe archive. Grocery merge logic must retain
+  checked state, explicit quantity overrides, removed items, and custom items.
 - Add repository and RPC parity tests for the same input sequence when more than one implementation exists.
 - Define loading, error, offline, retry, and partial-completion behavior.
 
@@ -276,6 +300,10 @@ type MutationOutcome = {
     | { type: "target-updated"; targetId: string }
     | { type: "plan-generated"; planId: string }
     | { type: "plan-edited"; planId: string }
+    | { type: "meal-saved"; mealId: string }
+    | { type: "meal-archived"; mealId: string }
+    | { type: "progression-decision-saved"; decisionId: string }
+    | { type: "workout-override-removed"; planId: string }
     | { type: "workout-completed"; sessionId: string }
     | { type: "nutrition-entry-saved"; entryId: string }
     | { type: "weight-entry-added"; entryId: string }
@@ -299,9 +327,14 @@ must not infer business events by comparing arbitrary snapshots.
 - The Context refreshes the authoritative snapshot after a stale result while
   keeping the user draft and retry intent. Reapplication is explicit and uses a
   new idempotency key; an unchanged transport retry reuses the original key.
+- The M1.2 meal editor follows this protocol for plan and grocery versions;
+  local two-client verification proves one stale writer is rejected and the
+  retained edit succeeds only after an explicit refreshed-version reapply.
 - `src/services/draftStore.ts` is the single versioned browser draft boundary.
   It uses IndexedDB when available, falls back to user-scoped localStorage,
-  expires envelopes by draft type, and clears account drafts on deletion.
+  applies feature-specific lifetimes, reports storage failure without closing
+  the active form, exposes account-scoped inspection, and clears drafts on
+  sign-out or deletion.
 
 Automated target calculations use policy version `calicoach-health-v1`. The
 eligibility outcome (`eligible`, `unsupported`, or `not_answered`) and screening

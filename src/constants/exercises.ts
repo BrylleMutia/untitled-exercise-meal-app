@@ -6,7 +6,7 @@ import type { Exercise } from "@/types/domain";
  * time so they render without network access (CC BY-SA 4.0, Bryl Lim —
  * attribution shown in Settings and on the workout screens).
  */
-export const EXERCISES: Exercise[] = [
+const RAW_EXERCISES: Exercise[] = [
   {
     id: "ex-knee-push-up",
     slug: "knee-push-up",
@@ -304,6 +304,23 @@ export const EXERCISES: Exercise[] = [
     safety: "Lift gently; stop on any back pain.",
   },
 ];
+
+const CATALOG_PROGRESSION_BOUNDS: NonNullable<Exercise["progressionBounds"]> = {
+  minSets: 1,
+  maxSets: 5,
+  setStep: 1,
+  minReps: 1,
+  maxReps: 20,
+  repStep: 2,
+  minHoldSeconds: 5,
+  maxHoldSeconds: 90,
+  holdStep: 5,
+};
+
+export const EXERCISES: Exercise[] = RAW_EXERCISES.map((exercise) => ({
+  ...exercise,
+  progressionBounds: exercise.progressionBounds ?? CATALOG_PROGRESSION_BOUNDS,
+}));
 
 export function exerciseById(id: string): Exercise | undefined {
   return EXERCISES.find((e) => e.id === id);

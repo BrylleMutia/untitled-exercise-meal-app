@@ -1,20 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { averages, dayStatus } from "@/utility/nutrition";
-import { monthMatrix, sameMonth, startOfWeek, todayKey } from "@/utility/dates";
+import { addDays, monthMatrix, sameMonth, startOfWeek, todayKey } from "@/utility/dates";
 import type { Tone } from "@/components/progress/progressShared";
 import { HistoryList, Sparkline } from "@/components/progress/progressShared";
+import type { HistoryReadModel } from "@/types/backend";
 
 export default function ProgressPage() {
-  const { snapshot } = useApp();
+  const { snapshot, actions } = useApp();
   const today = todayKey();
   const [month] = useState(today);
+  const [history, setHistory] = useState<HistoryReadModel | null>(null);
 
-  const completedSessions = snapshot.sessions.filter(
+  useEffect(() => {
+    let active = true;
+    void actions.loadHistory({ from: addDays(today, -365), to: today, limit: 50 }).then((loaded) => {
+      if (active && loaded) setHistory(loaded);
+    });
+    return () => { active = false; };
+  }, [actions, today]);
+
+  const sessions = history?.sessions ?? snapshot.sessions;
+  const nutritionLogs = history?.nutritionLogs ?? snapshot.nutritionLogs;
+  const weights = history?.weights ?? snapshot.weights;
+
+  const completedSessions = sessions.filter(
     (s) => s.status === "completed",
   );
   const weekOf = startOfWeek(today);
@@ -25,17 +39,17 @@ export default function ProgressPage() {
       .map((s) => `${s.plannedWorkoutId}:${s.date}`),
   ).size;
 
-  const avgs = averages(snapshot.nutritionLogs);
-  const weights = [...snapshot.weights].sort((a, b) => a.date.localeCompare(b.date));
-  const firstWeight = weights[0];
-  const lastWeight = weights[weights.length - 1];
+  const avgs = averages(nutritionLogs);
+  const sortedWeights = [...weights].sort((a, b) => a.date.localeCompare(b.date));
+  const firstWeight = sortedWeights[0];
+  const lastWeight = sortedWeights[sortedWeights.length - 1];
 
   const grid = monthMatrix(month);
   const completedDates = new Set(completedSessions.map((s) => s.date));
   const nutritionDays = new Map(
-    [...new Set(snapshot.nutritionLogs.map((l) => l.date))].map((d) => [
+    [...new Set(nutritionLogs.map((l) => l.date))].map((d) => [
       d,
-      dayStatus(snapshot.nutritionLogs, d),
+      dayStatus(nutritionLogs, d),
     ]),
   );
 
@@ -86,12 +100,12 @@ export default function ProgressPage() {
           </p>
           <div className="mt-4">
             <Sparkline
-              points={weights.slice(-16).map((w) => w.weightKg)}
+              points={sortedWeights.slice(-16).map((w) => w.weightKg)}
               ariaLabel="Weight trend sparkline"
             />
           </div>
           <p className="mt-2 text-xs font-semibold text-muted">
-            {weights.length} entries
+            {sortedWeights.length} entries
             {firstWeight ? `, latest ${lastWeight?.weightKg.toFixed(1)} kg` : ""}.
           </p>
         </Card>
@@ -145,7 +159,7 @@ export default function ProgressPage() {
 
       <Card>
         <h2 className="font-extrabold">Recent history</h2>
-        <HistoryList />
+        <HistoryList history={history} />
       </Card>
 
       <p className="text-center text-[11px] font-semibold text-muted">

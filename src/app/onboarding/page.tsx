@@ -28,7 +28,7 @@ import type {
   UserProfile,
   TargetEligibility,
 } from "@/types/domain";
-import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
+import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 
 const STEPS = ["You", "Training", "Goal", "Your numbers"] as const;
 
@@ -92,21 +92,12 @@ export default function OnboardingPage() {
   const app = useAppOptional();
   const router = useRouter();
   const draftUserId = app?.snapshot.userId ?? "";
-  const draftStorageKey = draftUserId ? `calicoach:onboarding-draft:${draftUserId}` : "";
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState<Draft>(() => {
-    const base = profileToDraft(app?.snapshot.profile, app?.snapshot.goal);
-    if (typeof window === "undefined") return base;
-    try {
-      const saved = draftStorageKey ? window.localStorage.getItem(draftStorageKey) : null;
-      return saved ? { ...base, ...(JSON.parse(saved) as Partial<Draft>) } : base;
-    } catch {
-      return base;
-    }
-  });
+  const [draft, setDraft] = useState<Draft>(() => profileToDraft(app?.snapshot.profile, app?.snapshot.goal));
   const [errors, setErrors] = useState<string[]>([]);
   const [draftReady, setDraftReady] = useState(false);
   const [draftWasRestored, setDraftWasRestored] = useState(false);
+  const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
   const suppressDraftWriteRef = useRef(false);
 
   useEffect(() => {
@@ -141,9 +132,9 @@ export default function OnboardingPage() {
         mealPlanVersion: app?.snapshot.mealPlan?.version,
         groceryRevision: app?.snapshot.grocery?.revision,
       },
-      ttlMs: 30 * 24 * 60 * 60 * 1000,
-    }));
-  }, [app?.snapshot, draft, draftReady, draftStorageKey, draftUserId]);
+      ttlMs: draftTtlMs("onboarding"),
+    })).then((saved) => setDraftWriteUnavailable(!saved));
+  }, [app?.snapshot, draft, draftReady, draftUserId]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -260,10 +251,7 @@ export default function OnboardingPage() {
       ? await app.actions.updateProfile(profile, goal)
       : await app.actions.completeOnboarding(profile, goal);
     if (saved) {
-      if (draftUserId) void clearDraft(draftUserId, "onboarding");
-      if (draftStorageKey) {
-        try { window.localStorage.removeItem(draftStorageKey); } catch { /* compatibility cleanup */ }
-      }
+      if (draftUserId) await clearDraft(draftUserId, "onboarding");
       router.push("/");
     }
   };
@@ -328,9 +316,6 @@ export default function OnboardingPage() {
             onClick={() => {
               suppressDraftWriteRef.current = true;
               if (draftUserId) void clearDraft(draftUserId, "onboarding");
-              if (draftStorageKey) {
-                try { window.localStorage.removeItem(draftStorageKey); } catch { /* compatibility cleanup */ }
-              }
               setDraft(profileToDraft(app?.snapshot.profile, app?.snapshot.goal));
               setDraftWasRestored(false);
               setErrors([]);
@@ -339,6 +324,12 @@ export default function OnboardingPage() {
           >
             Discard draft
           </button>
+        </div>
+      ) : null}
+
+      {draftWriteUnavailable ? (
+        <div className="rounded-2xl bg-peach-100 px-3 py-2 text-xs font-bold text-ink-soft" role="status">
+          Draft recovery is unavailable on this device right now. Keep this page open until your save is confirmed.
         </div>
       ) : null}
 
@@ -358,9 +349,6 @@ export default function OnboardingPage() {
               onClick={() => {
                 suppressDraftWriteRef.current = true;
                 if (draftUserId) void clearDraft(draftUserId, "onboarding");
-                if (draftStorageKey) {
-                  try { window.localStorage.removeItem(draftStorageKey); } catch { /* compatibility cleanup */ }
-                }
                 setDraft(profileToDraft(app.snapshot.profile, app.snapshot.goal));
                 setDraftWasRestored(false);
                 setErrors([]);

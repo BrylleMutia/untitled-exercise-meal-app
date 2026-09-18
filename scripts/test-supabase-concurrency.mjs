@@ -318,6 +318,112 @@ async function run() {
       throw new Error("Concurrent profile edits did not produce exactly one typed stale_version conflict");
     }
 
+    const currentMealPlan = await userA.client
+      .from("meal_plans")
+      .select("row_id, app_id, version, week_of")
+      .eq("user_id", userA.userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(currentMealPlan.error, "current meal plan read failed");
+    const currentPlannedMeal = await userA.client
+      .from("planned_meals")
+      .select("app_id, meal_date, meal_slot, skipped")
+      .eq("user_id", userA.userId)
+      .eq("meal_plan_row_id", currentMealPlan.data.row_id)
+      .limit(1)
+      .single();
+    assertOk(currentPlannedMeal.error, "current planned meal read failed");
+    const currentGrocery = await userA.client
+      .from("grocery_lists")
+      .select("row_id, app_id, week_of, revision")
+      .eq("user_id", userA.userId)
+      .order("row_id", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(currentGrocery.error, "current grocery list read failed");
+    const currentGroceryItem = await userA.client
+      .from("grocery_items")
+      .select("app_id, name, category, unit, generated_quantity, quantity, checked, custom_item, removed")
+      .eq("user_id", userA.userId)
+      .eq("grocery_list_row_id", currentGrocery.data.row_id)
+      .limit(1)
+      .single();
+    assertOk(currentGroceryItem.error, "current grocery item read failed");
+    const mealEditPayload = (label, key) => ({
+      mealPlan: {
+        id: currentMealPlan.data.app_id,
+        weekOf: currentMealPlan.data.week_of,
+        meals: [{
+          id: currentPlannedMeal.data.app_id,
+          date: currentPlannedMeal.data.meal_date,
+          slot: currentPlannedMeal.data.meal_slot,
+          foodId: "food-milk",
+          label,
+          servings: 1,
+          expectedCalories: 122,
+          expectedProteinG: 8,
+          expectedCarbsG: 12,
+          expectedFatG: 4.8,
+          confidence: "high",
+          preparationBasis: "as_labeled",
+          skipped: currentPlannedMeal.data.skipped,
+        }],
+      },
+      grocery: {
+        id: currentGrocery.data.app_id,
+        weekOf: currentGrocery.data.week_of,
+        items: [{
+          id: currentGroceryItem.data.app_id,
+          name: currentGroceryItem.data.name,
+          category: currentGroceryItem.data.category,
+          unit: currentGroceryItem.data.unit,
+          generatedQuantity: 3,
+          quantity: 3,
+          checked: currentGroceryItem.data.checked,
+          custom: currentGroceryItem.data.custom_item,
+          removed: currentGroceryItem.data.removed,
+        }],
+      },
+      expectedVersions: {
+        mealPlanVersion: currentMealPlan.data.version,
+        groceryRevision: currentGrocery.data.revision,
+      },
+      idempotencyKey: key,
+    });
+    const mealEditResults = await Promise.all([
+      rawRpc(userA.client, "edit_meal_plan", mealEditPayload("Concurrent meal winner", "concurrency-meal-edit-a")),
+      rawRpc(userA.client, "edit_meal_plan", mealEditPayload("Concurrent meal loser", "concurrency-meal-edit-b")),
+    ]);
+    const mealEditFailures = mealEditResults.filter((result) => result.error);
+    if (mealEditFailures.length !== 1 || !mealEditFailures[0].error.message.includes("stale_version")) {
+      throw new Error("Concurrent meal-plan edits did not produce exactly one typed stale_version conflict");
+    }
+    const refreshedMealPlan = await userA.client
+      .from("meal_plans")
+      .select("row_id, app_id, version, week_of")
+      .eq("user_id", userA.userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(refreshedMealPlan.error, "refreshed meal plan read failed");
+    const refreshedGrocery = await userA.client
+      .from("grocery_lists")
+      .select("row_id, app_id, week_of, revision")
+      .eq("user_id", userA.userId)
+      .order("row_id", { ascending: false })
+      .limit(1)
+      .single();
+    assertOk(refreshedGrocery.error, "refreshed grocery read failed");
+    const reapply = mealEditPayload("Explicitly reapplied meal", "concurrency-meal-edit-reapply");
+    reapply.mealPlan.id = refreshedMealPlan.data.app_id;
+    reapply.mealPlan.weekOf = refreshedMealPlan.data.week_of;
+    reapply.expectedVersions.mealPlanVersion = refreshedMealPlan.data.version;
+    reapply.grocery.id = refreshedGrocery.data.app_id;
+    reapply.grocery.weekOf = refreshedGrocery.data.week_of;
+    reapply.expectedVersions.groceryRevision = refreshedGrocery.data.revision;
+    await rpc(userA.client, "edit_meal_plan", reapply, "explicit meal-plan stale reapply");
+
     const mismatchPayloadOne = onboardingPayload(userA.userId, "concurrency-hash-mismatch");
     const mismatchPayloadTwo = onboardingPayload(userA.userId, "concurrency-hash-mismatch", "different");
     const mismatchResults = await Promise.all([
@@ -432,7 +538,7 @@ async function run() {
     assertOk(userBItem.error, "User B cross-user isolation read failed");
     if (userBItem.data.checked !== false) throw new Error("User B grocery state changed from User A request");
 
-    console.log("Supabase local concurrency checks passed (2 users, duplicate replay, hash mismatch, stale profile conflict, workout, grocery, isolation).");
+    console.log("Supabase local concurrency checks passed (2 users, duplicate replay, hash mismatch, stale profile and meal-plan conflicts, explicit reapply, workout, grocery, isolation).");
   } finally {
     await Promise.all([
       deleteLocalUser(userA, "User A"),

@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ExerciseIllustration } from "@/components/ExerciseIllustration";
 import { EXERCISES, exerciseById } from "@/constants/exercises";
 import { startOfWeek, todayKey, weekDates, formatDay } from "@/utility/dates";
+import { suggestProgression } from "@/utility/progression";
 
 const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -97,9 +98,21 @@ export default function WorkoutsPage() {
                   const e = exerciseById(pe.exerciseId);
                   const slotKey = pe.slotKey ?? `day:${workout.dayOfWeek}:exercise:${pe.sortOrder ?? exerciseIndex + 1}`;
                   const editing = editingSlot === slotKey;
+                  const suggestion = suggestProgression(pe.id, snapshot.sessions);
+                  const latestDecision = snapshot.progressionDecisions.find(
+                    (decision) => decision.slotKey === slotKey && decision.plannedExerciseId === pe.id,
+                  );
+                  const suggestionHandled = Boolean(
+                    suggestion && latestDecision &&
+                    latestDecision.sourceSessionIds.join(",") === suggestion.sourceSessionIds.join(","),
+                  );
+                  const activeOverride = snapshot.workoutOverrides.find(
+                    (override) => override.slotKey === slotKey && override.active,
+                  );
                   return (
-                    <li key={pe.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/60 px-3 py-1.5">
-                      <span>{e?.name ?? "Exercise"}</span>
+                    <li key={pe.id} className="grid gap-2 rounded-xl bg-white/60 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{e?.name ?? "Exercise"}</span>
                       <button
                         type="button"
                         className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white"
@@ -113,6 +126,7 @@ export default function WorkoutsPage() {
                       >
                         <Pencil className="h-3.5 w-3.5" aria-hidden />
                       </button>
+                      </div>
                       {editing ? (
                         <div className="flex items-center gap-1">
                           <select className="input !min-h-9 max-w-36 text-xs" value={replacementId} onChange={(event) => setReplacementId(event.target.value)} aria-label="Replacement exercise">
@@ -136,9 +150,65 @@ export default function WorkoutsPage() {
                           }}>Save</button>
                         </div>
                       ) : null}
-                      <span className="tabular-nums text-ink-soft">
-                        {pe.sets} × {pe.reps ?? `${pe.holdSeconds}s`}
-                      </span>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="tabular-nums text-ink-soft">
+                          {pe.sets} × {pe.reps ?? `${pe.holdSeconds}s`}
+                        </span>
+                        {activeOverride ? (
+                          <button
+                            type="button"
+                            className="font-extrabold text-ink underline underline-offset-2"
+                            onClick={() => void actions.removeWorkoutOverride({ slotKey, plannedExerciseId: pe.id })}
+                          >
+                            Remove edit
+                          </button>
+                        ) : null}
+                      </div>
+                      {suggestion && !suggestionHandled && suggestion.action !== "hold" ? (
+                        <div className="grid gap-2 rounded-xl bg-lav-100 px-2.5 py-2 text-[11px] font-semibold text-ink-soft">
+                          <span>{suggestion.reason}</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              className="min-h-9 rounded-xl bg-ink px-2.5 font-extrabold text-white"
+                              onClick={() => {
+                                const replacement = suggestion.replacementExerciseId
+                                  ? EXERCISES.find((candidate) => candidate.id === suggestion.replacementExerciseId)
+                                  : undefined;
+                                void actions.applyProgressionDecision({
+                                  slotKey,
+                                  plannedExerciseId: pe.id,
+                                  action: suggestion.action,
+                                  decision: "accepted",
+                                  ruleVersion: suggestion.ruleVersion,
+                                  sourceSessionIds: suggestion.sourceSessionIds,
+                                  ...(replacement && replacement.measure === e?.measure ? { replacementExerciseId: replacement.id } : {}),
+                                  ...(suggestion.proposedSets === undefined ? {} : { sets: suggestion.proposedSets }),
+                                  ...(suggestion.proposedReps === undefined ? {} : { reps: suggestion.proposedReps }),
+                                  ...(suggestion.proposedHoldSeconds === undefined ? {} : { holdSeconds: suggestion.proposedHoldSeconds }),
+                                  restSeconds: pe.restSeconds,
+                                });
+                              }}
+                            >
+                              Accept {suggestion.action === "progress" ? "progression" : "regression"}
+                            </button>
+                            <button
+                              type="button"
+                              className="min-h-9 rounded-xl bg-white px-2.5 font-extrabold text-ink"
+                              onClick={() => void actions.applyProgressionDecision({
+                                slotKey,
+                                plannedExerciseId: pe.id,
+                                action: suggestion.action,
+                                decision: "rejected",
+                                ruleVersion: suggestion.ruleVersion,
+                                sourceSessionIds: suggestion.sourceSessionIds,
+                              })}
+                            >
+                              Keep current
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </li>
                   );
                 })}

@@ -2,6 +2,7 @@
 
 import { Check, Dumbbell, Scale, UtensilsCrossed } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
+import type { HistoryReadModel } from "@/types/backend";
 
 export type Tone = "lav" | "mint" | "peach";
 
@@ -50,12 +51,12 @@ export function Sparkline({ points, ariaLabel }: SparklineProps) {
  * Accessible text alternative to the calendar history — summary lists every
  * session and nutrition day instead of hiding information in a graphic.
  */
-export function HistoryList() {
+export function HistoryList({ history }: { history?: HistoryReadModel | null }) {
   const app = useAppOptional();
   if (!app) return null;
 
   const rows = [
-    ...app.snapshot.sessions.map((s) => ({
+    ...(history?.sessions ?? app.snapshot.sessions).map((s) => ({
       date: s.date,
       icon: <Dumbbell className="h-4 w-4" aria-hidden />,
       label:
@@ -64,15 +65,15 @@ export function HistoryList() {
           : s.status === "partial"
             ? "Workout partially logged"
             : "Workout abandoned",
-      detail: `${s.logs.length} exercises · planned vs actual kept separate`,
+        detail: `${"loggedExerciseCount" in s ? s.loggedExerciseCount : s.logs.length} exercises · planned vs actual kept separate`,
     })),
-    ...app.snapshot.nutritionLogs.map((n) => ({
+    ...(history?.nutritionLogs ?? app.snapshot.nutritionLogs).map((n) => ({
       date: n.date,
       icon: <UtensilsCrossed className="h-4 w-4" aria-hidden />,
       label: `Nutrition — ${n.slot}`,
       detail: `${n.foodId ?? n.customName ?? "entry"} · ${Math.round(n.calories)} kcal`,
     })),
-    ...app.snapshot.weights.map((w) => ({
+    ...(history?.weights ?? app.snapshot.weights).map((w) => ({
       date: w.date,
       icon: <Scale className="h-4 w-4" aria-hidden />,
       label: "Weight entry",

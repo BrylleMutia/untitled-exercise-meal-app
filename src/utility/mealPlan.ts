@@ -18,7 +18,7 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
         sourceVersion: "starter-v1",
         assumptions: "Estimated from the saved recipe and catalog serving sizes.",
         confidence: "medium" as const,
-        preparationBasis: "as-listed",
+        preparationBasis: "as_labeled" as const,
       };
     }
   }
@@ -35,7 +35,7 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
         sourceVersion: food.sourceVersion,
         assumptions: "Estimated from the catalog serving size.",
         confidence: food.confidence,
-        preparationBasis: "as-listed",
+        preparationBasis: "as_labeled" as const,
       };
     }
   }
@@ -48,7 +48,7 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
     sourceVersion: "unknown",
     assumptions: "No trusted catalog match; choose and confirm a meal before logging.",
     confidence: "low" as const,
-    preparationBasis: "unknown",
+    preparationBasis: "unknown" as const,
   };
 }
 

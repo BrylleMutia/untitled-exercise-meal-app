@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { HEALTH_DISCLAIMER, kgToLb, lbToKg } from "@/utility/health";
 import { signOutAction } from "@/app/auth/actions";
+import { clearUserDrafts } from "@/services/draftStore";
 
 export default function SettingsPage() {
   const { snapshot, actions } = useApp();
@@ -22,6 +23,7 @@ export default function SettingsPage() {
   const [weight, setWeight] = useState("");
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const profile = snapshot.profile;
   const target = snapshot.target;
 
@@ -60,6 +62,12 @@ export default function SettingsPage() {
       } catch { /* best-effort cleanup */ }
       router.push("/auth/sign-in");
     }
+  };
+
+  const signOut = async () => {
+    setSigningOut(true);
+    await clearUserDrafts(snapshot.userId);
+    await signOutAction();
   };
 
   return (
@@ -165,17 +173,9 @@ export default function SettingsPage() {
             <RefreshCw className="h-4 w-4" aria-hidden />
             Regenerate plan from current profile
           </Button>
-          <form action={signOutAction} onSubmit={() => {
-            try {
-              for (const key of Object.keys(window.localStorage)) {
-                if (key.startsWith("calicoach:onboarding-draft:") || key.startsWith("calicoach:session:")) window.localStorage.removeItem(key);
-              }
-            } catch { /* best-effort cleanup */ }
-          }}>
-            <Button type="submit" variant="danger" className="w-full">
-              <LogOut className="h-4 w-4" aria-hidden /> Sign out
-            </Button>
-          </form>
+          <Button type="button" variant="danger" className="w-full" onClick={() => void signOut()} disabled={signingOut}>
+            <LogOut className="h-4 w-4" aria-hidden /> {signingOut ? "Signing out…" : "Sign out"}
+          </Button>
           <Button variant="danger" onClick={() => void deleteAccount()} disabled={deleting}>
             Permanently delete account
           </Button>

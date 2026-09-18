@@ -1,7 +1,7 @@
 # MVP Priority Matrix
 
-Audit date: 2026-09-16
-Implementation specification revision: 2026-09-17
+Audit date: 2026-09-18
+Implementation specification revision: 2026-09-18
 
 This document summarizes the current implementation and the work required to
 meet the MVP contract in [`FEATURES.md`](./FEATURES.md), the engineering and
@@ -65,9 +65,11 @@ The following highest-risk items now have implementation coverage:
   onboarding. They are applied and verified against the local Supabase stack;
   the linked remote remains unchanged pending explicit rollout authorization.
 
-Remaining release blockers are complete feature-wide conflict/reapply coverage,
-nutrition editing/preparation controls, trusted production nutrition data,
-protected AI extraction, browser/accessibility checks, and guarded
+The current MVP-1 wave adds the durable workout progression/override loop,
+same-slot planned-meal ordering, bounded progress/history reads, and the
+canonical per-100-g nutrition calculation foundation. Remaining release
+blockers are provider-backed nutrition/AI integration, complete feature-wide
+conflict/reapply coverage, browser/accessibility checks, and guarded
 staging/remote smoke verification.
 
 ## What Is Completed So Far
@@ -90,20 +92,20 @@ staging/remote smoke verification.
   refresh, safe protected-route redirects, PKCE confirmation, token-hash
   verification, password recovery, sign-up, sign-in, sign-out, and missing-env
   configuration handling exist.
-- Twenty-two forward-only migrations define 20 public tables, versioned workout
+- Twenty-eight forward-only migrations define 20 public tables, versioned workout
   and meal plans, planned-versus-actual workout history, nutrition and weight
   history, grocery state, idempotency records, indexes, constraints, RLS, and
   explicit grants/revokes.
-- Twenty-three public authenticated RPC wrappers cover profile/target/plan
+- Twenty-five public authenticated RPC wrappers cover profile/target/plan
   bundles, workout sessions, nutrition, saved meals/recipes, weight, grocery,
   export, and account deletion.
 - `src/types/database.generated.ts`, database-to-domain mappers, authenticated
   repository hydration, typed mutation outcomes, and semantic events exist.
-- Static inspection confirms the documented 20 tables, 20 policies, and 23
-  public RPCs. Fresh local reset/lint, all 377 pgTAP assertions, the 23-RPC
-  client smoke run, concurrency run, typecheck, lint, and production build
-  now pass; linked history/lint still cover only the previously deployed
-  nineteen migrations.
+- Static inspection confirms the documented 20 tables, 20 policies, and 25
+  authenticated RPC wrappers. The local reset/lint/384-assertion gate,
+  27-wrapper client smoke run, concurrency run, typecheck, lint, and production
+  build pass. Linked history still covers only the previously deployed
+  migrations.
 
 ### Domain and feature groundwork
 
@@ -135,23 +137,23 @@ staging/remote smoke verification.
 |---|---|---|---|
 | App shell, responsive design, accessibility baseline | Substantially complete | Shared shell/components, mobile and desktop navigation, 44px controls, focus styles, reduced motion, loading/error/empty/pending/offline surfaces | Run mobile, desktop, keyboard, screen-reader-oriented, large-text, reduced-motion, and narrow-overflow checks |
 | Supabase authentication | Substantially complete | SSR clients, protected routes, PKCE/token-hash callback, sign-up/sign-in/recovery/sign-out | Configure production URLs, SMTP, leaked-password protection; complete remote disposable-user Auth smoke flow |
-| Supabase schema, RLS, RPCs, generated types | Substantially complete | 23 forward-only migrations, 20 RLS tables/policies, 23 authenticated wrappers, direct writes revoked, generated types aligned with the MVP-0 revision/health columns, local reset/lint/377 pgTAP/23-RPC/concurrency checks passing | Apply the hardening migration to staging/remote when authorized, regenerate types from the deployed schema, and run remote RPC/Auth smoke |
+| Supabase schema, RLS, RPCs, generated types | Substantially complete | 30 forward-only migrations, 21 RLS tables/policies, 27 authenticated wrappers, direct writes revoked, generated types aligned with the MVP-0/M1.1/M1.2 contracts; local reset/lint/384-assertion and 27-wrapper smoke gates pass | Apply the authorized migration set to staging/remote, regenerate types from the deployed schema, and run remote RPC/Auth smoke |
 | Onboarding and profile | Substantially complete | Four-step flow, core body/training fields, units, dietary pattern, allergy text, primary goal, target weight/date/rate persistence, optional preference fields, profile hydration/edit action, supported-population screening | Add food-preference, cooking-time, and budget controls; verify unsupported profile-only completion and under-five-minute completion |
 | Health calculations and safety | Substantially complete | Versioned Mifflin–St Jeor policy, adult boundaries, unit conversions, estimate/disclaimer copy, aggressive-rate UI, explicit below-floor/unsupported outcomes, persisted target assumptions | Preserve assumptions in every historical read model, represent ranges where appropriate, broaden boundary tests, and complete browser verification |
 | Goals and target versioning | Substantially complete | Versioned database tables and bundle creation; goal fields now hydrate and persist with target references; expected-version preflight and typed stale errors | Complete feature-wide stale reapply UX and verify historical summaries retain target assumptions |
 | Exercise library | Complete for starter scope | 21 exercises, balanced movement coverage, local illustrations, descriptions, equipment, measure type, regression/progression, safety, attribution | Final visual/accessibility review and catalog parity test rerun |
 | Weekly workout plan | Substantially complete | Deterministic generator with schedule/equipment/duration constraints, per-slot edit UI, authorized override RPC/table, override hydration and regeneration preservation | Add override removal UI and apply recorded performance to the next plan rather than only showing a suggestion |
 | Workout execution and logging | Substantially complete | Start/save/finish/abandon RPCs; actual sets/reps/holds, skip/modify, RPE, manageable, pain, notes; local pause/resume, interrupted-session recovery, serialized saves, stable retry key | Add optional load entry and make warm-up/cooldown/rest guidance usable in-session; test every lifecycle transition and browser failure path |
-| Weekly meal plan | Partial | Deterministic seven-day plan, dietary/allergy filtering, skip/unskip, versioned database rows, expected macro/source/version/assumption/confidence metadata | Add replace, serving change, add-meal, and explicit plan-edit flows; account for preferences, cooking time, budget, and user recipes; preserve past logs and user edits across regeneration |
+| Weekly meal plan | Partial | Deterministic seven-day plan, dietary/allergy filtering, skip/unskip, versioned database rows, expected macro/source/version/assumption/confidence metadata, planned-meal replace/serving/add editor, expected-version `edit_meal_plan` RPC, atomic grocery reconciliation | Add stable same-slot ordering, normalized edit intents/regenerate flow, preference/cooking-time/budget-aware generation, unresolved-slot output, recipe draft recovery, and full browser verification |
 | Manual nutrition logging | Substantially complete | Catalog/custom entry, deletion, non-negative validation, daily totals/completeness labels, source/confidence display, atomic `log_saved_meal` RPC, per-entry idempotency, recoverable custom/text drafts | Add editing/correction and serving-unit/preparation controls; add planned-meal/recipe drafts and run duplicate/date/unit tests |
 | Trusted nutrition data | Not implemented | Estimated 22-food starter catalog with source/version labels | Select, license, document, load, and version one production nutrition source; define canonical grams/milliliters, household conversions, branded/raw/cooked behavior, mixed-dish uncertainty, and unmatched fallback |
 | AI-assisted text nutrition | Not implemented for MVP | Temporary deterministic browser parser and review UI | Add protected server-side/Edge Function extraction, Zod/schema validation, trusted-record matching, timeouts/rate limits/privacy/error handling, editable candidate review, and separate confirmation/save mutation. The model must never supply authoritative macros or save data directly |
-| Custom meals and recipes | Partial backend only | Tables, hydration, save meal/recipe RPCs, repository `saveMeal` method, starter saved-meal display/logging | Expose Context actions and create/duplicate/edit/delete/log UI; calculate per-serving nutrition; validate ingredient ownership/units; make meal logging atomic; update grocery state after recipe edits |
-| Grocery list | Partial | Generation, duplicate combination, categories, check/edit/remove/custom/regenerate UI, generated-versus-adjusted values | Connect every meal replacement/serving/recipe change to regeneration; harden concurrent regeneration and lock ordering; expose pending/failure/retry behavior; verify overrides, removals, checked items, and custom items across all edit sequences |
+| Custom meals and recipes | Partial | Tables/hydration, owner-checked save/archive RPCs, Context/repository `saveMeal`/`duplicateMeal`/`archiveMeal` actions, create/edit/duplicate/archive/log UI, canonical ingredient validation, atomic saved-meal logging, recipe-save grocery reconciliation | Add custom-food persistence and serving/preparation contract, recipe/planned-meal draft recovery, richer nutrition preview, and full browser/rollback coverage |
+| Grocery list | Partial | Generation, duplicate combination, categories, check/edit/remove/custom/regenerate UI, generated-versus-adjusted values, atomic reconciliation after plan/recipe edits, expected revision checks, two-client stale/reapply coverage | Add explicit changed-quantity UI, broader edit-sequence tests, pending/failure/offline retry verification, and complete browser/accessibility/offline matrix |
 | Calendar and progress | Substantially complete | Calendar, history across plan versions, weight entries/sparkline, workout count, calorie/protein averages, explicit unlogged labels | Show planned/skipped occurrences, add date ranges/data counts, and introduce bounded/paginated read models |
 | Settings and data controls | Substantially complete | Unit changes, weight entry, plan reset, sign-out, disclaimer, server JSON export, authorized account deletion, sign-out and local draft clearing | Add full profile/target editing surface; add CSV if retained in scope; add notification preference or explicitly defer it in `FEATURES.md` |
-| Failure, offline, and draft recovery | Partial | Onboarding, nutrition custom/text, grocery custom-item, and workout-session recoverable drafts; serialized saves; stable retry key retained in Context; pending/error/offline UI; explicit restore/discard and retry actions; safe re-auth return path | Add planned-meal/recipe drafts and verify all account-switching, stale reapply, and offline paths |
-| Testing and release verification | Substantially complete | Health/progression unit tests; eight SQL suites; local reset/lint/377 pgTAP/23-RPC/concurrency runners; typecheck, lint, unit tests, and production build pass | Add plan, meal-plan, nutrition, grocery, mapper/repository, component, and end-to-end tests; add CI; run browser/accessibility/offline and guarded remote gates |
+| Failure, offline, and draft recovery | Partial | Onboarding, nutrition custom/text, grocery custom-item, and workout-session recoverable drafts; serialized saves; stable retry key retained in Context; pending/error/offline UI; explicit restore/discard and retry actions; safe re-auth return path; fresh-key meal-plan reapply | Add planned-meal/recipe draft envelopes and verify all account-switching, stale reapply, rollback, and offline paths |
+| Testing and release verification | Substantially complete | Health/progression/canonical-nutrition unit tests; eight SQL suites; local 384 pgTAP/27-RPC/concurrency gate; typecheck, lint, 28 local tests, and production build pass | Add plan, meal-plan, nutrition, grocery, mapper/repository, component, and end-to-end tests; add CI; run browser/accessibility/offline and guarded remote gates |
 
 MVP-0 reconciliation note: the onboarding screen now captures the supported-
 population result, target calculations use the versioned health policy without a
@@ -168,14 +170,15 @@ The original audit findings were rechecked after the retry implementation.
    counts no longer filter completed history to the current plan.
 2. **Plan editing and progression — partially resolved.** Authorized,
    per-slot workout overrides and replacement UI now persist safely. Bounded
-   progression acceptance/rejection, override removal, and meal-plan editing
-   remain open.
+   progression acceptance/rejection and override removal remain open; the first
+   planned-meal editor slice is implemented under M1.2.
 3. **Concurrent writes and retries — partially resolved.** Context guards
    duplicate submissions, retains idempotency keys for retry, serializes session
    saves, refreshes stale snapshots, and exposes typed expected-version conflicts.
-   Broader repository integration and feature-wide reapply coverage remain open.
+   Meal-plan/grocery stale-writer and explicit reapply coverage now pass locally;
+   broader feature-local adapters and browser reapply coverage remain open.
 4. **Saved-meal logging — resolved.** `log_saved_meal` performs one atomic
-   transaction with deterministic per-entry idempotency keys; the 23-wrapper
+   transaction with deterministic per-entry idempotency keys; the 27-wrapper
    local smoke suite covers replay and ownership behavior.
 5. **Nutrition zero-value validation — resolved.** Legitimate zero-valued
    nutrients are accepted while servings remain positive and values non-negative.
@@ -193,10 +196,11 @@ The original audit findings were rechecked after the retry implementation.
    refresh now preserves drafts and routes to sign-in with a safe return path.
    Planned-meal/recipe drafts, full stale reapplication coverage, and
    production PWA behavior remain open.
-10. **Database gate — resolved locally.** The forward hardening migrations are
-    applied locally; lint, 377 pgTAP assertions, 23-wrapper smoke, and
-    concurrency/isolation checks pass. Linked rollout and remote Auth smoke
-    remain pending explicit authorization and disposable credentials.
+10. **Database gate — previous baseline resolved locally.** The prior
+    23-migration gate passed locally. The profile-only/version-validation
+    follow-up migrations were rerun against a clean local reset with lint and the
+    full 384-assertion gate. Linked rollout and remote Auth smoke remain pending
+    explicit authorization and disposable credentials.
 
 ## Documentation and Guide Review
 
@@ -335,7 +339,7 @@ version, validation, draft, or retry conventions.
 
 ### M0.1 — Optimistic concurrency and stale-edit recovery
 
-**Status:** In progress
+**Status:** Partially implemented — durable decision/override slice complete; catalog and browser coverage remain
 
 **Outcome**
 
@@ -392,9 +396,11 @@ discard decision.
   shared database preflight that locks aggregates in a consistent order and
   raises `stale_version` before durable changes.
 - Context refreshes the authoritative snapshot on a stale response while
-  retaining the existing retry/draft intent. Onboarding now offers explicit
-  reapply/discard controls; full two-client coverage for every aggregate and
-  feature-local reapply UI remain follow-up work.
+  retaining the existing retry/draft intent. Reapply now uses a fresh
+  idempotency key, while ordinary transport retries reuse the original key;
+  onboarding and the shared shell expose explicit reapply controls. Full
+  two-client coverage for every aggregate and feature-local discard adapters
+  remain follow-up work.
 
 **Failure behavior**
 
@@ -468,8 +474,10 @@ the server boundary and either commits its complete result or changes nothing.
 **Implemented in the current MVP-0 wave**
 
 - Added private finite-number/date/payload validators and applied them through
-  all 23 authenticated wrappers, with private-schema execution revoked from
+  the authenticated wrappers, with private-schema execution revoked from
   client roles.
+- Expected-version counters now require integer-shaped values before any
+  comparison or cast, preventing decimal rounding from bypassing stale checks.
 - Added local pgTAP coverage for malformed values, unsupported health payloads,
   stale grocery writes, revision triggers, and no-mutation-on-conflict behavior.
 
@@ -557,6 +565,8 @@ changes.
   `UnsupportedTargetError` handling.
 - Unsupported onboarding can persist a profile-only result for manual logging;
   no automated target or plan rows are created.
+- Name and display-unit changes now use a profile-only mutation path, preserving
+  active targets and plan versions while incrementing only the profile revision.
 - Removed the silent 1,200-kcal clamp; below-floor and unsupported-screening
   outcomes now stop target preview/persistence and retain the user’s inputs.
 
@@ -636,7 +646,8 @@ do not lose active input or misrepresent an unsaved operation as persisted.
   controls. Context preserves drafts across stale responses and attempts one
   authenticated session refresh before replay; failed identity refresh
   redirects to sign-in with a safe return path. Grocery retries rebuild their
-  expected snapshot after a stale response instead of replaying stale versions.
+  expected snapshot after a stale response instead of replaying stale versions;
+  the shared shell now offers fresh-key reapplication for retained intents.
   Planned-meal and recipe-specific adapters, plus browser coverage for account
   switching and stale reapplication, remain pending.
 
@@ -682,11 +693,36 @@ history.
 - The current progression utility uses global bounds, the UI only shows a
   suggestion, and an override cannot be removed.
 
+**Implemented in the 2026-09-18 MVP-1 wave**
+
+- `src/utility/progression.ts` now returns a versioned recommendation with
+  source-session IDs, bounded reps/holds/sets changes, validated
+  progression/regression references, and the documented pain/RPE/partial/
+  skipped rules. The Context exposes `getProgressionRecommendations` for this
+  deterministic read.
+- Migration `20260918033746_mvp1_progression_overrides_and_loads.sql` adds
+  durable planned-exercise and override `slot_key` values, clones the current
+  workout plan for override/progression changes, persists accepted/rejected
+  decisions with rule version and source sessions, and adds optional actual
+  load/load-unit fields to exercise logs.
+- Authorized `remove_workout_override` and `apply_progression_decision` RPCs,
+  repository methods, Context actions, semantic events, and the Workouts UI
+  now support accept/keep/remove flows. A cloned plan keeps previous session
+  snapshots intact and carries unrelated active overrides forward.
+- The active session presents warm-up, current exercise, rest guidance,
+  cooldown, one-handed controls, and optional actual load/unit entry.
+
+The slice is intentionally still marked partial: a full repository-backed
+recommendation read model, catalog-specific load bounds, complete cleanup of
+legacy free-text references, and browser/accessibility verification remain
+before M1.1 exit.
+
 **Implementation and data logic**
 
 1. Replace global progression limits with catalog-defined minimum, maximum, and
-   step values for sets, reps, holds, and optional load. Replace free-text
-   progression links with validated nullable exercise references.
+   step values for sets, reps, holds, and optional load. The current catalog
+   wrapper supplies shared bounded defaults; per-exercise load bounds and a
+   migration from every legacy free-text reference remain pending.
 2. Persist a stable `slotKey` on planned exercises and overrides. Overrides
    follow the scheduled slot, not a generated exercise ID or internal row ID.
 3. Evaluate the latest two applicable exposures with the documented rules:
@@ -712,7 +748,9 @@ history.
 **Public contract changes**
 
 - Add `getProgressionRecommendations`, `applyProgressionDecision`, and
-  `removeWorkoutOverride` repository/Context actions and authorized RPCs.
+  `removeWorkoutOverride` repository/Context actions and authorized RPCs. The
+  Context read and the latter two durable actions are implemented; a focused
+  repository read for recommendations remains follow-up work.
 - Add load/unit snapshots and progression decision types.
 - Add semantic events for accepted/rejected progression and removed overrides.
 
@@ -740,7 +778,7 @@ history.
 
 ### M1.2 — Editable meal plans, recipes, and atomic grocery updates
 
-**Status:** In progress
+**Status:** Partially implemented — editor, transaction, and slot/order slice complete; intent/generation hardening remains
 
 **Outcome**
 
@@ -752,54 +790,86 @@ their explicit corrections.
 
 - Versioned meal-plan tables, deterministic generation, skip/unskip, saved-meal
   persistence/logging, grocery generation, and merge behavior exist.
-- Replace/add/serving flows and recipe CRUD UI are missing, and recipe changes do
-  not yet participate in grocery regeneration.
+- The current nutrition screen now exposes planned-meal replace/serving/add
+  editing and saved-meal create/edit/duplicate/archive/log actions.
+- `edit_meal_plan` creates a future meal-plan version, recalculates trusted
+  nutrition metadata from catalog/owned-meal references, and reconciles the
+  active grocery list in the same transaction.
+- `save_saved_meal` now accepts the active grocery read model so recipe saves
+  and grocery reconciliation commit atomically; archive is a soft-delete that
+  preserves historical references.
+- Migration `20260918040044_mvp1_planned_meal_slot_order.sql` adds stable
+  planned-meal `slot_key` and `sort_order` values, removes the one-row-per-date/
+  slot uniqueness restriction, and preserves deterministic ordering for
+  multiple same-slot entries.
 
 **Implementation and data logic**
 
 1. Add a stable planned-meal slot key and `sortOrder`. Replace one-row-per-date
    and meal-slot uniqueness with date/slot/order uniqueness so multiple snacks
-   or added meals are representable.
+   or added meals are representable. Implemented in the local schema migration;
+   UI/editor insertion and full same-slot browser coverage remain pending.
 2. Implement one `editMealPlan` intent union: replace reference, change serving,
-   add entry, skip/unskip, or regenerate.
+   add entry, skip/unskip, or regenerate. The current UI routes replace,
+   serving, add, and skip/unskip through the repository; a normalized intent
+   union and standalone regenerate command remain follow-up cleanup.
 3. Every edit creates a new future meal-plan version with a supersedes link. Old
    plan rows and previously logged nutrition remain unchanged.
 4. Accept only intent and trusted food/meal IDs from the client. Recalculate
    expected macros, source/version, preparation, assumptions, and confidence
-   from persisted catalog data at the trusted boundary.
+   from persisted catalog data at the trusted boundary. `edit_meal_plan` now
+   rejects mixed food/meal references, missing owner/system records, invalid
+   dates/slots/servings, and cross-user IDs.
 5. Apply dietary pattern, allergies/exclusions, food preferences, cooking-time
    ceiling, budget, and available user meals/recipes during deterministic
-   generation. If nothing qualifies, create an explicit unresolved slot.
+   generation. The current generator has dietary/allergy filtering and the
+   editor can select trusted foods or saved meals; preference/cooking-time/
+   budget-aware selection and explicit unresolved slots remain pending.
 6. Expose reusable meal/recipe behavior:
    - Create and edit through the owner-checked save boundary.
    - Duplicate from an owned/system-visible source into a new owned record.
    - Archive instead of hard-delete so historical references remain valid.
-   - Calculate per-serving nutrition from canonical ingredient quantities.
-   - Log all ingredients atomically through the saved-meal transaction.
+   - Calculate per-serving nutrition from canonical ingredient quantities. The
+     current editor validates positive servings and ingredient quantities and
+     the trusted save boundary recalculates the stored meal totals.
+   - Log all ingredients atomically through the saved-meal transaction. Current
+     UI logging is wired to the existing atomic `log_saved_meal` RPC.
 7. If an edited recipe is referenced by the active meal plan, regenerate the
-   current grocery list in the same transaction.
+   current grocery list in the same transaction. The current `save_saved_meal`
+   path reconciles the active grocery list on every recipe save; the active
+   plan editor uses the same behavior for replacements and serving changes.
 8. Recalculate generated grocery quantities while preserving checked state,
    explicit quantity overrides, removals, and custom items. Surface changed
    generated quantities.
 
 **Public contract changes**
 
-- Add `editMealPlan`, `saveCustomFood`, `saveMeal`, `duplicateMeal`,
-  `archiveMeal`, and `logSavedMeal` repository/Context intents.
-- Add authorized RPCs for behaviors not covered by existing wrappers.
-- Return meal-plan and grocery semantic events from combined mutations.
+- Implemented `editMealPlan`, `saveMeal`, `duplicateMeal`, `archiveMeal`, and
+  `logSavedMeal` repository/Context intents. `saveCustomFood` is still pending
+  the M1.3 trusted nutrition/serving contract.
+- Added authorized `edit_meal_plan` and `archive_saved_meal` RPCs. The existing
+  `save_saved_meal` wrapper now accepts an optional grocery payload and keeps
+  recipe save plus grocery reconciliation atomic.
+- Repository outcomes return refreshed snapshots and meal-plan/grocery semantic
+  events; stale responses retain the draft for explicit fresh-key reapply.
 
 **Failure behavior**
 
 - Meal-plan and grocery changes succeed or fail together.
-- Stale meal-plan/grocery versions preserve the edit draft for reapplication.
+- Stale meal-plan/grocery versions preserve the edit draft for reapplication;
+  two-client local coverage now proves exactly one stale writer and an explicit
+  refreshed-version reapply.
 - Missing or unsafe matches remain unresolved; the generator never substitutes
   a known allergen or fabricates nutrition.
 
 **Verification**
 
 - Test every edit kind, multiple same-slot entries, recipe create/edit/duplicate/
-  archive/log, historical resolution, concurrent edits, and rollback.
+  archive/log, historical resolution, concurrent edits, and rollback. The
+  current local gate covers replace/serving/add, archive, duplicate replay,
+  historical references, stale meal-plan/grocery writers, and reapply; multiple
+  same-slot entries, browser rollback/offline states, and recipe draft recovery
+  remain pending.
 - Test grocery merges after replacement, serving change, add, skip, recipe edit,
   user quantity override, removal, checked item, and custom item.
 
@@ -807,11 +877,13 @@ their explicit corrections.
 
 - Depends on M0.1–M0.4 and the M1.3 nutrition/serving contracts.
 - Exit when every saved meal/recipe/plan edit updates grocery state atomically
-  without rewriting logs or user corrections.
+  without rewriting logs or user corrections, including multiple same-slot
+  entries, custom foods, preference-aware generation, recoverable recipe drafts,
+  and the required browser/accessibility/offline matrix.
 
 ### M1.3 — USDA FoodData Central and nutrition correction
 
-**Status:** Not started
+**Status:** Foundation only — provider schema/import and correction path pending
 
 **Outcome**
 
@@ -825,6 +897,20 @@ USDA records or is visibly identified as user-provided/uncertain.
   development path.
 - The 22 starter foods are estimates and do not define canonical household
   conversions or a production data lifecycle.
+
+**Implemented in the 2026-09-18 MVP-1 wave**
+
+- `src/utility/nutritionCanonical.ts` and its unit tests implement finite,
+  non-negative per-100-g scaling from a trusted gram equivalent, preserve
+  zero-valued nutrients, and reject missing gram weights instead of guessing.
+- `Food` now has optional USDA/source revision, provider import, canonical
+  nutrient, and serving-option fields so the domain can accept the trusted
+  contract without treating the starter catalog as production USDA data.
+
+The provider-backed USDA Edge Function, serving-option tables, production
+import, custom-food mutation, and correction mutation are deliberately not
+claimed complete until a versioned USDA release and server-secret deployment
+contract are selected.
 
 **Implementation and data logic**
 
@@ -887,7 +973,7 @@ USDA records or is visibly identified as user-provided/uncertain.
 
 ### M1.4 — Protected OpenAI text-meal extraction
 
-**Status:** Not started
+**Status:** Partially implemented — bounded history read path and Progress migration in place
 
 **Outcome**
 
@@ -967,13 +1053,32 @@ show workout occurrences, nutrition completeness, weight, ranges, and counts.
 - `AppSnapshot` still loads growing sessions, nutrition logs, weights, plans,
   and child rows without pagination.
 
+**Implemented in the 2026-09-18 MVP-1 wave**
+
+- `HistoryQuery`/`HistoryReadModel` provide date-bounded (maximum 366 days),
+  cursor-based focused reads with a default page size of 50 and maximum of
+  100. Session summaries include logged/completed exercise counts; nutrition
+  and weight records retain their source values.
+- `loadHistoryReadModel` and `SnapshotRepository.loadHistory` use authenticated
+  owner-scoped queries. `/progress` requests the focused read model and falls
+  back to the hydrated snapshot if the request fails, keeping existing rows
+  visible and showing the normal recovery toast.
+- Initial snapshot history is capped at 100 records per bounded history type
+  and the current 366-day window; export remains the complete-history path.
+
+The remaining work is cursor UI (“load more”), summary endpoints for scheduled
+occurrences/completeness, tighter child-row selection, and removal of the
+legacy history arrays from the main snapshot after all consumers migrate.
+
 **Implementation and data logic**
 
 1. Keep the main snapshot to the current profile, active goal/target/current
    plans, today's summary, active workout session, current grocery list, and
    compact saved-meal metadata.
 2. Add focused repository reads for workout history, nutrition history, weight
-   history, catalog search, and progress summaries.
+   history, catalog search, and progress summaries. The workout/nutrition/
+   weight read and Progress consumer are implemented; catalog search and
+   aggregate summary endpoints remain pending.
 3. Use cursor pagination with a default page size of 50 and maximum of 100.
    Bound aggregate summary requests to 366 calendar days.
 4. Return date range, data count, scheduled/completed/skipped/planned workout
@@ -986,7 +1091,9 @@ show workout occurrences, nutrition completeness, weight, ranges, and counts.
 
 **Public contract changes**
 
-- Add `HistoryPage<T>` and `ProgressSummary` repository queries.
+- Add `HistoryPage<T>` and `ProgressSummary` repository queries. The current
+  `HistoryReadModel` is the first bounded contract; a generic page/summary
+  contract remains follow-up work.
 - Migrate Progress and history consumers before removing unbounded arrays from
   `AppSnapshot`.
 
@@ -1183,23 +1290,123 @@ Static inspection completed:
   this wave preserves them and adds only the MVP-0 files listed below.
 - 63 source files containing approximately 7,927 lines were inspected by
   inventory and targeted source review.
-- 23 migrations (approximately 4,150 lines), eight database test files
+- 30 migrations (approximately 5,400 lines), eight database test files
   (approximately 1,350 lines), and five scripts (approximately 1,319 lines)
   were inventoried and reviewed at the contract level.
-- Static counts match the setup guide: 20 public tables, 20 RLS policies, and
-  23 unique public RPC wrappers.
+- Static counts match the setup guide: 21 public tables, 21 RLS policies, and
+  27 unique public RPC wrappers.
 
 Fresh checks completed in this audit:
 
 - `npm run typecheck` (pass)
 - `npm run lint` (pass)
-- `npm run test:local` (20/20 tests pass)
+- `npm run test:local` (24/24 tests pass)
 - `npm run build` (pass)
-- Local Supabase reset/lint/pgTAP/RPC/concurrency tests (pass; 377 pgTAP
-  assertions and 23 RPC wrappers)
+- Local Supabase reset/lint/pgTAP/RPC/concurrency tests (30-migration gate
+  pass; 384 pgTAP assertions and 27 RPC wrappers).
 
 Not yet run: remote Supabase/Auth smoke tests and browser
 viewport/accessibility/offline checks.
+
+## MVP-0 Follow-up Verification — 2026-09-18
+
+Fresh local and authenticated desktop verification completed after the audit
+above:
+
+- A clean local Supabase reset applied all 28 migration files.
+- `npm run supabase:test` passed 384 pgTAP assertions across eight files.
+- `npm run supabase:test:rpc` passed all 27 public-wrapper smoke checks with
+  two disposable local users.
+- `npm run supabase:test:concurrency` passed duplicate replay, hash mismatch,
+  stale profile and meal-plan conflicts, explicit meal-plan reapply, workout,
+  grocery, and cross-user isolation cases.
+- `npm run typecheck`, `npm run lint`, `npm run test:local` (24/24), and
+  `npm run build` passed. `git diff --check` reported no whitespace errors.
+- Authenticated desktop browser checks covered onboarding/save, home, nutrition
+  skip/reapply, grocery custom-item add, workout plan/session controls,
+  progress, settings unit switching, keyboard focus, and accessibility-tree
+  labels. Display-unit changes preserved the target version.
+- Verification found and fixed a database-incompatible generated meal metadata
+  value, a server/client online-status hydration mismatch, and a missing
+  accessible label on the grocery custom-item button.
+
+Still pending or limited:
+
+- The M1.2 implementation below now covers the first planned-meal and recipe
+  editor slice. Multiple same-slot entries/order migration, custom-food
+  persistence, preference/cooking-time/budget-aware generation, and
+  recipe-specific draft recovery remain open.
+- The available browser surface did not expose viewport overrides, so the
+  required 390px mobile/narrow-overflow matrix, full large-text/reduced-motion
+  matrix, and complete offline interaction pass remain unverified.
+- `npm run supabase:lint` exits successfully with no schema errors. No linked
+  or remote Supabase changes were made.
+
+## MVP-1 M1.2 Implementation Follow-up — 2026-09-18
+
+The remaining planned-meal/recipe limitations are owned by M1.2, not deferred
+without an implementation path. The first vertical slice is now implemented:
+
+- `src/app/nutrition/page.tsx` exposes planned-meal replace, serving, add,
+  skip/reapply, and saved-meal create/edit/duplicate/archive/log controls.
+- `src/contexts/AppContext.tsx`, `src/services/repository.ts`, and
+  `src/services/supabaseRepository.ts` carry typed edit/save/archive intents,
+  expected versions, idempotency keys, refreshed snapshots, and semantic
+  events through the normal authoritative path.
+- `supabase/migrations/20260918023343_mvp1_meal_editing.sql` adds the
+  owner-checked `edit_meal_plan` and `archive_saved_meal` wrappers and extends
+  `save_saved_meal` so active-plan grocery reconciliation is atomic with recipe
+  save. Meal-plan edits create a new version and preserve logged history;
+  archive is a soft-delete so historical references still resolve.
+- Trusted boundary validation rejects invalid dates/slots/servings, mixed food
+  and saved-meal references, and records that are neither system-visible nor
+  owned by the caller. Grocery regeneration preserves checked state, explicit
+  quantity overrides, removals, and custom items.
+- Local verification now includes 384 pgTAP assertions, 27 public-wrapper smoke
+  calls, and two-client stale meal-plan/grocery conflict plus explicit reapply
+  coverage. The application typecheck, lint, 24 local tests, and production
+  build pass.
+
+Remaining M1.2 implementation order:
+
+1. Normalize all editor operations behind a discriminated `editMealPlan` intent
+   and add standalone regenerate/rollback behavior.
+2. Add trusted custom-food persistence and canonical serving/preparation rules
+   under M1.3, then use those records in plan and recipe editors.
+3. Add deterministic food-preference, cooking-time, and budget constraints with
+   an explicit unresolved-slot result when no safe match qualifies.
+4. Add recipe/planned-meal draft envelopes and account-scoped restore/discard
+   behavior to the existing draft store.
+5. Complete narrow mobile, large-text, reduced-motion, keyboard, screen-reader,
+   offline, rollback, and authenticated remote verification before closing M1.2.
+
+The empty migration file generated during the first local CLI invocation is
+left untouched because migration history is forward-only; no linked or remote
+database was changed.
+
+## MVP-1 M1.1/M1.2/M1.5 Implementation Follow-up — 2026-09-18
+
+The second implementation wave is now reflected in source, schema, generated
+types, and local verification:
+
+- `20260918033746_mvp1_progression_overrides_and_loads.sql` adds stable workout
+  slot keys, versioned plan cloning for apply/remove edits, progression
+  decision persistence, actual load/unit logging, and authenticated
+  `apply_progression_decision`/`remove_workout_override` wrappers.
+- `20260918040044_mvp1_planned_meal_slot_order.sql` adds planned-meal slot keys
+  and sort order, removes the one-row-per-date/slot restriction, and keeps
+  same-slot ordering deterministic.
+- `HistoryQuery`, `HistoryReadModel`, `loadHistoryReadModel`, and the Progress
+  route’s focused read path bound history to 366 days and 50/100-row cursors.
+- `nutritionCanonical.ts` provides the trusted per-100-g scaling foundation;
+  USDA import/search, custom-food persistence, correction, and protected AI
+  extraction remain provider-gated follow-up work.
+
+Fresh local evidence for this wave: 30 migrations reset successfully, schema
+lint passed, 384 pgTAP assertions passed, all 27 public RPC wrappers passed the
+two-user smoke run, typecheck passed, and the load/progression/override paths
+were included in the smoke coverage. Browser viewport/accessibility controls
+and linked/remote changes remain unavailable or unauthorized.
 
 ## MVP 1.0 Release Evidence
 

@@ -1,6 +1,6 @@
 begin;
 
-select plan(28);
+select plan(32);
 
 select has_column('public', 'profiles', 'revision', 'profiles expose an optimistic concurrency revision');
 select has_column('public', 'profiles', 'eligibility_status', 'profiles persist screening outcome');
@@ -60,6 +60,12 @@ $$, 'unsupported screening saves a profile-only onboarding result for manual log
 select is((select count(*)::int from public.daily_targets where user_id = '00000000-0000-0000-0000-000000000901'), 0, 'unsupported onboarding creates no automated target row');
 select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000901'), 0, 'unsupported onboarding creates no automated workout plan');
 
+select lives_ok($$
+  select public.update_units('{"profile":{"name":"Unsafe","age":30,"sex":"female","heightCm":165,"weightKg":65,"units":"imperial","experience":"beginner","equipment":["none"],"daysPerWeek":3,"sessionMinutes":30,"goal":"maintain","dietaryPattern":"","allergies":[],"foodPreferences":[]},"profileOnly":true,"expectedVersions":{"profileRevision":3},"idempotencyKey":"mvp0-profile-only-units"}'::jsonb)
+$$, 'display-unit edits remain available for unsupported profiles');
+select is((select units from public.profiles where id = '00000000-0000-0000-0000-000000000901'), 'imperial', 'profile-only unit edits persist the selected display units');
+select is((select revision from public.profiles where id = '00000000-0000-0000-0000-000000000901'), 4, 'profile-only edits bump only the profile revision');
+
 select throws_ok($$
   select public.save_weight_entry('{"entry":{"id":"mvp0-bad-date","date":"2026-02-30","weightKg":65},"idempotencyKey":"mvp0-bad-date"}'::jsonb)
 $$, 'P0001', null, 'invalid local dates are rejected by the shared validator');
@@ -79,6 +85,9 @@ $$, 'P0001', 'meal ingredients are required', 'saved meals require at least one 
 select throws_ok($$
   select public.toggle_grocery_item('{"itemId":"mvp0-item","expectedVersions":{"unknown":1},"idempotencyKey":"mvp0-unknown-version"}'::jsonb)
 $$, 'P0001', 'unknown expected version field', 'unknown expected-version fields are rejected');
+select throws_ok($$
+  select public.toggle_grocery_item('{"itemId":"mvp0-item","expectedVersions":{"groceryRevision":1.5},"idempotencyKey":"mvp0-decimal-version"}'::jsonb)
+$$, 'P0001', 'groceryRevision must be an integer', 'expected versions reject decimal counters');
 
 select lives_ok($$
   select public.save_saved_meal('{"meal":{"id":"mvp0-owned-meal","name":"Owned meal","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-owned-meal-create"}'::jsonb)

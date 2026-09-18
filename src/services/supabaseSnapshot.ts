@@ -13,13 +13,17 @@ import type {
   NutritionLog,
   PlannedExercise,
   PlannedMeal,
+  PreparationBasis,
   PlannedWorkout,
   UserProfile,
   WorkoutPlan,
   WorkoutSession,
   Goal,
   WorkoutPlanOverride,
+  ProgressionDecision,
 } from "@/types/domain";
+import type { HistoryQuery, HistoryReadModel } from "@/types/backend";
+import { addDays, todayKey } from "@/utility/dates";
 
 type AppSupabaseClient = SupabaseClient<Database>;
 type ProfileRow = Tables<"profiles">;
@@ -41,6 +45,7 @@ type GroceryListRow = Tables<"grocery_lists">;
 type GroceryItemRow = Tables<"grocery_items">;
 type GoalRow = Tables<"goals">;
 type OverrideRow = Tables<"workout_plan_overrides">;
+type ProgressionDecisionRow = Tables<"progression_decisions">;
 
 const isEquipment = (value: string): value is EquipmentId =>
   ["none", "pullup_bar", "bands", "dumbbells", "bench"].includes(value);
@@ -190,7 +195,7 @@ function mapWorkoutPlan(
               : { reps: override?.reps_override ?? exercise.reps ?? 1 }),
             restSeconds: override?.rest_seconds_override ?? exercise.rest_seconds,
             sortOrder: exercise.sort_order,
-            slotKey: `day:${workout.day_of_week}:exercise:${exerciseIndex + 1}`,
+            slotKey: exercise.slot_key || `day:${workout.day_of_week}:exercise:${exerciseIndex + 1}`,
           };
         }),
     }));
@@ -219,12 +224,14 @@ function mapMealPlan(
     targetId: target?.app_id ?? "",
     meals: meals
       .filter((meal) => meal.meal_plan_row_id === row.row_id)
-      .sort((a, b) => a.meal_date.localeCompare(b.meal_date) || a.meal_slot.localeCompare(b.meal_slot))
+      .sort((a, b) => a.meal_date.localeCompare(b.meal_date) || a.meal_slot.localeCompare(b.meal_slot) || a.sort_order - b.sort_order)
       .map((meal): PlannedMeal => {
         const mealRef = meal.meal_row_id === null ? undefined : mealsByRow.get(meal.meal_row_id);
         const foodRef = meal.food_row_id === null ? undefined : foodsByRow.get(meal.food_row_id);
         return {
           id: meal.app_id,
+          slotKey: meal.slot_key,
+          sortOrder: meal.sort_order,
           date: meal.meal_date,
           slot: meal.meal_slot as PlannedMeal["slot"],
           ...(mealRef ? { mealId: mealRef.app_id } : {}),
@@ -241,7 +248,7 @@ function mapMealPlan(
           ...(meal.source_version ? { sourceVersion: meal.source_version } : {}),
           ...(meal.assumptions ? { assumptions: meal.assumptions } : {}),
           ...(meal.confidence ? { confidence: meal.confidence as PlannedMeal["confidence"] } : {}),
-          ...(meal.preparation_basis ? { preparationBasis: meal.preparation_basis } : {}),
+          ...(meal.preparation_basis ? { preparationBasis: meal.preparation_basis as PreparationBasis } : {}),
         };
       }),
   };
@@ -274,6 +281,8 @@ function mapSession(
         sets: log.actual_sets ?? 0,
         ...(log.actual_reps === null ? {} : { reps: log.actual_reps }),
         ...(log.actual_hold_seconds === null ? {} : { holdSeconds: log.actual_hold_seconds }),
+        ...(log.actual_load === null ? {} : { load: Number(log.actual_load) }),
+        ...(log.actual_load_unit === null ? {} : { loadUnit: log.actual_load_unit as "kg" | "lb" }),
       },
       status: log.status as ExerciseLog["status"],
       ...(log.rpe === null ? {} : { rpe: log.rpe }),
@@ -301,7 +310,7 @@ function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>): Nutr
     confidence: row.confidence as NutritionLog["confidence"],
     source: row.source,
     ...(row.source_version ? { sourceVersion: row.source_version } : {}),
-    ...(row.preparation_basis ? { preparationBasis: row.preparation_basis } : {}),
+    ...(row.preparation_basis ? { preparationBasis: row.preparation_basis as PreparationBasis } : {}),
     ...(row.fiber_g === null ? {} : { fiberG: Number(row.fiber_g) }),
     ...(row.assumptions ? { assumptions: row.assumptions } : {}),
     revision: row.revision,
@@ -342,6 +351,7 @@ function mapMeal(
     id: row.app_id,
     name: row.name,
     servings: Number(row.servings),
+    ...(row.is_system ? { isSystem: true } : {}),
     ...(row.notes ? { notes: row.notes } : {}),
     revision: row.revision,
     ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
@@ -370,6 +380,24 @@ function emptySnapshot(userId: string): AppSnapshot {
     weights: [],
     grocery: null,
     savedMeals: [],
+    progressionDecisions: [],
+  };
+}
+
+function mapProgressionDecision(row: ProgressionDecisionRow): ProgressionDecision {
+  return {
+    id: row.app_id,
+    slotKey: row.slot_key,
+    plannedExerciseId: row.planned_exercise_app_id,
+    action: row.action as ProgressionDecision["action"],
+    decision: row.decision as ProgressionDecision["decision"],
+    ruleVersion: row.rule_version,
+    sourceSessionIds: row.source_session_ids,
+    ...(row.proposed_replacement_exercise_id ? { proposedReplacementExerciseId: row.proposed_replacement_exercise_id } : {}),
+    ...(row.proposed_sets === null ? {} : { proposedSets: row.proposed_sets }),
+    ...(row.proposed_reps === null ? {} : { proposedReps: row.proposed_reps }),
+    ...(row.proposed_hold_seconds === null ? {} : { proposedHoldSeconds: row.proposed_hold_seconds }),
+    createdAt: row.created_at,
   };
 }
 
@@ -395,7 +423,8 @@ export async function loadAppSnapshot(
   const targetsByRow = new Map(targetRows.map((row) => [row.row_id, row]));
   const currentTarget = targetRows[0] ? mapTarget(targetRows[0]) : null;
 
-  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides] =
+  const historyFrom = addDays(todayKey(), -365);
+  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions] =
     await Promise.all([
       required(client.from("exercises").select("*")),
       required(client.from("foods").select("*")),
@@ -403,13 +432,14 @@ export async function loadAppSnapshot(
       required(client.from("meal_ingredients").select("*")),
       required(client.from("workout_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
       required(client.from("meal_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
-      required(client.from("workout_sessions").select("*").eq("user_id", userId).order("session_date", { ascending: false })),
-      required(client.from("nutrition_logs").select("*").eq("user_id", userId).order("log_date", { ascending: false })),
-      required(client.from("weight_entries").select("*").eq("user_id", userId).order("entry_date", { ascending: false })),
+      required(client.from("workout_sessions").select("*").eq("user_id", userId).gte("session_date", historyFrom).order("session_date", { ascending: false }).limit(100)),
+      required(client.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", historyFrom).order("log_date", { ascending: false }).limit(100)),
+      required(client.from("weight_entries").select("*").eq("user_id", userId).gte("entry_date", historyFrom).order("entry_date", { ascending: false }).limit(100)),
       required(client.from("grocery_lists").select("*").eq("user_id", userId).order("week_of", { ascending: false })),
       required(client.from("grocery_items").select("*").eq("user_id", userId)),
       required(client.from("goals").select("*").eq("user_id", userId).order("version", { ascending: false })),
       required(client.from("workout_plan_overrides").select("*").eq("user_id", userId).eq("active", true)),
+      required(client.from("progression_decisions").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
     ]);
 
   const exerciseRows = exercises as ExerciseRow[];
@@ -425,6 +455,7 @@ export async function loadAppSnapshot(
   const groceryItemRows = groceryItems as GroceryItemRow[];
   const goalRows = goals as GoalRow[];
   const overrideRows = overrides as OverrideRow[];
+  const progressionDecisionRows = progressionDecisions as ProgressionDecisionRow[];
   const mealsByRow = new Map(mealRows.map((row) => [row.row_id, row]));
   const exercisesByRow = new Map(exerciseRows.map((row) => [row.row_id, row]));
   const foodsByRow = new Map(foodRows.map((row) => [row.row_id, row]));
@@ -501,7 +532,7 @@ export async function loadAppSnapshot(
   );
   snapshot.workoutOverrides = overrideRows.map((row): WorkoutPlanOverride => ({
     id: row.app_id,
-    slotKey: `exercise:${row.planned_exercise_row_id}`,
+    slotKey: row.slot_key,
     plannedExerciseId: plannedExercisesByRow.get(row.planned_exercise_row_id)?.app_id,
     ...(row.replacement_exercise_row_id ? { replacementExerciseId: exercisesByRow.get(row.replacement_exercise_row_id)?.app_id } : {}),
     ...(row.measure_override ? { measure: row.measure_override as WorkoutPlanOverride["measure"] } : {}),
@@ -513,6 +544,7 @@ export async function loadAppSnapshot(
     effectiveAt: row.effective_at,
     ...(row.ended_at ? { endedAt: row.ended_at } : {}),
   }));
+  snapshot.progressionDecisions = progressionDecisionRows.map(mapProgressionDecision);
   snapshot.nutritionLogs = nutritionRows.map((row) => mapNutrition(row, foodsByRow));
   snapshot.weights = weightRows.map((row) => ({
     id: row.app_id,
@@ -523,10 +555,119 @@ export async function loadAppSnapshot(
     ? mapGrocery(groceryListRows[0], groceryItemRows)
     : null;
   snapshot.savedMeals = mealRows
-    .filter((row) => row.is_system || row.owner_user_id === userId)
+    .filter((row) => (row.is_system || row.owner_user_id === userId) && !row.archived_at)
     .map((row) => mapMeal(row, ingredientsByMeal, foodsByRow));
 
   return snapshot;
+}
+
+/**
+ * Bounded history read model for progress/history surfaces. The main app
+ * snapshot remains the current-plan read model; older history is fetched by
+ * date range and independent cursors so it cannot grow without bound.
+ */
+export async function loadHistoryReadModel(
+  client: AppSupabaseClient,
+  userId: string,
+  query: HistoryQuery = {},
+): Promise<HistoryReadModel> {
+  const to = query.to ?? todayKey();
+  const from = query.from ?? addDays(to, -365);
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(from) || !datePattern.test(to) || from > to) {
+    throw new Error("History date range is invalid.");
+  }
+  const rangeDays = Math.floor((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+  if (!Number.isFinite(rangeDays) || rangeDays > 366) {
+    throw new Error("History date range cannot exceed 366 days.");
+  }
+  const limit = Math.min(100, Math.max(1, Math.floor(query.limit ?? 50)));
+
+  const sessionsQuery = client
+    .from("workout_sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("session_date", from)
+    .lte("session_date", to)
+    .order("started_at", { ascending: false })
+    .limit(limit + 1);
+  if (query.sessionsCursor) sessionsQuery.lt("started_at", query.sessionsCursor);
+
+  const nutritionQuery = client
+    .from("nutrition_logs")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("log_date", from)
+    .lte("log_date", to)
+    .order("created_at", { ascending: false })
+    .limit(limit + 1);
+  if (query.nutritionCursor) nutritionQuery.lt("created_at", query.nutritionCursor);
+
+  const weightsQuery = client
+    .from("weight_entries")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("entry_date", from)
+    .lte("entry_date", to)
+    .order("entry_date", { ascending: false })
+    .limit(limit + 1);
+  if (query.weightsCursor) weightsQuery.lt("entry_date", query.weightsCursor);
+
+  const [sessionResult, nutritionResult, weightResult] = await Promise.all([
+    required(sessionsQuery),
+    required(nutritionQuery),
+    required(weightsQuery),
+  ]);
+  const sessionRows = sessionResult as SessionRow[];
+  const nutritionRows = nutritionResult as NutritionRow[];
+  const weightRows = weightResult as WeightRow[];
+  const visibleSessions = sessionRows.slice(0, limit);
+  const visibleNutrition = nutritionRows.slice(0, limit);
+  const visibleWeights = weightRows.slice(0, limit);
+
+  const [plannedWorkouts, sessionLogs, foods] = await Promise.all([
+    visibleSessions.length
+      ? required(client.from("planned_workouts").select("*").eq("user_id", userId).in("row_id", visibleSessions.map((row) => row.planned_workout_row_id)))
+      : Promise.resolve([] as PlannedWorkoutRow[]),
+    visibleSessions.length
+      ? required(client.from("exercise_logs").select("*").eq("user_id", userId).in("session_row_id", visibleSessions.map((row) => row.row_id)))
+      : Promise.resolve([] as ExerciseLogRow[]),
+    visibleNutrition.length
+      ? required(client.from("foods").select("*").in("row_id", visibleNutrition.flatMap((row) => row.food_row_id === null ? [] : [row.food_row_id])))
+      : Promise.resolve([] as FoodRow[]),
+  ]);
+  const workoutsByRow = new Map((plannedWorkouts as PlannedWorkoutRow[]).map((row) => [row.row_id, row]));
+  const logsBySession = new Map<number, ExerciseLogRow[]>();
+  for (const log of sessionLogs as ExerciseLogRow[]) {
+    const list = logsBySession.get(log.session_row_id) ?? [];
+    list.push(log);
+    logsBySession.set(log.session_row_id, list);
+  }
+  const foodsByRow = new Map((foods as FoodRow[]).map((row) => [row.row_id, row]));
+
+  return {
+    sessions: visibleSessions.map((row) => {
+      const logs = logsBySession.get(row.row_id) ?? [];
+      const workout = workoutsByRow.get(row.planned_workout_row_id);
+      return {
+        id: row.app_id,
+        plannedWorkoutId: workout?.app_id ?? "",
+        date: row.session_date,
+        startedAt: row.started_at,
+        ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
+        status: row.status as HistoryReadModel["sessions"][number]["status"],
+        loggedExerciseCount: logs.length,
+        completedExerciseCount: logs.filter((log) => log.status === "completed").length,
+      };
+    }),
+    nutritionLogs: visibleNutrition.map((row) => mapNutrition(row, foodsByRow)),
+    weights: visibleWeights.map((row) => ({ id: row.app_id, date: row.entry_date, weightKg: Number(row.weight_kg) })),
+    nextCursors: {
+      ...(sessionRows.length > limit && visibleSessions.at(-1) ? { sessions: visibleSessions.at(-1)!.started_at } : {}),
+      ...(nutritionRows.length > limit && visibleNutrition.at(-1) ? { nutrition: visibleNutrition.at(-1)!.created_at } : {}),
+      ...(weightRows.length > limit && visibleWeights.at(-1) ? { weights: visibleWeights.at(-1)!.entry_date } : {}),
+    },
+  };
 }
 
 export { mapFood, mapExercise };

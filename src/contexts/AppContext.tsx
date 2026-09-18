@@ -18,10 +18,15 @@ import type {
   MutationOutcome,
   RepositoryError,
   WorkoutPlanOverrideInput,
+  ProgressionDecisionInput,
+  RemoveWorkoutOverrideInput,
+  HistoryQuery,
+  HistoryReadModel,
 } from "@/types/backend";
 import type {
   AppSnapshot,
   Meal,
+  MealPlan,
   NutritionLog,
   SemanticEvent,
   Toast,
@@ -30,12 +35,21 @@ import type {
   WorkoutSession,
 } from "@/types/domain";
 import type { SnapshotRepository } from "@/services/repository";
-import { clearDraft, clearUserDrafts, readDraft } from "@/services/draftStore";
+import { clearDraft, clearUserDrafts, listDrafts, readDraft } from "@/services/draftStore";
+import { suggestProgression, type ProgressionSuggestion } from "@/utility/progression";
 
 export interface AppActions {
   notify(message: string, tone?: Toast["tone"]): void;
   clearError(): void;
+  refreshSnapshot(): Promise<boolean>;
+  loadHistory(query?: HistoryQuery): Promise<HistoryReadModel | null>;
+  getProgressionRecommendations(): Array<{
+    slotKey: string;
+    plannedExerciseId: string;
+    suggestion: ProgressionSuggestion;
+  }>;
   restoreDraft<T>(draftType: string): Promise<DraftEnvelope<T> | null>;
+  inspectDrafts(): Promise<DraftEnvelope<unknown>[]>;
   discardDraft(draftType: string): Promise<void>;
   completeOnboarding(profile: UserProfile, goal?: OnboardingGoal): Promise<boolean>;
   updateProfile(profile: UserProfile, goal?: OnboardingGoal): Promise<boolean>;
@@ -58,9 +72,14 @@ export interface AppActions {
   addCustomGrocery(name: string, quantity: number, unit: string): Promise<boolean>;
   regenerateGrocery(): Promise<void>;
   skipPlannedMeal(id: string): Promise<void>;
+  editMealPlan(mealPlan: MealPlan): Promise<boolean>;
   resetPlan(): Promise<void>;
   applyWorkoutOverride(input: Omit<WorkoutPlanOverrideInput, "currentSnapshot">): Promise<void>;
-  saveMeal(meal: Meal): Promise<void>;
+  removeWorkoutOverride(input: Omit<RemoveWorkoutOverrideInput, "currentSnapshot">): Promise<void>;
+  applyProgressionDecision(input: Omit<ProgressionDecisionInput, "currentSnapshot">): Promise<boolean>;
+  saveMeal(meal: Meal): Promise<boolean>;
+  duplicateMeal(mealId: string): Promise<boolean>;
+  archiveMeal(mealId: string): Promise<boolean>;
   exportData(): Promise<unknown | null>;
   deleteAccount(): Promise<boolean>;
   retryLast(): Promise<boolean>;
@@ -102,6 +121,7 @@ function createEmptySnapshot(userId = ""): AppSnapshot {
     weights: [],
     grocery: null,
     savedMeals: [],
+    progressionDecisions: [],
   };
 }
 
@@ -127,8 +147,16 @@ type MutationOperation = (
 ) => Promise<MutationOutcome>;
 
 type RetryIntent =
-  | { kind: "mutation"; label: string; operation: MutationOperation; mutationKey: string }
-  | { kind: "export"; mutationKey: string };
+  | {
+      kind: "mutation";
+      userId: string;
+      label: string;
+      operation: MutationOperation;
+      mutationKey: string;
+      /** Stale writes must be intentionally reapplied with a new key. */
+      reuseKey: boolean;
+    }
+  | { kind: "export"; userId: string; mutationKey: string };
 
 export function AppProvider({
   children,
@@ -232,6 +260,7 @@ export function AppProvider({
       setPendingMutation(label);
       pendingRef.current = true;
       setError(null);
+      const mutationUserId = snapshotRef.current.userId;
       const mutationKey = fixedKey ?? (
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -240,6 +269,7 @@ export function AppProvider({
       try {
         const outcome = await operation(snapshotRef.current, mutationKey);
         retryRef.current = null;
+        snapshotRef.current = outcome.snapshot;
         setSnapshot(outcome.snapshot);
         setEvents((current) => appendEvents(current, outcome));
         return outcome;
@@ -262,6 +292,7 @@ export function AppProvider({
             try {
               const replayed = await operation(snapshotRef.current, mutationKey);
               retryRef.current = null;
+              snapshotRef.current = replayed.snapshot;
               setSnapshot(replayed.snapshot);
               setEvents((current) => appendEvents(current, replayed));
               notify("Your session was refreshed and the save was retried.", "ok");
@@ -282,15 +313,38 @@ export function AppProvider({
           }
         }
         if (nextError.code === "stale_version") {
+          let refreshedSnapshotAvailable = false;
           try {
             const refreshedSnapshot = await repository.load();
-            if (refreshedSnapshot) setSnapshot(refreshedSnapshot);
+            if (refreshedSnapshot) {
+              // Keep immediate reapplication on the same authoritative base
+              // even before React commits the state update/effect cycle.
+              snapshotRef.current = refreshedSnapshot;
+              setSnapshot(refreshedSnapshot);
+              refreshedSnapshotAvailable = true;
+            }
             notify("Your saved data changed elsewhere. Review your draft and apply it again.", "warn");
           } catch {
             // The original draft remains in the form/draft repository for a later retry.
           }
+          nextError = {
+            ...nextError,
+            details: nextError.details
+              ? {
+                  ...nextError.details,
+                  refreshedSnapshotAvailable,
+                }
+              : undefined,
+          };
         }
-        retryRef.current = { kind: "mutation", label, operation, mutationKey };
+        retryRef.current = {
+          kind: "mutation",
+          userId: mutationUserId,
+          label,
+          operation,
+          mutationKey,
+          reuseKey: nextError.code !== "stale_version",
+        };
         setError(nextError);
         notify(nextError.message, nextError.retryable ? "warn" : "info");
         return null;
@@ -308,9 +362,54 @@ export function AppProvider({
       clearError() {
         setError(null);
       },
+      async refreshSnapshot() {
+        if (!repository) return false;
+        try {
+          const refreshedSnapshot = await repository.load();
+          if (!refreshedSnapshot) return false;
+          snapshotRef.current = refreshedSnapshot;
+          setSnapshot(refreshedSnapshot);
+          setError(null);
+          notify("Current account data refreshed.", "ok");
+          return true;
+        } catch (reason: unknown) {
+          const nextError = errorFromUnknown(reason);
+          setError(nextError);
+          notify("The latest account data could not be loaded yet.", "warn");
+          return false;
+        }
+      },
+      async loadHistory(query) {
+        if (!repository) return null;
+        try {
+          return await repository.loadHistory(query);
+        } catch (reason: unknown) {
+          const nextError = errorFromUnknown(reason);
+          setError(nextError);
+          notify("History could not be loaded yet. Showing the latest cached view.", "warn");
+          return null;
+        }
+      },
+      getProgressionRecommendations() {
+        const current = snapshotRef.current;
+        if (!current.plan) return [];
+        return current.plan.workouts.flatMap((workout) => workout.exercises.flatMap((exercise, index) => {
+          const suggestion = suggestProgression(exercise.id, current.sessions);
+          if (!suggestion) return [];
+          return [{
+            slotKey: exercise.slotKey ?? `day:${workout.dayOfWeek}:exercise:${exercise.sortOrder ?? index + 1}`,
+            plannedExerciseId: exercise.id,
+            suggestion,
+          }];
+        }));
+      },
       async restoreDraft<T>(draftType: string) {
         const userId = snapshotRef.current.userId;
         return userId ? readDraft<T>(userId, draftType) : null;
+      },
+      async inspectDrafts() {
+        const userId = snapshotRef.current.userId;
+        return userId ? listDrafts(userId) : [];
       },
       async discardDraft(draftType: string) {
         const userId = snapshotRef.current.userId;
@@ -464,21 +563,85 @@ export function AppProvider({
         );
       },
 
+      async editMealPlan(mealPlan) {
+        const outcome = await execute("edit_meal_plan", (current, idempotencyKey) =>
+          repository!.editMealPlan({ mealPlan, currentSnapshot: current, idempotencyKey }),
+        );
+        return Boolean(outcome);
+      },
+
       async applyWorkoutOverride(input) {
         await execute("apply_workout_override", (current, idempotencyKey) =>
           repository!.applyWorkoutOverride({ ...input, currentSnapshot: current, idempotencyKey }),
         );
       },
 
+      async removeWorkoutOverride(input) {
+        await execute("remove_workout_override", (current, idempotencyKey) =>
+          repository!.removeWorkoutOverride({
+            slotKey: input.slotKey,
+            plannedExerciseId: input.plannedExerciseId,
+            currentSnapshot: current,
+            expectedVersions: { workoutPlanVersion: current.plan?.version },
+            idempotencyKey,
+          }),
+        );
+      },
+
+      async applyProgressionDecision(input) {
+        const outcome = await execute("apply_progression_decision", (current, idempotencyKey) =>
+          repository!.applyProgressionDecision({ ...input, currentSnapshot: current, idempotencyKey }),
+        );
+        return Boolean(outcome);
+      },
+
       async saveMeal(meal) {
-        await execute("save_saved_meal", (current, idempotencyKey) => repository!.saveMeal({
+        const outcome = await execute("save_saved_meal", (current, idempotencyKey) => repository!.saveMeal({
           meal,
+          currentSnapshot: current,
           expectedVersions: {
-            profileRevision: current.profile?.revision,
             recordRevision: meal.revision,
+            groceryRevision: current.grocery?.revision,
           },
           idempotencyKey,
         }));
+        return Boolean(outcome);
+      },
+
+      async duplicateMeal(mealId) {
+        const source = snapshotRef.current.savedMeals.find((meal) => meal.id === mealId);
+        if (!source) {
+          notify("That saved meal is no longer available.", "info");
+          return false;
+        }
+        const duplicate: Meal = {
+          ...source,
+          id: `meal-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
+          name: `${source.name} copy`,
+          isSystem: undefined,
+          revision: undefined,
+        };
+        const outcome = await execute("save_saved_meal", (current, idempotencyKey) => repository!.saveMeal({
+          meal: duplicate,
+          currentSnapshot: current,
+          expectedVersions: { groceryRevision: current.grocery?.revision },
+          idempotencyKey,
+        }));
+        return Boolean(outcome);
+      },
+
+      async archiveMeal(mealId) {
+        const meal = snapshotRef.current.savedMeals.find((candidate) => candidate.id === mealId);
+        if (!meal) {
+          notify("That saved meal is no longer available.", "info");
+          return false;
+        }
+        const outcome = await execute("archive_saved_meal", (current, idempotencyKey) => repository!.archiveMeal({
+          mealId,
+          expectedVersions: { recordRevision: meal.revision },
+          idempotencyKey,
+        }));
+        return Boolean(outcome);
       },
 
       async exportData() {
@@ -503,7 +666,11 @@ export function AppProvider({
           return outcome.data;
         } catch (reason: unknown) {
           const nextError = errorFromUnknown(reason);
-          retryRef.current = { kind: "export", mutationKey: idempotencyKey };
+          retryRef.current = {
+            kind: "export",
+            userId: snapshotRef.current.userId,
+            mutationKey: idempotencyKey,
+          };
           setError(nextError);
           notify(nextError.message, "warn");
           return null;
@@ -528,8 +695,18 @@ export function AppProvider({
       async retryLast() {
         const retry = retryRef.current;
         if (!retry) return false;
+        if (retry.userId !== snapshotRef.current.userId) {
+          retryRef.current = null;
+          setError(null);
+          notify("This saved action belongs to another account. Please start it again.", "info");
+          return false;
+        }
         if (retry.kind === "mutation") {
-          return Boolean(await execute(retry.label, retry.operation, retry.mutationKey));
+          return Boolean(await execute(
+            retry.label,
+            retry.operation,
+            retry.reuseKey ? retry.mutationKey : undefined,
+          ));
         }
         if (pendingRef.current || !repository) return false;
         setPendingMutation("export_account_data");

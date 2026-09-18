@@ -1,6 +1,6 @@
 begin;
 
-select plan(50);
+select plan(51);
 
 -- All fixtures are local to this transaction. The two auth rows make the
 -- composite ownership foreign keys exercise the same boundary as the app.
@@ -226,9 +226,12 @@ select throws_ok($$insert into public.planned_meals (meal_plan_row_id, user_id, 
 select throws_ok($$insert into public.planned_meals (meal_plan_row_id, user_id, week_of, app_id, meal_date, meal_slot, meal_row_id, food_row_id, label, servings)
   values ((select row_id from public.meal_plans where app_id = 'test-meal-plan-a-1'), '00000000-0000-0000-0000-000000000101', '2026-09-07', 'test-meal-both-refs', '2026-09-08', 'lunch', (select row_id from public.meals where is_system limit 1), (select row_id from public.foods where is_system limit 1), 'Test', 1)$$,
   '23514', null, 'planned meals cannot reference both a meal and a food');
-select throws_ok($$insert into public.planned_meals (meal_plan_row_id, user_id, week_of, app_id, meal_date, meal_slot, meal_row_id, label, servings)
-  values ((select row_id from public.meal_plans where app_id = 'test-meal-plan-a-1'), '00000000-0000-0000-0000-000000000101', '2026-09-07', 'test-meal-duplicate-slot', '2026-09-07', 'breakfast', (select row_id from public.meals where is_system limit 1), 'Test', 1)$$,
-  '23505', null, 'a meal plan version has at most one meal per date and slot');
+select throws_ok($$insert into public.planned_meals (meal_plan_row_id, user_id, week_of, app_id, meal_date, meal_slot, sort_order, meal_row_id, label, servings)
+  values ((select row_id from public.meal_plans where app_id = 'test-meal-plan-a-1'), '00000000-0000-0000-0000-000000000101', '2026-09-07', 'test-meal-duplicate-slot', '2026-09-07', 'breakfast', 1, (select row_id from public.meals where is_system limit 1), 'Test', 1)$$,
+  '23505', null, 'a meal plan version has at most one meal per date, slot, and order');
+select lives_ok($$insert into public.planned_meals (meal_plan_row_id, user_id, week_of, app_id, meal_date, meal_slot, sort_order, meal_row_id, label, servings)
+  values ((select row_id from public.meal_plans where app_id = 'test-meal-plan-a-1'), '00000000-0000-0000-0000-000000000101', '2026-09-07', 'test-meal-second-slot-order', '2026-09-07', 'breakfast', 2, (select row_id from public.meals where is_system limit 1), 'Test', 1)$$,
+  'multiple meals in one slot are allowed when their order is distinct');
 select throws_ok($$insert into public.workout_sessions (app_id, user_id, planned_workout_row_id, planned_plan_row_id, planned_plan_version, session_date, started_at, finished_at, status)
   values ('test-session-bad-status', '00000000-0000-0000-0000-000000000101', (select row_id from public.planned_workouts where app_id = 'test-workout-a-1'), (select row_id from public.workout_plans where app_id = 'test-plan-a-1'), 1, '2026-09-10', '2026-09-10 09:00+00', '2026-09-10 08:00+00', 'complete')$$,
   '23514', null, 'workout session status and timestamps are constrained');

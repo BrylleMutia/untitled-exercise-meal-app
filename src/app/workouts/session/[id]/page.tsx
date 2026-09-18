@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { exerciseById } from "@/constants/exercises";
 import { secondsToClock } from "@/utility/dates";
 import type { ExerciseLog, WorkoutSession } from "@/types/domain";
-import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
+import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 
 const RPE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -43,6 +43,7 @@ export default function SessionPage() {
   const [finished, setFinished] = useState(false);
   const [recoveredDraft, setRecoveredDraft] = useState<WorkoutSession | null>(null);
   const [draftWasRecovered, setDraftWasRecovered] = useState(false);
+  const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
   const draftSessionRef = useRef<WorkoutSession | null>(null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -131,8 +132,8 @@ export default function SessionPage() {
           draftType: `workout-session:${sessionId}`,
           payload: next,
           baseVersions: { workoutPlanVersion: snapshot.plan?.version },
-          ttlMs: 30 * 24 * 60 * 60 * 1000,
-        }));
+          ttlMs: draftTtlMs(`workout-session:${sessionId}`),
+        })).then((saved) => setDraftWriteUnavailable(!saved));
       }
       saveQueueRef.current = saveQueueRef.current
         .catch(() => undefined)
@@ -181,7 +182,7 @@ export default function SessionPage() {
     if (!sessionId) return;
     if (await actions.finishSession(sessionId)) {
       setFinished(true);
-      if (snapshot.userId) void clearDraft(snapshot.userId, `workout-session:${sessionId}`);
+      if (snapshot.userId) await clearDraft(snapshot.userId, `workout-session:${sessionId}`);
       try { window.localStorage.removeItem(`calicoach:session:${sessionId}`); } catch { /* compatibility cleanup */ }
       router.push("/workouts");
     }
@@ -190,7 +191,7 @@ export default function SessionPage() {
   const discard = async () => {
     if (!sessionId) return;
     if (await actions.abandonSession(sessionId)) {
-      if (snapshot.userId) void clearDraft(snapshot.userId, `workout-session:${sessionId}`);
+      if (snapshot.userId) await clearDraft(snapshot.userId, `workout-session:${sessionId}`);
       try { window.localStorage.removeItem(`calicoach:session:${sessionId}`); } catch { /* compatibility cleanup */ }
       router.push("/workouts");
     }
@@ -254,6 +255,18 @@ export default function SessionPage() {
         </div>
       ) : null}
 
+      {draftWriteUnavailable ? (
+        <div className="rounded-2xl bg-peach-100 px-3 py-2 text-xs font-bold text-ink-soft" role="status">
+          Session recovery is unavailable on this device right now. Keep this session open until your save is confirmed.
+        </div>
+      ) : null}
+
+      <Card tone="peach" className="grid gap-1.5 text-xs font-semibold text-ink-soft">
+        <p><span className="font-extrabold text-ink">Warm-up:</span> {workout.warmup.join(" · ")}</p>
+        <p><span className="font-extrabold text-ink">Rest:</span> follow the planned {plannedExercise?.restSeconds ?? 0}s between sets and pause if form or breathing breaks down.</p>
+        {isLast ? <p><span className="font-extrabold text-ink">Cooldown:</span> {workout.cooldown.join(" · ")}</p> : null}
+      </Card>
+
       <ol className="flex justify-center gap-1.5" aria-label="Exercise progress">
         {workout.exercises.map((pe, i) => (
           <li
@@ -310,6 +323,45 @@ export default function SessionPage() {
             onMinus={() => adjust(exercise?.measure === "hold" ? "holdSeconds" : "reps", -1)}
             onPlus={() => adjust(exercise?.measure === "hold" ? "holdSeconds" : "reps", 1)}
           />
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 px-3 py-2">
+            <label htmlFor="actual-load" className="text-xs font-extrabold uppercase tracking-wide text-ink-soft">
+              Load (optional)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="actual-load"
+                className="input !min-h-11 w-24 text-right tabular-nums"
+                type="number"
+                min="0"
+                max="1000"
+                step="0.5"
+                inputMode="decimal"
+                value={log?.actual.load ?? ""}
+                onChange={(event) => updateLog((current) => ({
+                  ...current,
+                  actual: {
+                    ...current.actual,
+                    ...(event.target.value === "" ? { load: undefined } : { load: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) }),
+                  },
+                  status: current.status === "completed" ? "modified" : current.status,
+                }))}
+                aria-label="Actual load"
+              />
+              <select
+                className="input !min-h-11 w-20"
+                value={log?.actual.loadUnit ?? "kg"}
+                onChange={(event) => updateLog((current) => ({
+                  ...current,
+                  actual: { ...current.actual, loadUnit: event.target.value as "kg" | "lb" },
+                  status: current.status === "completed" ? "modified" : current.status,
+                }))}
+                aria-label="Load unit"
+              >
+                <option value="kg">kg</option>
+                <option value="lb">lb</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4" role="group" aria-label="Rate of perceived exertion">

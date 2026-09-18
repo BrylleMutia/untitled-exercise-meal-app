@@ -46,14 +46,16 @@ revoked.
   `supabase/migrations/`, in dependency order: eleven schema/seed migrations,
   one foreign-key-index correction, authenticated RPC migrations, export-shape
   hardening, MVP integrity hardening, and the MVP-0 foundation hardening
-  migration plus the saved-meal ownership/concurrency follow-up migration.
+  migration plus the saved-meal ownership/concurrency, profile-only update,
+  and integer-version validation follow-up migrations.
 - [x] The migration set defines the domain tables, normalized versioned plan
   rows, catalog seed data, ownership indexes, constraints, RLS read policies,
   explicit grants/revokes, and idempotency storage.
 - [x] The seed migration contains 21 exercises, 22 starter foods, and 4
   starter meals with the authored application IDs preserved.
-- [x] Local migration reset, migration listing, and database lint pass with no
-  schema errors.
+- [x] The previous 23-migration local reset, migration listing, and database
+  lint passed with no schema errors; rerun is pending for the new profile-only
+  follow-up migration.
 - [x] The remote project is linked to this repository with project ref
   `ifunkhvbvkdxolhpxjvk`.
 - [x] The schema/RLS/catalog batch and the authenticated RPC batch are deployed
@@ -82,10 +84,11 @@ revoked.
 - [x] Focused local pgTAP suites have been added beside the baseline:
   `schema_catalog_test.sql`, `constraints_test.sql`, `rls_isolation_test.sql`,
   `privileges_rpc_security_test.sql`, and `domain_mutations_test.sql`.
-  Together with the baseline they execute 377 assertions covering schema
+  Together with the baseline they execute 384 assertions covering schema
   contracts, catalog metadata, constraints, ownership isolation, direct-write
   denial, wrapper security, RPC behavior, idempotency, export shape, and
-  account deletion.
+  account deletion, profile-only/version validation, planned-meal editing,
+  recipe archiving, and atomic meal/grocery reconciliation.
 - [x] `scripts/test-supabase-concurrency.mjs` and the
   `supabase:test:concurrency` package script provide a two-session local
   concurrency lane. The runner refuses non-local URLs, never reads the
@@ -95,7 +98,7 @@ revoked.
   invoke the deployed public RPC wrappers, including unit updates,
   plan reset, skipped meals, abandoned sessions, nutrition deletion, and
   recipe saves.
-- [x] `scripts/test-supabase-rpc-smoke.mjs` runs the complete 23-wrapper
+- [x] `scripts/test-supabase-rpc-smoke.mjs` runs the complete 27-wrapper
   matrix through two independent local Auth clients with unique run IDs,
   replay/hash-mismatch checks, cross-user checks, and deletion cleanup.
 - [x] `scripts/test-supabase-rpc-remote.mjs` provides a separately guarded
@@ -117,7 +120,7 @@ revoked.
 - [x] Finish the local database-test gate. The new hardening migration is
   applied locally; baseline/focused suites pass, including non-blank checks for
   the three catalog `app_id` columns and the atomic `log_saved_meal` wrapper.
-- [x] Re-run the full test gate after the MVP-0 foundation migration. All 377
+- [x] Re-run the full test gate after the MVP-0/M1.2 migrations. All 384
   pgTAP assertions pass, including anonymous denial, cross-user
   denial, user-ID reassignment protection, invalid inputs, owner-only custom
   catalogs, direct table-write denial, wrapper authorization, controlled
@@ -126,10 +129,10 @@ revoked.
    rejection, finite-number/date validation, and unsupported-screening guards.
 - [ ] Complete the remote manual RPC/Auth smoke flow with disposable
   authenticated accounts. The local 103-assertion RPC suite and the
-  two-client Data API runner exercise all 23 wrappers, including the two
-  hardening wrappers with duplicate retries and ownership checks. The remote project has
+  two-client Data API runner exercise all 25 wrappers, including the M1.2
+  meal-editing wrappers with duplicate retries and ownership checks. The remote project has
   passed linked migration/dry-run preflight, but remote account creation,
-  email confirmation, 23-RPC execution, and cleanup remain pending until two
+  email confirmation, 27-RPC execution, and cleanup remain pending until two
   confirmed disposable credentials are supplied transiently.
 
 #### P0 — Complete backend correctness and security
@@ -198,17 +201,19 @@ revoked.
   presenting unsynchronized mutations as persisted.
 
 The current test implementation is local-first and does not change the linked
-remote project. The local verification gate is complete; the latest local
+remote project. The previous local verification gate is complete; the latest
+profile-only/version-validation/M1.2 migrations are applied locally. The last verified
 results are:
 
-- `npx supabase@latest db reset --local`: pass; all 23 forward-only migrations
-  apply from an empty database, including the hardening migration.
+- `npx supabase@latest db reset --local`: clean 30-file local migration gate
+  passed, including the profile-only/version-validation and M1.2 meal-editing
+  migrations.
 - `npx supabase@latest migration list --local`: pass; the local migration
   history is complete.
 - `npx supabase@latest db lint --local`: pass with no schema errors.
-- `npx supabase@latest test db --local`: 377/377 assertions pass; all focused
-  pgTAP/RLS suites are green.
-- `npm run supabase:test:rpc`: pass; all 23 public wrappers were exercised
+- `npx supabase@latest test db --local`: 384/384 assertions passed across eight
+  suites.
+- `npm run supabase:test:rpc`: pass; all 27 public wrappers were exercised
   through two disposable local Auth users and both accounts were cleaned up
   through `delete_account`.
 - `npm run supabase:test:concurrency`: pass against
@@ -387,13 +392,13 @@ rewrite completed history.
 Creates normalized, versioned weekly meal plans:
 
 - `meal_plans` stores version, Monday `week_of`, and target reference.
-- `planned_meals` stores the date/slot, optional meal or food reference,
-  display label, servings, skipped state, expected nutrition, source,
-  assumptions, confidence, and preparation basis.
+- `planned_meals` stores a stable date/slot/order key, optional meal or food
+  reference, display label, servings, skipped state, expected nutrition,
+  source, assumptions, confidence, and preparation basis.
 
 Constraints enforce Monday week starts, dates within the plan week, valid meal
-slots, one reference at most between meal and food, and one planned meal per
-date/slot in a plan version.
+slots, one reference at most between meal and food, and unique date/slot/order
+positions within a plan version.
 
 ### 4.8 `create_workout_history`
 
@@ -634,7 +639,7 @@ The initial backend implementation has completed these steps:
 4. Replace the in-memory repository path with authenticated Supabase reads and
    mutation outcomes that include refreshed read models and semantic events.
 5. Add the focused database/security tests, local concurrency runner, and
-   complete local 23-RPC smoke runner. These test assets are present and the
+   complete local 27-RPC smoke runner. These test assets are present and the
    local RPC/database sweeps are passing; remote disposable-user exercise and
    remaining product integration work are still separate release dependencies.
 

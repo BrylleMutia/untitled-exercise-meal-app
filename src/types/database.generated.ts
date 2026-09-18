@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       daily_targets: {
@@ -29,15 +24,15 @@ export type Database = {
           effective_date: string
           fat_g: number
           formula: string
+          goal_adjustment: number
           goal_row_id: number
           protein_g: number
           raw_calories: number
           row_id: number
+          safety_outcome: string
           tdee: number
           user_id: string
           version: number
-          goal_adjustment: number
-          safety_outcome: string
         }
         Insert: {
           activity_factor: number
@@ -53,15 +48,15 @@ export type Database = {
           effective_date: string
           fat_g: number
           formula: string
+          goal_adjustment?: number
           goal_row_id: number
           protein_g: number
           raw_calories?: number
           row_id?: never
+          safety_outcome?: string
           tdee: number
           user_id: string
           version: number
-          goal_adjustment?: number
-          safety_outcome?: string
         }
         Update: {
           activity_factor?: number
@@ -77,15 +72,15 @@ export type Database = {
           effective_date?: string
           fat_g?: number
           formula?: string
+          goal_adjustment?: number
           goal_row_id?: number
           protein_g?: number
           raw_calories?: number
           row_id?: never
+          safety_outcome?: string
           tdee?: number
           user_id?: string
           version?: number
-          goal_adjustment?: number
-          safety_outcome?: string
         }
         Relationships: [
           {
@@ -101,6 +96,8 @@ export type Database = {
         Row: {
           actual_exercise_row_id: number
           actual_hold_seconds: number | null
+          actual_load: number | null
+          actual_load_unit: string | null
           actual_measure: string
           actual_reps: number | null
           actual_sets: number | null
@@ -125,6 +122,8 @@ export type Database = {
         Insert: {
           actual_exercise_row_id: number
           actual_hold_seconds?: number | null
+          actual_load?: number | null
+          actual_load_unit?: string | null
           actual_measure: string
           actual_reps?: number | null
           actual_sets?: number | null
@@ -149,6 +148,8 @@ export type Database = {
         Update: {
           actual_exercise_row_id?: number
           actual_hold_seconds?: number | null
+          actual_load?: number | null
+          actual_load_unit?: string | null
           actual_measure?: string
           actual_reps?: number | null
           actual_sets?: number | null
@@ -459,8 +460,8 @@ export type Database = {
         Row: {
           app_id: string
           created_at: string
-          row_id: number
           revision: number
+          row_id: number
           updated_at: string
           user_id: string
           week_of: string
@@ -580,8 +581,8 @@ export type Database = {
       }
       meals: {
         Row: {
-          archived_at: string | null
           app_id: string
+          archived_at: string | null
           created_at: string
           is_system: boolean
           name: string
@@ -594,8 +595,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          archived_at?: string | null
           app_id: string
+          archived_at?: string | null
           created_at?: string
           is_system?: boolean
           name: string
@@ -608,8 +609,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          archived_at?: string | null
           app_id?: string
+          archived_at?: string | null
           created_at?: string
           is_system?: boolean
           name?: string
@@ -773,6 +774,7 @@ export type Database = {
           rest_seconds: number
           row_id: number
           sets: number
+          slot_key: string
           sort_order: number
           user_id: string
         }
@@ -791,6 +793,7 @@ export type Database = {
           rest_seconds: number
           row_id?: never
           sets: number
+          slot_key: string
           sort_order: number
           user_id: string
         }
@@ -809,6 +812,7 @@ export type Database = {
           rest_seconds?: number
           row_id?: never
           sets?: number
+          slot_key?: string
           sort_order?: number
           user_id?: string
         }
@@ -850,6 +854,8 @@ export type Database = {
           row_id: number
           servings: number
           skipped: boolean
+          slot_key: string
+          sort_order: number
           source: string | null
           source_version: string | null
           updated_at: string
@@ -876,6 +882,8 @@ export type Database = {
           row_id?: never
           servings: number
           skipped?: boolean
+          slot_key: string
+          sort_order: number
           source?: string | null
           source_version?: string | null
           updated_at?: string
@@ -902,6 +910,8 @@ export type Database = {
           row_id?: never
           servings?: number
           skipped?: boolean
+          slot_key?: string
+          sort_order?: number
           source?: string | null
           source_version?: string | null
           updated_at?: string
@@ -993,14 +1003,14 @@ export type Database = {
           created_at: string
           days_per_week: number
           dietary_pattern: string
+          eligibility_status: string
+          eligibility_version: string
           equipment: string[]
           experience: string
           food_preferences: string[]
           goal: string
           height_cm: number
           id: string
-          eligibility_status: string
-          eligibility_version: string
           meal_budget: number | null
           name: string
           revision: number
@@ -1017,14 +1027,14 @@ export type Database = {
           created_at?: string
           days_per_week: number
           dietary_pattern?: string
+          eligibility_status?: string
+          eligibility_version?: string
           equipment?: string[]
           experience: string
           food_preferences?: string[]
           goal: string
           height_cm: number
           id: string
-          eligibility_status?: string
-          eligibility_version?: string
           meal_budget?: number | null
           name: string
           revision?: number
@@ -1041,14 +1051,14 @@ export type Database = {
           created_at?: string
           days_per_week?: number
           dietary_pattern?: string
+          eligibility_status?: string
+          eligibility_version?: string
           equipment?: string[]
           experience?: string
           food_preferences?: string[]
           goal?: string
           height_cm?: number
           id?: string
-          eligibility_status?: string
-          eligibility_version?: string
           meal_budget?: number | null
           name?: string
           revision?: number
@@ -1057,6 +1067,57 @@ export type Database = {
           units?: string
           updated_at?: string
           weight_kg?: number
+        }
+        Relationships: []
+      }
+      progression_decisions: {
+        Row: {
+          action: string
+          app_id: string
+          created_at: string
+          decision: string
+          planned_exercise_app_id: string
+          proposed_hold_seconds: number | null
+          proposed_replacement_exercise_id: string | null
+          proposed_reps: number | null
+          proposed_sets: number | null
+          row_id: number
+          rule_version: string
+          slot_key: string
+          source_session_ids: string[]
+          user_id: string
+        }
+        Insert: {
+          action: string
+          app_id: string
+          created_at?: string
+          decision: string
+          planned_exercise_app_id: string
+          proposed_hold_seconds?: number | null
+          proposed_replacement_exercise_id?: string | null
+          proposed_reps?: number | null
+          proposed_sets?: number | null
+          row_id?: never
+          rule_version: string
+          slot_key: string
+          source_session_ids?: string[]
+          user_id: string
+        }
+        Update: {
+          action?: string
+          app_id?: string
+          created_at?: string
+          decision?: string
+          planned_exercise_app_id?: string
+          proposed_hold_seconds?: number | null
+          proposed_replacement_exercise_id?: string | null
+          proposed_reps?: number | null
+          proposed_sets?: number | null
+          row_id?: never
+          rule_version?: string
+          slot_key?: string
+          source_session_ids?: string[]
+          user_id?: string
         }
         Relationships: []
       }
@@ -1102,6 +1163,7 @@ export type Database = {
           rest_seconds_override: number | null
           row_id: number
           sets_override: number | null
+          slot_key: string
           updated_at: string
           user_id: string
         }
@@ -1119,6 +1181,7 @@ export type Database = {
           rest_seconds_override?: number | null
           row_id?: never
           sets_override?: number | null
+          slot_key: string
           updated_at?: string
           user_id: string
         }
@@ -1136,6 +1199,7 @@ export type Database = {
           rest_seconds_override?: number | null
           row_id?: never
           sets_override?: number | null
+          slot_key?: string
           updated_at?: string
           user_id?: string
         }
@@ -1269,17 +1333,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      apply_workout_override: { Args: { p_payload: Json }; Returns: Json }
       abandon_workout_session: { Args: { p_payload: Json }; Returns: Json }
       add_custom_grocery_item: { Args: { p_payload: Json }; Returns: Json }
+      apply_progression_decision: { Args: { p_payload: Json }; Returns: Json }
+      apply_workout_override: { Args: { p_payload: Json }; Returns: Json }
+      archive_saved_meal: { Args: { p_payload: Json }; Returns: Json }
       complete_onboarding: { Args: { p_payload: Json }; Returns: Json }
       delete_account: { Args: { p_payload: Json }; Returns: Json }
       delete_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
+      edit_meal_plan: { Args: { p_payload: Json }; Returns: Json }
       export_account_data: { Args: { p_payload: Json }; Returns: Json }
       finish_workout_session: { Args: { p_payload: Json }; Returns: Json }
       log_saved_meal: { Args: { p_payload: Json }; Returns: Json }
       regenerate_grocery: { Args: { p_payload: Json }; Returns: Json }
       remove_grocery_item: { Args: { p_payload: Json }; Returns: Json }
+      remove_workout_override: { Args: { p_payload: Json }; Returns: Json }
       reset_plan: { Args: { p_payload: Json }; Returns: Json }
       save_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       save_recipe: { Args: { p_payload: Json }; Returns: Json }

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
 import type { GroceryCategory } from "@/types/domain";
-import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
+import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 
 const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", "Pantry", "Other"];
 
@@ -18,6 +18,7 @@ export default function GroceryPage() {
   const [unit, setUnit] = useState("pcs");
   const [draftReady, setDraftReady] = useState(false);
   const [draftWasRestored, setDraftWasRestored] = useState(false);
+  const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
   const suppressDraftWriteRef = useRef(false);
 
   const list = snapshot.grocery;
@@ -41,14 +42,22 @@ export default function GroceryPage() {
   }, [draftType, userId]);
 
   useEffect(() => {
-    if (!draftReady || !userId || suppressDraftWriteRef.current) return;
+    if (!draftReady || !userId) return;
+    if (suppressDraftWriteRef.current) {
+      suppressDraftWriteRef.current = false;
+      return;
+    }
+    if (!name.trim() && quantity === "1" && unit === "pcs") {
+      void clearDraft(userId, draftType);
+      return;
+    }
     void writeDraft(createDraftEnvelope({
       userId,
       draftType,
       payload: { name, quantity, unit },
       baseVersions: { groceryRevision: list?.revision },
-      ttlMs: 7 * 24 * 60 * 60 * 1000,
-    }));
+      ttlMs: draftTtlMs(draftType),
+    })).then((saved) => setDraftWriteUnavailable(!saved));
   }, [draftReady, list?.revision, name, quantity, unit, userId]);
 
   if (!list || list.items.length === 0) {
@@ -98,6 +107,12 @@ export default function GroceryPage() {
           </div>
         ) : null}
 
+        {draftWriteUnavailable ? (
+          <p className="mt-3 rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold text-ink-soft" role="status">
+            Draft recovery is unavailable on this device right now. Keep this form open until the item is confirmed.
+          </p>
+        ) : null}
+
         {/* Add custom item */}
         <div className="mt-4 flex gap-2">
           <input
@@ -135,6 +150,7 @@ export default function GroceryPage() {
           </select>
           <Button
             className="!min-h-12 !px-4"
+            aria-label="Add custom grocery item"
             disabled={!name.trim()}
             onClick={async () => {
               const saved = await actions.addCustomGrocery(
@@ -147,6 +163,7 @@ export default function GroceryPage() {
               suppressDraftWriteRef.current = true;
               setName("");
               setQuantity("1");
+              setUnit("pcs");
               setDraftWasRestored(false);
             }}
           >

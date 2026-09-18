@@ -212,7 +212,7 @@ select lives_ok($$
   )
 $$, 'update_units accepts a complete unit-change bundle');
 select is((select units from public.profiles where id = '00000000-0000-0000-0000-000000000401'), 'imperial', 'update_units persists the changed unit system');
-select is((select count(*)::int from public.daily_targets where user_id = '00000000-0000-0000-0000-000000000401'), 3, 'update_units creates a derived target version');
+select is((select count(*)::int from public.daily_targets where user_id = '00000000-0000-0000-0000-000000000401'), 2, 'update_units preserves the current target version for a display-unit-only edit');
 
 select lives_ok($$
   select public.reset_plan(
@@ -220,7 +220,7 @@ select lives_ok($$
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-reset-plan')
   )
 $$, 'reset_plan creates a future plan bundle');
-select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000401'), 4, 'reset_plan retains previous workout plan history');
+select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000401'), 3, 'reset_plan retains previous workout plan history');
 select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000401' and app_id = 'test-rpc-smoke-reset-plan'), 1, 'reset_plan stores the new plan application ID');
 
 select lives_ok($$

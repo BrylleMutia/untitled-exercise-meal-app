@@ -17,8 +17,10 @@ import type { Database, Json } from "@/types/database.generated";
 import type {
   AbandonSessionInput,
   AddCustomGroceryInput,
+  ArchiveMealInput,
   DeleteAccountInput,
   DeleteNutritionInput,
+  EditMealPlanInput,
   ExportInput,
   ExportOutcome,
   FinishSessionInput,
@@ -39,8 +41,12 @@ import type {
   UpdateUnitsInput,
   WeightInput,
   WorkoutPlanOverrideInput,
+  RemoveWorkoutOverrideInput,
+  ProgressionDecisionInput,
+  HistoryQuery,
+  HistoryReadModel,
 } from "@/types/backend";
-import { loadAppSnapshot } from "@/services/supabaseSnapshot";
+import { loadAppSnapshot, loadHistoryReadModel } from "@/services/supabaseSnapshot";
 import type { SnapshotRepository } from "@/services/repository";
 
 type RpcName =
@@ -49,6 +55,7 @@ type RpcName =
   | "update_units"
   | "reset_plan"
   | "skip_planned_meal"
+  | "edit_meal_plan"
   | "start_workout_session"
   | "save_workout_session"
   | "finish_workout_session"
@@ -56,10 +63,13 @@ type RpcName =
   | "save_nutrition_log"
   | "log_saved_meal"
   | "apply_workout_override"
+  | "remove_workout_override"
+  | "apply_progression_decision"
   | "delete_nutrition_log"
   | "save_weight_entry"
   | "save_saved_meal"
   | "save_recipe"
+  | "archive_saved_meal"
   | "toggle_grocery_item"
   | "set_grocery_quantity"
   | "remove_grocery_item"
@@ -203,6 +213,33 @@ function profileBundle(
   };
 }
 
+/**
+ * Name and display-unit edits do not alter health or plan inputs. Keeping the
+ * comparison explicit prevents a harmless profile edit from creating a new
+ * target/plan version and preserves the historical prescription.
+ */
+function hasSamePlanInputs(current: UserProfile, next: UserProfile) {
+  const comparable = (profile: UserProfile) => ({
+    age: profile.age,
+    sex: profile.sex,
+    heightCm: profile.heightCm,
+    weightKg: profile.weightKg,
+    experience: profile.experience,
+    equipment: profile.equipment,
+    daysPerWeek: profile.daysPerWeek,
+    sessionMinutes: profile.sessionMinutes,
+    goal: profile.goal,
+    dietaryPattern: profile.dietaryPattern,
+    allergies: profile.allergies,
+    foodPreferences: profile.foodPreferences,
+    cookingTimeMinutes: profile.cookingTimeMinutes,
+    mealBudget: profile.mealBudget,
+    targetEligibility: profile.targetEligibility ?? "eligible",
+    eligibilityVersion: profile.eligibilityVersion ?? "calicoach-eligibility-v1",
+  });
+  return JSON.stringify(comparable(current)) === JSON.stringify(comparable(next));
+}
+
 function sessionPayload(session: WorkoutSession, snapshot: AppSnapshot) {
   const workout = snapshot.plan?.workouts.find(
     (candidate) => candidate.id === session.plannedWorkoutId,
@@ -256,6 +293,18 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     return userId ? loadAppSnapshot(this.client, userId) : null;
   }
 
+  async loadHistory(query: HistoryQuery = {}): Promise<HistoryReadModel> {
+    const { data, error } = await this.client.auth.getClaims();
+    if (error) throw repositoryException(toRepositoryError(error.message, error.status));
+    const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+    if (!userId) throw repositoryException(toRepositoryError("not_authenticated", 401));
+    try {
+      return await loadHistoryReadModel(this.client, userId, query);
+    } catch (reason: unknown) {
+      throw repositoryException(toRepositoryError(reason instanceof Error ? `validation_failed: ${reason.message}` : "retryable: history could not be loaded"));
+    }
+  }
+
   private async mutate(
     name: RpcName,
     payload: Record<string, unknown>,
@@ -306,6 +355,23 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async updateProfile(input: ProfileUpdateInput): Promise<MutationOutcome> {
+    const profileOnly = Boolean(
+      input.currentSnapshot.profile && hasSamePlanInputs(input.currentSnapshot.profile, input.profile),
+    );
+    if (profileOnly) {
+      return this.mutate(
+        "update_profile",
+        {
+          profile: input.profile,
+          profileOnly: true,
+          expectedVersions: input.expectedVersions ?? {
+            profileRevision: input.currentSnapshot.profile?.revision,
+          },
+          idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+        },
+        [{ type: "profile-updated" }],
+      );
+    }
     if (input.profile.targetEligibility === "unsupported") {
       return this.mutate(
         "update_profile",
@@ -335,15 +401,23 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       throw repositoryException(toRepositoryError("validation_failed: profile is required"));
     }
     const profile = { ...input.currentSnapshot.profile, units: input.units };
-    const bundle = profileBundle(profile, todayKey(), input.currentSnapshot.grocery, undefined, undefined, input.currentSnapshot.workoutOverrides);
+    // Eligibility metadata is preserved server-side for a display-unit edit;
+    // omitting it also keeps the shared validator from treating this as a new
+    // health-screening decision for an unsupported profile.
+    const profilePayload = {
+      ...profile,
+      targetEligibility: undefined,
+      eligibilityVersion: undefined,
+    };
     return this.mutate(
       "update_units",
-      { ...bundle, expectedVersions: expectedVersionsForSnapshot(input.currentSnapshot), idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
-      [
-        { type: "profile-updated" },
-        { type: "target-updated", targetId: bundle.target.id },
-        { type: "plan-generated", planId: bundle.plan.id },
-      ],
+      {
+        profile: profilePayload,
+        profileOnly: true,
+        expectedVersions: input.expectedVersions ?? { profileRevision: input.currentSnapshot.profile.revision },
+        idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+      },
+      [{ type: "profile-updated" }],
     );
   }
 
@@ -360,7 +434,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     };
     return this.mutate("start_workout_session", {
       session,
-      expectedVersions: { workoutPlanVersion: input.currentSnapshot.plan?.version },
+      expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan?.version },
       idempotencyKey: mutationKey,
     });
   }
@@ -368,7 +442,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   async saveSession(input: SaveSessionInput): Promise<MutationOutcome> {
     return this.mutate("save_workout_session", {
       session: sessionPayload(input.session, input.currentSnapshot),
-      expectedVersions: { workoutPlanVersion: input.currentSnapshot.plan?.version },
+      expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan?.version },
       idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
     });
   }
@@ -377,7 +451,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const outcome = await this.mutate("finish_workout_session", {
       session: sessionPayload(input.session, input.currentSnapshot),
       finishedAt: new Date().toISOString(),
-      expectedVersions: { workoutPlanVersion: input.currentSnapshot.plan?.version },
+      expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan?.version },
       idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
     });
     const sessionStatus = outcome.resultRefs?.session_status;
@@ -398,7 +472,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   async abandonSession(input: AbandonSessionInput): Promise<MutationOutcome> {
     return this.mutate("abandon_workout_session", {
       session: { id: input.sessionId },
-      expectedVersions: { workoutPlanVersion: input.currentSnapshot.plan?.version },
+      expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan?.version },
       idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
     });
   }
@@ -479,7 +553,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       "add_custom_grocery_item",
       {
         grocery: input.currentSnapshot.grocery,
-        expectedVersions: expectedVersionsForSnapshot(input.currentSnapshot),
+        expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
         item,
         idempotencyKey: mutationKey,
       },
@@ -497,7 +571,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       "regenerate_grocery",
       {
         grocery: input.currentSnapshot.grocery,
-        expectedVersions: expectedVersionsForSnapshot(input.currentSnapshot),
+        expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
       },
       [
@@ -529,7 +603,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     );
     return this.mutate(
       "skip_planned_meal",
-      { ...bundle, expectedVersions: expectedVersionsForSnapshot(input.currentSnapshot), idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
+      { ...bundle, expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot), idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
       [{ type: "grocery-list-updated", listId: bundle.grocery.id }],
     );
   }
@@ -548,7 +622,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     );
     return this.mutate(
       "reset_plan",
-      { ...bundle, expectedVersions: expectedVersionsForSnapshot(input.currentSnapshot), idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
+      { ...bundle, expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot), idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
       [{ type: "plan-generated", planId: bundle.plan.id }],
     );
   }
@@ -573,6 +647,40 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     );
   }
 
+  async editMealPlan(input: EditMealPlanInput): Promise<MutationOutcome> {
+    if (!input.currentSnapshot.mealPlan) {
+      throw repositoryException(toRepositoryError("validation_failed: meal plan is required"));
+    }
+    const mealsById = new Map(
+      [...SAVED_MEALS, ...input.currentSnapshot.savedMeals].map((meal) => [meal.id, meal]),
+    );
+    const generatedGrocery = generateGroceryList(
+      input.mealPlan,
+      [...mealsById.values()],
+      FOODS,
+      input.mealPlan.weekOf,
+    );
+    const grocery = input.currentSnapshot.grocery
+      ? mergeGroceryLists(input.currentSnapshot.grocery, generatedGrocery)
+      : generatedGrocery;
+    return this.mutate(
+      "edit_meal_plan",
+      {
+        mealPlan: input.mealPlan,
+        grocery,
+        expectedVersions: input.expectedVersions ?? {
+          mealPlanVersion: input.currentSnapshot.mealPlan.version,
+          groceryRevision: input.currentSnapshot.grocery?.revision,
+        },
+        idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+      },
+      [
+        { type: "plan-edited", planId: input.mealPlan.id },
+        { type: "grocery-list-updated", listId: grocery.id },
+      ],
+    );
+  }
+
   async applyWorkoutOverride(input: WorkoutPlanOverrideInput): Promise<MutationOutcome> {
     if (!input.currentSnapshot.profile || !input.currentSnapshot.plan) {
       throw repositoryException(toRepositoryError("validation_failed: profile and plan are required"));
@@ -587,17 +695,88 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         reps: input.reps,
         holdSeconds: input.holdSeconds,
         restSeconds: input.restSeconds,
-        expectedVersions: { workoutPlanVersion: input.currentSnapshot.plan.version },
+        expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan.version },
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
       },
       [{ type: "plan-edited", planId: input.currentSnapshot.plan.id }],
     );
   }
 
+  async removeWorkoutOverride(input: RemoveWorkoutOverrideInput): Promise<MutationOutcome> {
+    if (!input.currentSnapshot.profile || !input.currentSnapshot.plan) {
+      throw repositoryException(toRepositoryError("validation_failed: profile and plan are required"));
+    }
+    return this.mutate(
+      "remove_workout_override",
+      {
+        slotKey: input.slotKey,
+        plannedExerciseId: input.plannedExerciseId,
+        expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan.version },
+        idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+      },
+      [{ type: "workout-override-removed", planId: input.currentSnapshot.plan.id }],
+    );
+  }
+
+  async applyProgressionDecision(input: ProgressionDecisionInput): Promise<MutationOutcome> {
+    if (!input.currentSnapshot.profile || !input.currentSnapshot.plan) {
+      throw repositoryException(toRepositoryError("validation_failed: profile and plan are required"));
+    }
+    const outcome = await this.mutate(
+      "apply_progression_decision",
+      {
+        slotKey: input.slotKey,
+        plannedExerciseId: input.plannedExerciseId,
+        action: input.action,
+        decision: input.decision,
+        ruleVersion: input.ruleVersion,
+        sourceSessionIds: input.sourceSessionIds,
+        replacementExerciseId: input.replacementExerciseId,
+        sets: input.sets,
+        reps: input.reps,
+        holdSeconds: input.holdSeconds,
+        restSeconds: input.restSeconds,
+        expectedVersions: input.expectedVersions ?? { workoutPlanVersion: input.currentSnapshot.plan.version },
+        idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+      },
+      [],
+    );
+    return {
+      ...outcome,
+      events: [{
+        type: "progression-decision-saved",
+        decisionId: outcome.resultRefs?.decision_id ?? input.idempotencyKey ?? "decision",
+      }],
+    };
+  }
+
   async saveMeal(input: SaveMealInput): Promise<MutationOutcome> {
+    const savedMeals = [...input.currentSnapshot.savedMeals.filter((meal) => meal.id !== input.meal.id), input.meal];
+    const grocery = input.currentSnapshot.mealPlan
+      ? mergeGroceryLists(
+          input.currentSnapshot.grocery ?? generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, FOODS, input.currentSnapshot.mealPlan.weekOf),
+          generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, FOODS, input.currentSnapshot.mealPlan.weekOf),
+        )
+      : input.currentSnapshot.grocery;
     return this.mutate(
       "save_saved_meal",
-      { meal: input.meal, expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
+      { meal: input.meal, grocery, expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
+      [
+        { type: "meal-saved", mealId: input.meal.id },
+        ...(grocery ? [{ type: "grocery-list-updated" as const, listId: grocery.id }] : []),
+      ],
+    );
+  }
+
+  async archiveMeal(input: ArchiveMealInput): Promise<MutationOutcome> {
+    return this.mutate(
+      "archive_saved_meal",
+      {
+        mealId: input.mealId,
+        expectedVersions: input.expectedVersions,
+        idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+      },
+      [{ type: "meal-archived", mealId: input.mealId }],
     );
   }
 
@@ -641,6 +820,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         weights: [],
         grocery: null,
         savedMeals: [],
+        progressionDecisions: [],
       },
       events: [{ type: "data-erased" }],
       resultRefs: asRefs(isObject(result.data) ? result.data.result_refs : undefined),

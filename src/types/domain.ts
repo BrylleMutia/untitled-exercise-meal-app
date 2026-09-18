@@ -5,6 +5,14 @@ export type EquipmentId = "none" | "pullup_bar" | "bands" | "dumbbells" | "bench
 export type PrimaryGoal = "lose" | "maintain" | "gain" | "strength" | "consistency";
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 export type Confidence = "high" | "medium" | "low";
+export type PreparationBasis =
+  | "raw"
+  | "cooked"
+  | "baked"
+  | "dry"
+  | "prepared"
+  | "as_labeled"
+  | "unknown";
 export type MovementCategory = "push" | "pull" | "squat" | "hinge" | "core" | "mobility";
 export type GroceryCategory = "Produce" | "Protein" | "Dairy" | "Grains" | "Pantry" | "Other";
 export type TargetEligibility = "eligible" | "unsupported" | "not_answered";
@@ -83,6 +91,17 @@ export interface Exercise {
   illustrationAlt: string;
   regression?: string;
   progression?: string;
+  progressionBounds?: {
+    minSets: number;
+    maxSets: number;
+    setStep: number;
+    minReps: number;
+    maxReps: number;
+    repStep: number;
+    minHoldSeconds: number;
+    maxHoldSeconds: number;
+    holdStep: number;
+  };
   safety: string;
 }
 
@@ -136,7 +155,13 @@ export interface ExerciseLog {
   exerciseId: string;
   plannedExerciseId?: string;
   planned: { sets: number; reps?: number; holdSeconds?: number };
-  actual: { sets: number; reps?: number; holdSeconds?: number };
+  actual: {
+    sets: number;
+    reps?: number;
+    holdSeconds?: number;
+    load?: number;
+    loadUnit?: "kg" | "lb";
+  };
   status: "completed" | "skipped" | "modified";
   rpe?: number;
   manageable?: boolean; // explicit "manageable" mark when RPE is not recorded
@@ -171,6 +196,22 @@ export interface Food {
   estimated: boolean;
   confidence: Confidence;
   category: GroceryCategory;
+  fdcId?: string;
+  recordType?: string;
+  providerRevision?: string;
+  providerImportedAt?: string;
+  nutrientsPer100g?: {
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+    fiberG?: number;
+  };
+  servingOptions?: Array<{
+    label: string;
+    unit: string;
+    grams: number;
+  }>;
 }
 
 export interface NutritionLog {
@@ -188,10 +229,28 @@ export interface NutritionLog {
   confidence: Confidence;
   source: string;
   sourceVersion?: string;
-  preparationBasis?: string;
+  preparationBasis?: PreparationBasis;
   fiberG?: number;
   assumptions?: string;
   revision?: number;
+  createdAt: string;
+}
+
+export type ProgressionAction = "progress" | "hold" | "regress";
+export type ProgressionDecisionState = "accepted" | "rejected";
+
+export interface ProgressionDecision {
+  id: string;
+  slotKey: string;
+  plannedExerciseId: string;
+  action: ProgressionAction;
+  decision: ProgressionDecisionState;
+  ruleVersion: string;
+  sourceSessionIds: string[];
+  proposedReplacementExerciseId?: string;
+  proposedSets?: number;
+  proposedReps?: number;
+  proposedHoldSeconds?: number;
   createdAt: string;
 }
 
@@ -204,6 +263,7 @@ export interface Meal {
   id: string;
   name: string;
   servings: number;
+  isSystem?: boolean;
   notes?: string;
   ingredients: RecipeIngredient[];
   revision?: number;
@@ -212,6 +272,8 @@ export interface Meal {
 
 export interface PlannedMeal {
   id: string;
+  slotKey?: string;
+  sortOrder?: number;
   date: string; // YYYY-MM-DD
   slot: MealSlot;
   mealId?: string;
@@ -228,7 +290,7 @@ export interface PlannedMeal {
   sourceVersion?: string;
   assumptions?: string;
   confidence?: Confidence;
-  preparationBasis?: string;
+  preparationBasis?: PreparationBasis;
 }
 
 export interface MealPlan {
@@ -279,6 +341,7 @@ export interface AppSnapshot {
   weights: WeightEntry[];
   grocery: GroceryList | null;
   savedMeals: Meal[];
+  progressionDecisions: ProgressionDecision[];
 }
 
 export type SemanticEvent =
@@ -291,6 +354,10 @@ export type SemanticEvent =
   | { type: "workout-partially-logged"; sessionId: string }
   | { type: "nutrition-entry-saved"; entryId: string }
   | { type: "meal-logged"; entryIds: string[] }
+  | { type: "meal-saved"; mealId: string }
+  | { type: "meal-archived"; mealId: string }
+  | { type: "progression-decision-saved"; decisionId: string }
+  | { type: "workout-override-removed"; planId: string }
   | { type: "weight-entry-added"; entryId: string }
   | { type: "grocery-list-updated"; listId: string }
   | { type: "data-exported" }

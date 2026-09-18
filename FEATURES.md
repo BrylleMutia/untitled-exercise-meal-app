@@ -82,6 +82,9 @@ Display calculated values as estimates, not medical measurements:
 - Protein, carbohydrate, and fat targets
 
 Users must be able to edit profile data and recalculate targets at any time.
+Name and display-unit edits update the profile without creating a new target or
+plan version; body, goal, training, and nutrition-preference edits create only
+the affected future artifacts and preserve historical assumptions.
 
 ### Health and Calculation Safety
 
@@ -221,6 +224,8 @@ calculate nutrition for the plan.
 Each planned meal should contain:
 
 - Local calendar date and meal slot
+- Stable slot key and order within the date/slot, so multiple snacks or added
+  meals remain independently editable
 - Referenced food, saved meal, or recipe
 - Planned serving quantity and unit
 - Expected calories and macros calculated from trusted nutrition records
@@ -318,6 +323,15 @@ Users can create a reusable meal or recipe with:
 Allow users to duplicate, edit, and log a saved meal. A social-media URL may be
 stored as a reference, but the user should enter or confirm the ingredients in
 the MVP.
+
+The current M1.2 implementation provides create, edit, duplicate, archive, and
+log controls for saved meals, plus replacement, serving, add, and skip/reapply
+controls for the active planned meal. Plan edits create a new future snapshot;
+recipe archive is a soft-delete so historical planned meals and nutrition logs
+remain resolvable. Recipe saves and active-plan grocery reconciliation use one
+authorized transaction. Custom-food persistence, multiple same-slot ordering,
+preference/cooking-time/budget-aware generation, and recipe-specific draft
+recovery remain M1.2/M1.3 follow-up work.
 
 ### 10. Grocery List
 
@@ -541,10 +555,11 @@ make input faster without becoming the authority for calculations or safety.
 The current implementation persists onboarding goal fields and profile food
 preferences, hydrates historical workout plans and sessions, supports
 per-exercise-slot workout overrides, carries planned-meal nutrition metadata,
-logs saved meals atomically, and routes export/account deletion through
-authorized Supabase mutations. Onboarding and in-progress session drafts are
-  recoverable in the versioned IndexedDB/localStorage draft repository and are
-  never treated as durable until the Supabase mutation succeeds. MVP-0 now also
+logs saved meals atomically, and exposes the first M1.2 planned-meal/recipe
+editor slice through authorized Supabase mutations. Onboarding, nutrition,
+grocery, and in-progress session drafts are recoverable in the versioned
+IndexedDB/localStorage draft repository and are never treated as durable until
+the Supabase mutation succeeds. MVP-0 now also
 includes revision-aware stale conflict handling, health eligibility metadata,
 RPC preflight validation, and profile-only onboarding for unsupported health
 screening outcomes (manual logging remains available). Trusted production nutrition data, server-side AI

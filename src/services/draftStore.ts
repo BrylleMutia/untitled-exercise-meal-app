@@ -4,6 +4,37 @@ const DB_NAME = "calicoach-drafts";
 const STORE_NAME = "drafts";
 const LOCAL_PREFIX = "calicoach:draft:v1:";
 
+const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Draft lifetimes are intentionally separate from durable domain retention.
+ * The prefix match keeps future feature-local draft types on the same policy
+ * until their dedicated editor is introduced.
+ */
+export const DRAFT_TTL_MS = {
+  profile: 30 * DAY,
+  onboarding: 30 * DAY,
+  // Workout drafts are cleared on confirmed completion or abandonment.
+  workout: Number.POSITIVE_INFINITY,
+  nutrition: 7 * DAY,
+  textMeal: 7 * DAY,
+  plannedMeal: 7 * DAY,
+  recipe: 7 * DAY,
+  grocery: 7 * DAY,
+} as const;
+
+export function draftTtlMs(draftType: string): number {
+  if (draftType === "onboarding" || draftType === "profile") return DRAFT_TTL_MS.profile;
+  if (draftType.startsWith("workout-session:")) return DRAFT_TTL_MS.workout;
+  if (draftType.startsWith("nutrition-") || draftType.startsWith("text-meal:")) {
+    return draftType.startsWith("text-meal:") ? DRAFT_TTL_MS.textMeal : DRAFT_TTL_MS.nutrition;
+  }
+  if (draftType.startsWith("planned-meal:")) return DRAFT_TTL_MS.plannedMeal;
+  if (draftType.startsWith("recipe:")) return DRAFT_TTL_MS.recipe;
+  if (draftType.startsWith("grocery-")) return DRAFT_TTL_MS.grocery;
+  return DRAFT_TTL_MS.nutrition;
+}
+
 function browserAvailable() {
   return typeof window !== "undefined";
 }
@@ -15,13 +46,27 @@ function localKey(userId: string, draftType: string) {
 function isFresh<T>(value: unknown, userId?: string, draftType?: string): value is DraftEnvelope<T> {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<DraftEnvelope<T>>;
-  if (candidate.schemaVersion !== 1 || typeof candidate.userId !== "string" || typeof candidate.draftType !== "string") return false;
+  if (
+    candidate.schemaVersion !== 1 ||
+    typeof candidate.userId !== "string" ||
+    candidate.userId.length === 0 ||
+    typeof candidate.draftType !== "string" ||
+    candidate.draftType.length === 0 ||
+    !candidate.baseVersions ||
+    typeof candidate.baseVersions !== "object" ||
+    Array.isArray(candidate.baseVersions)
+  ) return false;
   if (userId !== undefined && candidate.userId !== userId) return false;
   if (draftType !== undefined && candidate.draftType !== draftType) return false;
   if (typeof candidate.updatedAt !== "string" || typeof candidate.expiresAt !== "string") return false;
   const expiresAt = Date.parse(candidate.expiresAt);
   const updatedAt = Date.parse(candidate.updatedAt);
-  return Number.isFinite(expiresAt) && Number.isFinite(updatedAt) && expiresAt > Date.now();
+  if (!Number.isFinite(expiresAt) || !Number.isFinite(updatedAt) || expiresAt <= updatedAt || expiresAt <= Date.now()) {
+    return false;
+  }
+  return Object.values(candidate.baseVersions as Record<string, unknown>).every(
+    (version) => typeof version === "number" && Number.isInteger(version) && version >= 1,
+  );
 }
 
 function readLocal<T>(userId: string, draftType: string): DraftEnvelope<T> | null {
@@ -40,12 +85,32 @@ function readLocal<T>(userId: string, draftType: string): DraftEnvelope<T> | nul
   }
 }
 
-function writeLocal<T>(value: DraftEnvelope<T>) {
-  if (!browserAvailable()) return;
+function readLegacyLocal<T>(userId: string, draftType: string): DraftEnvelope<T> | null {
+  if (!browserAvailable() || draftType !== "onboarding") return null;
+  try {
+    const raw = window.localStorage.getItem(`calicoach:onboarding-draft:${userId}`);
+    if (!raw) return null;
+    const payload = JSON.parse(raw) as unknown;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+    return createDraftEnvelope({
+      userId,
+      draftType,
+      payload: payload as T,
+      ttlMs: DRAFT_TTL_MS.onboarding,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function writeLocal<T>(value: DraftEnvelope<T>): boolean {
+  if (!browserAvailable()) return false;
   try {
     window.localStorage.setItem(localKey(value.userId, value.draftType), JSON.stringify(value));
+    return true;
   } catch {
     // Storage can be unavailable or full; the in-memory form remains authoritative until retry.
+    return false;
   }
 }
 
@@ -54,9 +119,18 @@ function openDb(): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
     try {
       const request = window.indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME, { keyPath: "key" });
-      request.onsuccess = () => resolve(request.result);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+          request.result.createObjectStore(STORE_NAME, { keyPath: "key" });
+        }
+      };
+      request.onsuccess = () => {
+        const database = request.result;
+        database.onversionchange = () => database.close();
+        resolve(database);
+      };
       request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
     } catch {
       resolve(null);
     }
@@ -75,60 +149,104 @@ export function createDraftEnvelope<T>(input: {
   ttlMs: number;
 }): DraftEnvelope<T> {
   const now = new Date();
+  const baseVersions = Object.fromEntries(
+    Object.entries(input.baseVersions ?? {}).filter(([, version]) => version !== undefined),
+  ) as ExpectedVersions;
+  const expiresAt = input.ttlMs === Number.POSITIVE_INFINITY
+    ? "9999-12-31T23:59:59.999Z"
+    : new Date(now.getTime() + input.ttlMs).toISOString();
   return {
     schemaVersion: 1,
     userId: input.userId,
     draftType: input.draftType,
-    baseVersions: input.baseVersions ?? {},
+    baseVersions,
     updatedAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + input.ttlMs).toISOString(),
+    expiresAt,
     payload: input.payload,
   };
 }
 
-export async function readDraft<T>(userId: string, draftType: string): Promise<DraftEnvelope<T> | null> {
-  const fallback = readLocal<T>(userId, draftType);
-  const db = await openDb();
-  if (!db) return fallback;
+function newest<T>(...values: Array<DraftEnvelope<T> | null>): DraftEnvelope<T> | null {
+  return values
+    .filter((value): value is DraftEnvelope<T> => Boolean(value))
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? null;
+}
+
+async function readIndexed<T>(
+  db: IDBDatabase,
+  userId: string,
+  draftType: string,
+): Promise<DraftEnvelope<T> | null> {
   return new Promise((resolve) => {
-    const transaction = db.transaction(STORE_NAME, "readonly");
-    const request = transaction.objectStore(STORE_NAME).get(idbKey(userId, draftType));
-    request.onsuccess = () => {
-      const value = request.result?.value as DraftEnvelope<T> | undefined;
-      if (!isFresh<T>(value ?? null, userId, draftType)) {
-        if (value) void clearDraft(userId, draftType);
-        resolve(fallback);
-        return;
-      }
-      resolve(value ?? fallback);
-    };
-    request.onerror = () => resolve(fallback);
+    try {
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      const request = transaction.objectStore(STORE_NAME).get(idbKey(userId, draftType));
+      request.onsuccess = () => {
+        const value = request.result?.value as DraftEnvelope<T> | undefined;
+        resolve(isFresh<T>(value ?? null, userId, draftType) ? value ?? null : null);
+      };
+      request.onerror = () => resolve(null);
+      transaction.onabort = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
   });
 }
 
-export async function writeDraft<T>(value: DraftEnvelope<T>): Promise<void> {
-  writeLocal(value);
+export async function readDraft<T>(userId: string, draftType: string): Promise<DraftEnvelope<T> | null> {
+  const fallback = newest(readLocal<T>(userId, draftType), readLegacyLocal<T>(userId, draftType));
   const db = await openDb();
-  if (!db) return;
-  await new Promise<void>((resolve) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put({ ...value, key: idbKey(value.userId, value.draftType) });
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => resolve();
+  if (!db) return fallback;
+  const primary = await readIndexed<T>(db, userId, draftType);
+  return newest(primary, fallback);
+}
+
+async function writeIndexed<T>(value: DraftEnvelope<T>, db: IDBDatabase): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      transaction.objectStore(STORE_NAME).put({ ...value, key: idbKey(value.userId, value.draftType) });
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
   });
+}
+
+/** Returns false when neither IndexedDB nor the localStorage fallback accepted the draft. */
+export async function writeDraft<T>(value: DraftEnvelope<T>): Promise<boolean> {
+  const db = await openDb();
+  if (db && await writeIndexed(value, db)) return true;
+  return writeLocal(value);
 }
 
 export async function clearDraft(userId: string, draftType: string): Promise<void> {
   if (browserAvailable()) {
-    try { window.localStorage.removeItem(localKey(userId, draftType)); } catch { /* best effort */ }
+    try {
+      window.localStorage.removeItem(localKey(userId, draftType));
+      // Remove the pre-envelope keys written by the first draft implementation.
+      if (draftType === "onboarding") {
+        window.localStorage.removeItem(`calicoach:onboarding-draft:${userId}`);
+      }
+      if (draftType.startsWith("workout-session:")) {
+        window.localStorage.removeItem(`calicoach:session:${draftType.slice("workout-session:".length)}`);
+      }
+    } catch { /* best effort */ }
   }
   const db = await openDb();
   if (!db) return;
   await new Promise<void>((resolve) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).delete(idbKey(userId, draftType));
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => resolve();
+    try {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      transaction.objectStore(STORE_NAME).delete(idbKey(userId, draftType));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => resolve();
+      transaction.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
   });
 }
 
@@ -138,24 +256,86 @@ export async function clearUserDrafts(userId: string): Promise<void> {
       const prefix = `${LOCAL_PREFIX}${encodeURIComponent(userId)}:`;
       for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
         const key = window.localStorage.key(index);
-        if (key?.startsWith(prefix)) window.localStorage.removeItem(key);
+        if (
+          key?.startsWith(prefix) ||
+          key === `calicoach:onboarding-draft:${userId}` ||
+          key?.startsWith("calicoach:session:")
+        ) window.localStorage.removeItem(key);
       }
     } catch { /* best effort */ }
   }
   const db = await openDb();
   if (!db) return;
   await new Promise<void>((resolve) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.openCursor();
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) return;
-      const value = cursor.value as { key?: string };
-      if (value.key?.startsWith(`${userId}:`)) cursor.delete();
-      cursor.continue();
-    };
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => resolve();
+    try {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const value = cursor.value as { key?: string };
+        if (value.key?.startsWith(`${userId}:`)) cursor.delete();
+        cursor.continue();
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => resolve();
+      transaction.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
   });
+}
+
+/** Inspect recoverable drafts without exposing another account's records. */
+export async function listDrafts(userId: string): Promise<DraftEnvelope<unknown>[]> {
+  if (!browserAvailable() || !userId) return [];
+  const localValues: DraftEnvelope<unknown>[] = [];
+  try {
+    const prefix = `${LOCAL_PREFIX}${encodeURIComponent(userId)}:`;
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+      const draftType = decodeURIComponent(key.slice(prefix.length));
+      const value = readLocal<unknown>(userId, draftType);
+      if (value) localValues.push(value);
+    }
+  } catch {
+    // IndexedDB can still provide the list when localStorage is unavailable.
+  }
+  const legacyOnboarding = readLegacyLocal<unknown>(userId, "onboarding");
+  if (legacyOnboarding) localValues.push(legacyOnboarding);
+
+  const db = await openDb();
+  if (!db) return localValues;
+  const indexedValues = await new Promise<DraftEnvelope<unknown>[]>((resolve) => {
+    try {
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      const request = transaction.objectStore(STORE_NAME).openCursor();
+      const values: DraftEnvelope<unknown>[] = [];
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve(values);
+          return;
+        }
+        const value = cursor.value?.value as unknown;
+        if (isFresh<unknown>(value, userId)) values.push(value);
+        cursor.continue();
+      };
+      request.onerror = () => resolve(values);
+      transaction.onabort = () => resolve(values);
+    } catch {
+      resolve([]);
+    }
+  });
+
+  const byType = new Map<string, DraftEnvelope<unknown>>();
+  for (const value of [...localValues, ...indexedValues]) {
+    const current = byType.get(value.draftType);
+    if (!current || Date.parse(value.updatedAt) > Date.parse(current.updatedAt)) {
+      byType.set(value.draftType, value);
+    }
+  }
+  return [...byType.values()].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
