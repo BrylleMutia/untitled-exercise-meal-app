@@ -5,10 +5,13 @@ import type {
   UserProfile,
   WorkoutSession,
   NutritionLog,
+  LoggedMeal,
   Meal,
   UnitSystem,
   ProgressionAction,
   WeightEntry,
+  Food,
+  NutritionServingUnit,
 } from "@/types/domain";
 
 export type MutationErrorCode =
@@ -53,8 +56,42 @@ export type MutationOutcome = {
 };
 
 export type ExportOutcome = {
-  data: unknown;
+  data: AccountExport | null;
   events: SemanticEvent[];
+};
+
+export type AccountExportValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AccountExportValue[]
+  | { [key: string]: AccountExportValue };
+
+export type AccountExportRow = { [key: string]: AccountExportValue };
+
+/** The exact scalar and entity collections returned by export_account_data. */
+export type AccountExport = {
+  exportedAt: string;
+  profile: AccountExportRow | null;
+  goals: AccountExportRow[];
+  dailyTargets: AccountExportRow[];
+  workoutPlans: AccountExportRow[];
+  plannedWorkouts: AccountExportRow[];
+  plannedExercises: AccountExportRow[];
+  workoutPlanOverrides: AccountExportRow[];
+  mealPlans: AccountExportRow[];
+  plannedMeals: AccountExportRow[];
+  workoutSessions: AccountExportRow[];
+  exerciseLogs: AccountExportRow[];
+  nutritionLogs: AccountExportRow[];
+  foods: AccountExportRow[];
+  weightEntries: AccountExportRow[];
+  groceryLists: AccountExportRow[];
+  groceryItems: AccountExportRow[];
+  savedMeals: AccountExportRow[];
+  savedMealIngredients: AccountExportRow[];
+  loggedMeals: AccountExportRow[];
 };
 
 export type IdempotentInput = {
@@ -65,6 +102,7 @@ export type IdempotentInput = {
 export type OnboardingInput = IdempotentInput & {
   profile: UserProfile;
   currentSnapshot: AppSnapshot;
+  expectedVersions?: ExpectedVersions;
   goal?: {
     targetWeightKg?: number;
     desiredRateKgPerWeek?: number;
@@ -103,11 +141,31 @@ export type AbandonSessionInput = IdempotentInput & {
 };
 
 export type NutritionInput = IdempotentInput & {
-  entry: Omit<NutritionLog, "id" | "createdAt">;
+  entry: Omit<NutritionLog, "id" | "createdAt"> & {
+    servingQuantity?: number;
+    servingUnit?: NutritionServingUnit;
+  };
+};
+
+export type NotificationPreferenceInput = IdempotentInput & {
+  enabled: boolean;
+  currentSnapshot: AppSnapshot;
+  expectedVersions?: ExpectedVersions;
+};
+
+export type UpdateNutritionInput = IdempotentInput & {
+  entry: NutritionLog;
+  currentSnapshot?: AppSnapshot;
+  expectedVersions?: ExpectedVersions;
+};
+
+export type SaveFoodInput = IdempotentInput & {
+  food: Omit<Food, "id"> & { id?: string };
 };
 
 export type DeleteNutritionInput = IdempotentInput & {
   id: string;
+  currentSnapshot?: AppSnapshot;
   expectedVersions?: ExpectedVersions;
 };
 
@@ -155,6 +213,7 @@ export type SavedMealLogInput = IdempotentInput & {
   date: string;
   slot: NutritionLog["slot"];
   entries: Array<Omit<NutritionLog, "id" | "createdAt">>;
+  meal?: Meal;
 };
 
 export type WorkoutPlanOverrideInput = IdempotentInput & {
@@ -214,6 +273,18 @@ export type HistoryReadModel = {
   }>;
   nutritionLogs: NutritionLog[];
   weights: WeightEntry[];
+  summary: {
+    rangeFrom: string;
+    rangeTo: string;
+    scheduledWorkoutDays: number;
+    completedWorkoutDays: number;
+    partialWorkoutDays: number;
+    skippedWorkoutDays: number;
+    nutritionLoggedDays: number;
+    nutritionCompleteDays: number;
+    nutritionPartialDays: number;
+    nutritionUnloggedDays: number;
+  };
   nextCursors: {
     sessions?: string;
     nutrition?: string;
@@ -229,6 +300,35 @@ export type SaveMealInput = IdempotentInput & {
 
 export type ArchiveMealInput = IdempotentInput & {
   mealId: string;
+  currentSnapshot?: AppSnapshot;
+  expectedVersions?: ExpectedVersions;
+};
+
+export type ReviewedMealIngredientInput = Omit<NutritionLog, "id" | "createdAt" | "loggedMealId" | "ingredientOrder"> & {
+  ingredientOrder?: number;
+};
+
+export type SaveReviewedMealInput = IdempotentInput & {
+  date: string;
+  slot: NutritionLog["slot"];
+  meal: Meal;
+  name: string;
+  sourceMode: LoggedMeal["sourceMode"];
+  assumptions?: string;
+  ingredients: ReviewedMealIngredientInput[];
+};
+
+export type UpdateLoggedMealInput = IdempotentInput & {
+  loggedMeal: LoggedMeal;
+  ingredients: ReviewedMealIngredientInput[];
+  currentSnapshot: AppSnapshot;
+  expectedVersions?: ExpectedVersions;
+};
+
+export type DeleteLoggedMealInput = IdempotentInput & {
+  loggedMealId: string;
+  expectedRevision: number;
+  currentSnapshot: AppSnapshot;
   expectedVersions?: ExpectedVersions;
 };
 

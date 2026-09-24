@@ -1,6 +1,6 @@
 begin;
 
-select plan(32);
+select plan(34);
 
 select has_column('public', 'profiles', 'revision', 'profiles expose an optimistic concurrency revision');
 select has_column('public', 'profiles', 'eligibility_status', 'profiles persist screening outcome');
@@ -48,6 +48,11 @@ set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000901';
 select throws_ok($$
   select public.toggle_grocery_item('{"itemId":"mvp0-item","expectedVersions":{"groceryRevision":1},"idempotencyKey":"mvp0-stale"}'::jsonb)
 $$, 'P0001', 'stale_version', 'stale grocery edits return a stable conflict code');
+
+select lives_ok($$
+  select public.set_grocery_quantity('{"itemId":"mvp0-item","quantity":101,"expectedVersions":{"groceryRevision":2},"idempotencyKey":"mvp0-grocery-revision-bump"}'::jsonb)
+$$, 'a grocery item mutation succeeds against the current revision');
+select is((select revision from public.grocery_lists where app_id = 'mvp0-grocery'), 3, 'grocery item mutations bump the parent list revision');
 
 select throws_ok($$
   select public.save_weight_entry('{"entry":{"id":"mvp0-weight","date":"2026-09-17","weightKg":"NaN"},"idempotencyKey":"mvp0-invalid"}'::jsonb)
@@ -110,7 +115,7 @@ select throws_ok($$
   select public.save_workout_session('{"session":{"id":"mvp0-ambiguous-session","logs":[{"plannedExerciseId":"ex-push-up","actual":{"sets":1,"reps":1,"holdSeconds":10}}]},"idempotencyKey":"mvp0-ambiguous-session"}'::jsonb)
 $$, 'P0001', 'exercise log cannot include both reps and holdSeconds', 'workout logs reject ambiguous reps and hold measurements');
 
-select is((select quantity from public.grocery_items where app_id = 'mvp0-item'), 100::numeric, 'a stale grocery request does not mutate the item');
+select is((select quantity from public.grocery_items where app_id = 'mvp0-item'), 101::numeric, 'a stale grocery request does not mutate the item');
 
 select * from finish();
 

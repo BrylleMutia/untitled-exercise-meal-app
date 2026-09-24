@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { createSupabaseRepository } from "@/services/supabaseRepository";
 import type {
   DraftEnvelope,
+  AccountExport,
   MutationOutcome,
   RepositoryError,
   WorkoutPlanOverrideInput,
@@ -22,17 +23,20 @@ import type {
   RemoveWorkoutOverrideInput,
   HistoryQuery,
   HistoryReadModel,
+  SaveReviewedMealInput,
 } from "@/types/backend";
 import type {
   AppSnapshot,
   Meal,
   MealPlan,
   NutritionLog,
+  Food,
   SemanticEvent,
   Toast,
   UnitSystem,
   UserProfile,
   WorkoutSession,
+  LoggedMeal,
 } from "@/types/domain";
 import type { SnapshotRepository } from "@/services/repository";
 import { clearDraft, clearUserDrafts, listDrafts, readDraft } from "@/services/draftStore";
@@ -54,16 +58,23 @@ export interface AppActions {
   completeOnboarding(profile: UserProfile, goal?: OnboardingGoal): Promise<boolean>;
   updateProfile(profile: UserProfile, goal?: OnboardingGoal): Promise<boolean>;
   updateUnits(units: UnitSystem): Promise<void>;
+  updateNotificationPreference(enabled: boolean): Promise<void>;
   startSession(workoutId: string): Promise<string>;
   saveSession(session: WorkoutSession): Promise<void>;
   finishSession(sessionId: string): Promise<boolean>;
   abandonSession(sessionId: string): Promise<boolean>;
   logNutrition(input: Omit<NutritionLog, "id" | "createdAt">): Promise<boolean>;
+  updateNutrition(entry: NutritionLog): Promise<boolean>;
+  saveFood(food: Omit<Food, "id"> & { id?: string }): Promise<boolean>;
   logSavedMeal(
     date: string,
     slot: NutritionLog["slot"],
     entries: Array<Omit<NutritionLog, "id" | "createdAt">>,
+    meal?: Meal,
   ): Promise<void>;
+  saveReviewedMeal(input: Omit<SaveReviewedMealInput, "idempotencyKey">): Promise<boolean>;
+  updateLoggedMeal(loggedMeal: LoggedMeal, ingredients: Array<Omit<NutritionLog, "id" | "createdAt">>): Promise<boolean>;
+  deleteLoggedMeal(loggedMealId: string): Promise<void>;
   deleteNutrition(id: string): Promise<void>;
   logWeight(weightKg: number, date: string): Promise<void>;
   toggleGrocery(id: string): Promise<void>;
@@ -80,7 +91,7 @@ export interface AppActions {
   saveMeal(meal: Meal): Promise<boolean>;
   duplicateMeal(mealId: string): Promise<boolean>;
   archiveMeal(mealId: string): Promise<boolean>;
-  exportData(): Promise<unknown | null>;
+  exportData(): Promise<AccountExport | null>;
   deleteAccount(): Promise<boolean>;
   retryLast(): Promise<boolean>;
 }
@@ -111,6 +122,7 @@ function createEmptySnapshot(userId = ""): AppSnapshot {
     userId,
     onboarded: false,
     profile: null,
+    foods: [],
     goal: null,
     target: null,
     plan: null,
@@ -118,6 +130,7 @@ function createEmptySnapshot(userId = ""): AppSnapshot {
     mealPlan: null,
     sessions: [],
     nutritionLogs: [],
+    loggedMeals: [],
     weights: [],
     grocery: null,
     savedMeals: [],
@@ -196,10 +209,14 @@ export function AppProvider({
   }, [snapshot]);
 
   const notify = useCallback((message: string, tone: Toast["tone"] = "ok") => {
-    toastSequence.current += 1;
+    // Keep IDs unique across a Fast Refresh/provider remount as well as
+    // within one mounted queue. Duplicate keys can otherwise make an older
+    // toast disappear or be announced inconsistently by assistive tech.
+    const id = Math.max(toastSequence.current + 1, Date.now());
+    toastSequence.current = id;
     setToasts((toasts) => [
       ...toasts,
-      { id: toastSequence.current, message, tone },
+      { id, message, tone },
     ]);
   }, []);
 
@@ -394,7 +411,7 @@ export function AppProvider({
         const current = snapshotRef.current;
         if (!current.plan) return [];
         return current.plan.workouts.flatMap((workout) => workout.exercises.flatMap((exercise, index) => {
-          const suggestion = suggestProgression(exercise.id, current.sessions);
+          const suggestion = suggestProgression(exercise.exerciseId, current.sessions);
           if (!suggestion) return [];
           return [{
             slotKey: exercise.slotKey ?? `day:${workout.dayOfWeek}:exercise:${exercise.sortOrder ?? index + 1}`,
@@ -468,13 +485,14 @@ export function AppProvider({
       async logNutrition(input) {
         const numericValues = [
           input.servings,
+          ...(input.servingQuantity === undefined ? [] : [input.servingQuantity]),
           input.calories,
           input.proteinG,
           input.carbsG,
           input.fatG,
           ...(input.fiberG === undefined ? [] : [input.fiberG]),
         ];
-        if (!Number.isFinite(input.servings) || input.servings <= 0 || numericValues.slice(1).some((value) => !Number.isFinite(value) || value < 0)) {
+        if (!Number.isFinite(input.servings) || input.servings <= 0 || (input.servingQuantity !== undefined && input.servingQuantity <= 0) || numericValues.slice(1).some((value) => !Number.isFinite(value) || value < 0)) {
           notify("Servings must be positive; nutrition values may be zero or higher.", "warn");
           return false;
         }
@@ -482,7 +500,64 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async logSavedMeal(date, slot, entries) {
+      async saveReviewedMeal(input) {
+        if (!input.name.trim() || input.ingredients.length === 0 || input.ingredients.length > 10) {
+          notify("Add at least one reviewed ingredient before saving the meal.", "warn");
+          return false;
+        }
+        const invalid = input.ingredients.some((entry) => !Number.isFinite(entry.servings) || entry.servings <= 0 || [entry.calories, entry.proteinG, entry.carbsG, entry.fatG, ...(entry.fiberG === undefined ? [] : [entry.fiberG])].some((value) => !Number.isFinite(value) || value < 0));
+        if (invalid) {
+          notify("Review quantities and nutrition values before saving.", "warn");
+          return false;
+        }
+        const outcome = await execute("save_reviewed_meal", (_current, idempotencyKey) => repository!.saveReviewedMeal({ ...input, idempotencyKey }));
+        return Boolean(outcome);
+      },
+
+      async updateNotificationPreference(enabled) {
+        await execute("update_notification_preference", (current, idempotencyKey) =>
+          repository!.updateNotificationPreference({ enabled, currentSnapshot: current, idempotencyKey }),
+        );
+      },
+
+      async updateNutrition(entry) {
+        const numericValues = [
+          entry.servings,
+          ...(entry.servingQuantity === undefined ? [] : [entry.servingQuantity]),
+          entry.calories,
+          entry.proteinG,
+          entry.carbsG,
+          entry.fatG,
+          ...(entry.fiberG === undefined ? [] : [entry.fiberG]),
+        ];
+        if (!entry.id || !Number.isFinite(entry.servings) || entry.servings <= 0 || (entry.servingQuantity !== undefined && entry.servingQuantity <= 0) || numericValues.slice(1).some((value) => !Number.isFinite(value) || value < 0)) {
+          notify("Nutrition values are invalid. Check servings and macro values.", "warn");
+          return false;
+        }
+        const outcome = await execute("update_nutrition_log", (current, idempotencyKey) => repository!.updateNutrition({
+          entry,
+          currentSnapshot: current,
+          expectedVersions: { recordRevision: current.nutritionLogs.find((item) => item.id === entry.id)?.revision },
+          idempotencyKey,
+        }));
+        return Boolean(outcome);
+      },
+
+      async saveFood(food) {
+        if (!food.name.trim() || !food.servingLabel.trim() || !Number.isFinite(food.servingGrams) || food.servingGrams <= 0) {
+          notify("Add a food name, serving label, and positive serving size.", "warn");
+          return false;
+        }
+        const values = [food.calories, food.proteinG, food.carbsG, food.fatG, ...(food.fiberG === undefined ? [] : [food.fiberG])];
+        if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+          notify("Nutrition values must be finite and non-negative.", "warn");
+          return false;
+        }
+        const outcome = await execute("save_food", (current, idempotencyKey) => repository!.saveFood({ food, idempotencyKey }));
+        return Boolean(outcome);
+      },
+
+      async logSavedMeal(date, slot, entries, meal) {
         if (entries.length === 0) {
           notify("This meal has no ingredients to log.", "info");
           return;
@@ -491,13 +566,38 @@ export function AppProvider({
           notify("This saved meal has invalid nutrition values.", "warn");
           return;
         }
-        await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, idempotencyKey }));
+        await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, meal, idempotencyKey }));
+      },
+
+      async updateLoggedMeal(loggedMeal, ingredients) {
+        const outcome = await execute("update_logged_meal", (current, idempotencyKey) => repository!.updateLoggedMeal({
+          loggedMeal,
+          ingredients,
+          currentSnapshot: current,
+          expectedVersions: { recordRevision: current.loggedMeals.find((item) => item.id === loggedMeal.id)?.revision },
+          idempotencyKey,
+        }));
+        return Boolean(outcome);
+      },
+
+      async deleteLoggedMeal(loggedMealId) {
+        const current = snapshotRef.current;
+        const meal = current.loggedMeals.find((item) => item.id === loggedMealId);
+        if (!meal) return;
+        await execute("delete_logged_meal", (fresh, idempotencyKey) => repository!.deleteLoggedMeal({
+          loggedMealId,
+          expectedRevision: fresh.loggedMeals.find((item) => item.id === loggedMealId)?.revision ?? meal.revision,
+          currentSnapshot: fresh,
+          expectedVersions: { recordRevision: fresh.loggedMeals.find((item) => item.id === loggedMealId)?.revision ?? meal.revision },
+          idempotencyKey,
+        }));
       },
 
       async deleteNutrition(id) {
         await execute("delete_nutrition_log", (current, idempotencyKey) =>
           repository!.deleteNutrition({
             id,
+            currentSnapshot: current,
             expectedVersions: {
               recordRevision: current.nutritionLogs.find((entry) => entry.id === id)?.revision,
             },
@@ -638,6 +738,7 @@ export function AppProvider({
         }
         const outcome = await execute("archive_saved_meal", (current, idempotencyKey) => repository!.archiveMeal({
           mealId,
+          currentSnapshot: current,
           expectedVersions: { recordRevision: meal.revision },
           idempotencyKey,
         }));

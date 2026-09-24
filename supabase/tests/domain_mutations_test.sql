@@ -1,6 +1,6 @@
 begin;
 
-select plan(63);
+select plan(64);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000301', 'rpc-a@example.test'),
@@ -168,6 +168,7 @@ select lives_ok($$select public.export_account_data('{"idempotencyKey":"test-rpc
 select ok((select (public.export_account_data('{"idempotencyKey":"test-rpc-export-shape"}'::jsonb)->'data'->'goals'->0) ? 'app_id'), 'export preserves application IDs');
 select ok((select (public.export_account_data('{"idempotencyKey":"test-rpc-export-shape-2"}'::jsonb)->'data'->'goals'->0) ? 'row_id') = false, 'export omits internal row IDs');
 select ok((select (public.export_account_data('{"idempotencyKey":"test-rpc-export-shape-3"}'::jsonb)->'data'->'goals'->0) ? 'user_id') = false, 'export omits normalized ownership IDs');
+select ok((select (public.export_account_data('{"idempotencyKey":"test-rpc-export-foods"}'::jsonb)->'data') ? 'foods'), 'export includes the owned food collection');
 select is((select public.export_account_data('{"idempotencyKey":"test-rpc-export-replay"}'::jsonb)->>'status'), 'completed', 'export is retry-safe');
 
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000302';

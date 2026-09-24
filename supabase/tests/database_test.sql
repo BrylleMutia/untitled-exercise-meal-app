@@ -36,9 +36,9 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 21, 'every public application table has RLS enabled');
+), 24, 'every public application table has RLS enabled');
 
-select is((select count(*)::int from pg_policies where schemaname = 'public'), 21, 'owner/catalog policies are present');
+select is((select count(*)::int from pg_policies where schemaname = 'public'), 23, 'owner/catalog policies are present');
 
 select is((
   select count(*)::int
@@ -52,13 +52,13 @@ select is((
   select count(*)::int
   from information_schema.role_table_grants
   where table_schema = 'public' and grantee = 'anon' and privilege_type = 'SELECT'
-), 4, 'anonymous catalog reads are granted');
+), 5, 'anonymous catalog reads are granted');
 
 select is((
   select count(*)::int
   from information_schema.role_table_grants
   where table_schema = 'public' and grantee = 'authenticated' and privilege_type = 'SELECT'
-), 21, 'authenticated reads are granted');
+), 23, 'authenticated reads are granted');
 
 select is((
   select count(*)::int
@@ -67,7 +67,7 @@ select is((
   where n.nspname = 'public'
     and has_function_privilege('authenticated', p.oid, 'EXECUTE')
     and p.proname in (
-      'complete_onboarding', 'update_profile', 'update_units', 'reset_plan',
+      'complete_onboarding', 'update_profile', 'update_units', 'update_notification_preference', 'reset_plan',
       'skip_planned_meal', 'start_workout_session', 'save_workout_session',
       'finish_workout_session', 'abandon_workout_session', 'save_nutrition_log',
       'delete_nutrition_log', 'save_weight_entry', 'save_saved_meal', 'save_recipe',
@@ -75,7 +75,7 @@ select is((
       'add_custom_grocery_item', 'regenerate_grocery', 'export_account_data',
       'delete_account'
     )
-), 21, 'authenticated RPC wrappers have execute grants');
+), 22, 'authenticated RPC wrappers have execute grants');
 
 select is((
   select count(*)::int
@@ -84,7 +84,7 @@ select is((
   where n.nspname = 'public'
     and has_function_privilege('anon', p.oid, 'EXECUTE')
     and p.proname in (
-      'complete_onboarding', 'update_profile', 'update_units', 'reset_plan',
+      'complete_onboarding', 'update_profile', 'update_units', 'update_notification_preference', 'reset_plan',
       'skip_planned_meal', 'start_workout_session', 'save_workout_session',
       'finish_workout_session', 'abandon_workout_session', 'save_nutrition_log',
       'delete_nutrition_log', 'save_weight_entry', 'save_saved_meal', 'save_recipe',

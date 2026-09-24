@@ -35,6 +35,7 @@ const f = (
   category,
   source: FOOD_SOURCE,
   sourceVersion: FOOD_SOURCE_VERSION,
+  valueSource: "development_catalog",
   estimated: true,
   confidence,
 });
@@ -59,7 +60,13 @@ export const FOODS: Food[] = [
   f("food-greens", "Mixed greens", "80 g bowl", 80, 18, 1.4, 3, 0.2, "Produce", "g", "medium", 2),
   f("food-peanut-butter", "Peanut butter", "1 tbsp (16 g)", 16, 96, 3.6, 3.6, 8.2, "Pantry"),
   f("food-olive-oil", "Olive oil", "1 tsp (5 ml)", 5, 40, 0, 0, 4.5, "Pantry", "g", "medium"),
-  f("food-butter", "Butter", "1 tsp (5 g)", 5, 36, 0, 0, 4.1, "Dairy", "g", "medium"),
+  {
+    ...f("food-butter", "Butter", "1 tsp (5 g)", 5, 36, 0, 0, 4.1, "Dairy", "g", "medium"),
+    servingOptions: [
+      { label: "1 tsp (5 g)", unit: "tsp", grams: 5 },
+      { label: "1 tbsp (15 g)", unit: "tbsp", grams: 15 },
+    ],
+  },
   f("food-almonds", "Almonds", "28 g handful", 28, 164, 6, 6, 14, "Pantry", "g", "high", 3.5),
   f("food-honey", "Honey", "1 tsp (7 g)", 7, 21, 0, 5.7, 0, "Pantry"),
 ];

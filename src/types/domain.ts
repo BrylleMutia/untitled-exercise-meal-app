@@ -5,6 +5,12 @@ export type EquipmentId = "none" | "pullup_bar" | "bands" | "dumbbells" | "bench
 export type PrimaryGoal = "lose" | "maintain" | "gain" | "strength" | "consistency";
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 export type Confidence = "high" | "medium" | "low";
+export type NutritionValueSource =
+  | "trusted_catalog"
+  | "development_catalog"
+  | "user_provided"
+  | "ai_estimate";
+export type NutritionServingUnit = "g" | "piece" | "serving" | "ml" | "custom";
 export type PreparationBasis =
   | "raw"
   | "cooked"
@@ -16,6 +22,20 @@ export type PreparationBasis =
 export type MovementCategory = "push" | "pull" | "squat" | "hinge" | "core" | "mobility";
 export type GroceryCategory = "Produce" | "Protein" | "Dairy" | "Grains" | "Pantry" | "Other";
 export type TargetEligibility = "eligible" | "unsupported" | "not_answered";
+
+export interface EstimateTriple {
+  low: number;
+  base: number;
+  high: number;
+}
+
+export interface MacroEstimateRange {
+  calories: EstimateTriple;
+  proteinG: EstimateTriple;
+  carbsG: EstimateTriple;
+  fatG: EstimateTriple;
+  fiberG?: EstimateTriple;
+}
 
 export interface UserProfile {
   id: string;
@@ -35,6 +55,8 @@ export interface UserProfile {
   foodPreferences?: string[];
   cookingTimeMinutes?: number;
   mealBudget?: number;
+  /** Explicit opt-in preference; delivery is outside MVP-1. */
+  notificationsEnabled: boolean;
   /** Optimistic concurrency revision supplied by the authoritative profile row. */
   revision?: number;
   /** Stored screening outcome; no sensitive screening explanation is retained. */
@@ -193,13 +215,16 @@ export interface Food {
   fiberG?: number;
   source: string;
   sourceVersion: string;
+  valueSource: NutritionValueSource;
   estimated: boolean;
   confidence: Confidence;
   category: GroceryCategory;
+  preparationBasis?: PreparationBasis;
   fdcId?: string;
   recordType?: string;
   providerRevision?: string;
   providerImportedAt?: string;
+  estimateRange?: MacroEstimateRange;
   nutrientsPer100g?: {
     calories: number;
     proteinG: number;
@@ -207,11 +232,13 @@ export interface Food {
     fatG: number;
     fiberG?: number;
   };
-  servingOptions?: Array<{
-    label: string;
-    unit: string;
-    grams: number;
-  }>;
+  servingOptions?: FoodServingOption[];
+}
+
+export interface FoodServingOption {
+  label: string;
+  unit: string;
+  grams: number;
 }
 
 export interface NutritionLog {
@@ -221,6 +248,9 @@ export interface NutritionLog {
   foodId?: string;
   customName?: string;
   servings: number;
+  /** Canonical quantity shown to the user for this log entry. */
+  servingQuantity?: number;
+  servingUnit?: NutritionServingUnit;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -232,6 +262,10 @@ export interface NutritionLog {
   preparationBasis?: PreparationBasis;
   fiberG?: number;
   assumptions?: string;
+  valueSource: NutritionValueSource;
+  estimateRange?: MacroEstimateRange;
+  loggedMealId?: string;
+  ingredientOrder?: number;
   revision?: number;
   createdAt: string;
 }
@@ -268,6 +302,18 @@ export interface Meal {
   ingredients: RecipeIngredient[];
   revision?: number;
   archivedAt?: string;
+}
+
+export interface LoggedMeal {
+  id: string;
+  date: string;
+  slot: MealSlot;
+  name: string;
+  mealId: string;
+  sourceMode: "saved_meal" | "ai_assisted";
+  assumptions?: string;
+  revision: number;
+  createdAt: string;
 }
 
 export interface PlannedMeal {
@@ -331,6 +377,8 @@ export interface AppSnapshot {
   userId: string;
   onboarded: boolean;
   profile: UserProfile | null;
+  /** Read-only food catalog used by deterministic calculations and editors. */
+  foods: Food[];
   goal: Goal | null;
   target: DailyTarget | null;
   plan: WorkoutPlan | null;
@@ -338,6 +386,7 @@ export interface AppSnapshot {
   mealPlan: MealPlan | null;
   sessions: WorkoutSession[];
   nutritionLogs: NutritionLog[];
+  loggedMeals: LoggedMeal[];
   weights: WeightEntry[];
   grocery: GroceryList | null;
   savedMeals: Meal[];
@@ -346,6 +395,7 @@ export interface AppSnapshot {
 
 export type SemanticEvent =
   | { type: "profile-updated" }
+  | { type: "notification-preference-updated" }
   | { type: "goal-updated"; goalId: string }
   | { type: "target-updated"; targetId: string }
   | { type: "plan-generated"; planId: string }
@@ -354,6 +404,7 @@ export type SemanticEvent =
   | { type: "workout-partially-logged"; sessionId: string }
   | { type: "nutrition-entry-saved"; entryId: string }
   | { type: "meal-logged"; entryIds: string[] }
+  | { type: "logged-meal-saved"; loggedMealId: string; entryIds: string[] }
   | { type: "meal-saved"; mealId: string }
   | { type: "meal-archived"; mealId: string }
   | { type: "progression-decision-saved"; decisionId: string }

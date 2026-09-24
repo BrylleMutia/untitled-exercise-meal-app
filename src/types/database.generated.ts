@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
       daily_targets: {
@@ -208,6 +213,7 @@ export type Database = {
           movement_category: string
           muscles: string[]
           name: string
+          progression_bounds: Json
           progression_reference: string | null
           regression_reference: string | null
           row_id: number
@@ -228,6 +234,7 @@ export type Database = {
           movement_category: string
           muscles?: string[]
           name: string
+          progression_bounds: Json
           progression_reference?: string | null
           regression_reference?: string | null
           row_id?: never
@@ -248,6 +255,7 @@ export type Database = {
           movement_category?: string
           muscles?: string[]
           name?: string
+          progression_bounds?: Json
           progression_reference?: string | null
           regression_reference?: string | null
           row_id?: never
@@ -258,6 +266,44 @@ export type Database = {
         }
         Relationships: []
       }
+      food_serving_options: {
+        Row: {
+          created_at: string
+          food_row_id: number
+          grams: number
+          label: string
+          provider_revision: string
+          row_id: number
+          unit: string
+        }
+        Insert: {
+          created_at?: string
+          food_row_id: number
+          grams: number
+          label: string
+          provider_revision: string
+          row_id?: never
+          unit: string
+        }
+        Update: {
+          created_at?: string
+          food_row_id?: number
+          grams?: number
+          label?: string
+          provider_revision?: string
+          row_id?: never
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_serving_options_food_row_id_fkey"
+            columns: ["food_row_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["row_id"]
+          },
+        ]
+      }
       foods: {
         Row: {
           app_id: string
@@ -266,21 +312,29 @@ export type Database = {
           category: string
           confidence: string
           created_at: string
+          estimate_range: Json | null
           estimated: boolean
           fat_g: number
+          fdc_id: string | null
           fiber_g: number | null
           is_system: boolean
           name: string
+          nutrients_per_100g: Json | null
           owner_user_id: string | null
           preparation_basis: string
           protein_g: number
+          provider_imported_at: string | null
+          provider_revision: string | null
+          record_type: string | null
           row_id: number
           serving_grams: number
           serving_label: string
+          serving_options: Json | null
           serving_unit: string
           source: string
           source_version: string
           updated_at: string
+          value_source: string
         }
         Insert: {
           app_id: string
@@ -289,21 +343,29 @@ export type Database = {
           category: string
           confidence: string
           created_at?: string
+          estimate_range?: Json | null
           estimated?: boolean
           fat_g: number
+          fdc_id?: string | null
           fiber_g?: number | null
           is_system?: boolean
           name: string
+          nutrients_per_100g?: Json | null
           owner_user_id?: string | null
           preparation_basis?: string
           protein_g: number
+          provider_imported_at?: string | null
+          provider_revision?: string | null
+          record_type?: string | null
           row_id?: never
           serving_grams: number
           serving_label: string
+          serving_options?: Json | null
           serving_unit: string
           source: string
           source_version: string
           updated_at?: string
+          value_source?: string
         }
         Update: {
           app_id?: string
@@ -312,21 +374,29 @@ export type Database = {
           category?: string
           confidence?: string
           created_at?: string
+          estimate_range?: Json | null
           estimated?: boolean
           fat_g?: number
+          fdc_id?: string | null
           fiber_g?: number | null
           is_system?: boolean
           name?: string
+          nutrients_per_100g?: Json | null
           owner_user_id?: string | null
           preparation_basis?: string
           protein_g?: number
+          provider_imported_at?: string | null
+          provider_revision?: string | null
+          record_type?: string | null
           row_id?: never
           serving_grams?: number
           serving_label?: string
+          serving_options?: Json | null
           serving_unit?: string
           source?: string
           source_version?: string
           updated_at?: string
+          value_source?: string
         }
         Relationships: []
       }
@@ -485,6 +555,59 @@ export type Database = {
           week_of?: string
         }
         Relationships: []
+      }
+      logged_meals: {
+        Row: {
+          app_id: string
+          assumptions: string | null
+          created_at: string
+          log_date: string
+          meal_row_id: number
+          meal_slot: string
+          name: string
+          revision: number
+          row_id: number
+          source_mode: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_id: string
+          assumptions?: string | null
+          created_at?: string
+          log_date: string
+          meal_row_id: number
+          meal_slot: string
+          name: string
+          revision?: number
+          row_id?: never
+          source_mode: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_id?: string
+          assumptions?: string | null
+          created_at?: string
+          log_date?: string
+          meal_row_id?: number
+          meal_slot?: string
+          name?: string
+          revision?: number
+          row_id?: never
+          source_mode?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logged_meals_meal_row_id_fkey"
+            columns: ["meal_row_id"]
+            isOneToOne: false
+            referencedRelation: "meals"
+            referencedColumns: ["row_id"]
+          },
+        ]
       }
       meal_ingredients: {
         Row: {
@@ -675,12 +798,15 @@ export type Database = {
           confidence: string
           created_at: string
           custom_name: string | null
+          estimate_range: Json | null
           estimated: boolean
           fat_g: number
           fiber_g: number | null
           food_row_id: number | null
           idempotency_key: string | null
+          ingredient_order: number | null
           log_date: string
+          logged_meal_row_id: number | null
           meal_slot: string
           preparation_basis: string
           protein_g: number
@@ -693,6 +819,7 @@ export type Database = {
           source_version: string
           updated_at: string
           user_id: string
+          value_source: string
         }
         Insert: {
           app_id: string
@@ -702,12 +829,15 @@ export type Database = {
           confidence: string
           created_at?: string
           custom_name?: string | null
+          estimate_range?: Json | null
           estimated?: boolean
           fat_g: number
           fiber_g?: number | null
           food_row_id?: number | null
           idempotency_key?: string | null
+          ingredient_order?: number | null
           log_date: string
+          logged_meal_row_id?: number | null
           meal_slot: string
           preparation_basis?: string
           protein_g: number
@@ -720,6 +850,7 @@ export type Database = {
           source_version?: string
           updated_at?: string
           user_id: string
+          value_source?: string
         }
         Update: {
           app_id?: string
@@ -729,12 +860,15 @@ export type Database = {
           confidence?: string
           created_at?: string
           custom_name?: string | null
+          estimate_range?: Json | null
           estimated?: boolean
           fat_g?: number
           fiber_g?: number | null
           food_row_id?: number | null
           idempotency_key?: string | null
+          ingredient_order?: number | null
           log_date?: string
+          logged_meal_row_id?: number | null
           meal_slot?: string
           preparation_basis?: string
           protein_g?: number
@@ -747,6 +881,7 @@ export type Database = {
           source_version?: string
           updated_at?: string
           user_id?: string
+          value_source?: string
         }
         Relationships: [
           {
@@ -756,7 +891,41 @@ export type Database = {
             referencedRelation: "foods"
             referencedColumns: ["row_id"]
           },
+          {
+            foreignKeyName: "nutrition_logs_logged_meal_fk"
+            columns: ["logged_meal_row_id"]
+            isOneToOne: false
+            referencedRelation: "logged_meals"
+            referencedColumns: ["row_id"]
+          },
         ]
+      }
+      nutrition_provider_rate_limits: {
+        Row: {
+          day_count: number
+          day_started_on: string
+          updated_at: string
+          user_id: string
+          window_count: number
+          window_started_at: string
+        }
+        Insert: {
+          day_count?: number
+          day_started_on?: string
+          updated_at?: string
+          user_id: string
+          window_count?: number
+          window_started_at?: string
+        }
+        Update: {
+          day_count?: number
+          day_started_on?: string
+          updated_at?: string
+          user_id?: string
+          window_count?: number
+          window_started_at?: string
+        }
+        Relationships: []
       }
       planned_exercises: {
         Row: {
@@ -1013,6 +1182,7 @@ export type Database = {
           id: string
           meal_budget: number | null
           name: string
+          notifications_enabled: boolean
           revision: number
           session_minutes: number
           sex: string
@@ -1037,6 +1207,7 @@ export type Database = {
           id: string
           meal_budget?: number | null
           name: string
+          notifications_enabled?: boolean
           revision?: number
           session_minutes: number
           sex: string
@@ -1061,6 +1232,7 @@ export type Database = {
           id?: string
           meal_budget?: number | null
           name?: string
+          notifications_enabled?: boolean
           revision?: number
           session_minutes?: number
           sex?: string
@@ -1339,7 +1511,12 @@ export type Database = {
       apply_workout_override: { Args: { p_payload: Json }; Returns: Json }
       archive_saved_meal: { Args: { p_payload: Json }; Returns: Json }
       complete_onboarding: { Args: { p_payload: Json }; Returns: Json }
+      consume_nutrition_provider_quota: {
+        Args: { p_kind: string }
+        Returns: Json
+      }
       delete_account: { Args: { p_payload: Json }; Returns: Json }
+      delete_logged_meal: { Args: { p_payload: Json }; Returns: Json }
       delete_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       edit_meal_plan: { Args: { p_payload: Json }; Returns: Json }
       export_account_data: { Args: { p_payload: Json }; Returns: Json }
@@ -1349,8 +1526,10 @@ export type Database = {
       remove_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       remove_workout_override: { Args: { p_payload: Json }; Returns: Json }
       reset_plan: { Args: { p_payload: Json }; Returns: Json }
+      save_food: { Args: { p_payload: Json }; Returns: Json }
       save_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       save_recipe: { Args: { p_payload: Json }; Returns: Json }
+      save_reviewed_meal: { Args: { p_payload: Json }; Returns: Json }
       save_saved_meal: { Args: { p_payload: Json }; Returns: Json }
       save_weight_entry: { Args: { p_payload: Json }; Returns: Json }
       save_workout_session: { Args: { p_payload: Json }; Returns: Json }
@@ -1358,6 +1537,12 @@ export type Database = {
       skip_planned_meal: { Args: { p_payload: Json }; Returns: Json }
       start_workout_session: { Args: { p_payload: Json }; Returns: Json }
       toggle_grocery_item: { Args: { p_payload: Json }; Returns: Json }
+      update_logged_meal: { Args: { p_payload: Json }; Returns: Json }
+      update_notification_preference: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      update_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       update_profile: { Args: { p_payload: Json }; Returns: Json }
       update_units: { Args: { p_payload: Json }; Returns: Json }
     }

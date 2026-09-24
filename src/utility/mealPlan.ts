@@ -1,14 +1,16 @@
-import type { MealPlan, PlannedMeal, UserProfile } from "@/types/domain";
+import type { Food, Meal, MealPlan, PlannedMeal, UserProfile } from "@/types/domain";
 import { SAVED_MEALS } from "@/constants/meals";
 import { FOODS } from "@/constants/foods";
 import { weekDates } from "./dates";
 import { mealNutrition } from "./nutrition";
 
-function plannedMealMetadata(mealId: string | undefined, foodId: string | undefined, servings: number) {
+type MealPlanCatalog = { savedMeals?: Meal[]; foods?: Food[] };
+
+function plannedMealMetadata(mealId: string | undefined, foodId: string | undefined, servings: number, savedMeals: Meal[], foods: Food[]) {
   if (mealId) {
-    const meal = SAVED_MEALS.find((candidate) => candidate.id === mealId);
+    const meal = savedMeals.find((candidate) => candidate.id === mealId);
     if (meal) {
-      const nutrition = mealNutrition(meal, FOODS);
+      const nutrition = mealNutrition(meal, foods);
       return {
         expectedCalories: Math.round(nutrition.perServing.calories * servings),
         expectedProteinG: Math.round(nutrition.perServing.proteinG * servings * 10) / 10,
@@ -23,7 +25,7 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
     }
   }
   if (foodId) {
-    const food = FOODS.find((candidate) => candidate.id === foodId);
+    const food = foods.find((candidate) => candidate.id === foodId);
     if (food) {
       return {
         expectedCalories: Math.round(food.calories * servings),
@@ -61,32 +63,41 @@ const SNACK_ROTATION = ["food-apple", "food-almonds", "food-banana"];
 export function generateMealPlan(
   targetId: string,
   weekOf: string,
-  constraints?: Pick<UserProfile, "dietaryPattern" | "allergies">,
+  constraints?: Pick<UserProfile, "dietaryPattern" | "allergies" | "foodPreferences" | "cookingTimeMinutes" | "mealBudget">,
+  catalog: MealPlanCatalog = {},
 ): MealPlan {
+  const savedMeals = catalog.savedMeals ?? SAVED_MEALS;
+  const foods = catalog.foods ?? FOODS;
   const allowedMealIds = new Set(
-    SAVED_MEALS.filter((meal) => mealAllowed(meal.id, constraints)).map((meal) => meal.id),
+    savedMeals.filter((meal) => mealAllowed(meal.id, constraints, savedMeals, foods)).map((meal) => meal.id),
   );
-  const chooseMeal = (rotation: string[], index: number) =>
-    rotation
-      .map((_, offset) => rotation[(index + offset) % rotation.length])
-      .find((id) => allowedMealIds.has(id));
+  const customMealIds = savedMeals
+    .filter((meal) => !meal.isSystem && allowedMealIds.has(meal.id) && mealFitsTimeAndBudget(meal.id, constraints))
+    .map((meal) => meal.id);
+  const chooseMeal = (rotation: string[], index: number) => {
+    const rotated = rotation.map((_, offset) => rotation[(index + offset) % rotation.length]);
+    const candidates = [...rotated, ...customMealIds]
+      .filter((id) => allowedMealIds.has(id))
+      .filter((id) => mealFitsTimeAndBudget(id, constraints));
+    return [...candidates].sort((a, b) => preferenceScore(b, constraints, savedMeals, foods) - preferenceScore(a, constraints, savedMeals, foods))[0];
+  };
   const meals: PlannedMeal[] = [];
   weekDates(weekOf).forEach((date, i) => {
     const breakfastId = chooseMeal(BREAKFAST_ROTATION, i);
     const lunchId = chooseMeal(LUNCH_ROTATION, i);
     const dinnerId = chooseMeal(DINNER_ROTATION, i);
-    const snackId = chooseFood(SNACK_ROTATION, i, constraints);
-    const breakfast = plannedMealMetadata(breakfastId, undefined, 1);
-    const lunch = plannedMealMetadata(lunchId, undefined, 1);
-    const dinner = plannedMealMetadata(dinnerId, undefined, 1);
-    const snack = plannedMealMetadata(undefined, snackId || undefined, 1);
+    const snackId = chooseFood(SNACK_ROTATION, i, constraints, foods);
+    const breakfast = plannedMealMetadata(breakfastId, undefined, 1, savedMeals, foods);
+    const lunch = plannedMealMetadata(lunchId, undefined, 1, savedMeals, foods);
+    const dinner = plannedMealMetadata(dinnerId, undefined, 1, savedMeals, foods);
+    const snack = plannedMealMetadata(undefined, snackId || undefined, 1, savedMeals, foods);
     meals.push(
       {
         id: `pm-${date}-breakfast`,
         date,
         slot: "breakfast",
         mealId: breakfastId,
-        label: SAVED_MEALS.find((m) => m.id === breakfastId)?.name ?? "Choose a meal that fits",
+        label: savedMeals.find((m) => m.id === breakfastId)?.name ?? "Choose a meal that fits",
         servings: 1,
         ...breakfast,
       },
@@ -95,7 +106,7 @@ export function generateMealPlan(
         date,
         slot: "lunch",
         mealId: lunchId,
-        label: SAVED_MEALS.find((m) => m.id === lunchId)?.name ?? "Choose a meal that fits",
+        label: savedMeals.find((m) => m.id === lunchId)?.name ?? "Choose a meal that fits",
         servings: 1,
         ...lunch,
       },
@@ -104,7 +115,7 @@ export function generateMealPlan(
         date,
         slot: "dinner",
         mealId: dinnerId,
-        label: SAVED_MEALS.find((m) => m.id === dinnerId)?.name ?? "Choose a meal that fits",
+        label: savedMeals.find((m) => m.id === dinnerId)?.name ?? "Choose a meal that fits",
         servings: 1,
         ...dinner,
       },
@@ -124,13 +135,15 @@ export function generateMealPlan(
 
 function mealAllowed(
   mealId: string | undefined,
-  constraints?: Pick<UserProfile, "dietaryPattern" | "allergies">,
+  constraints?: Pick<UserProfile, "dietaryPattern" | "allergies" | "foodPreferences" | "cookingTimeMinutes" | "mealBudget">,
+  savedMeals: Meal[] = SAVED_MEALS,
+  catalogFoods: Food[] = FOODS,
 ): boolean {
-  const meal = SAVED_MEALS.find((candidate) => candidate.id === mealId);
+  const meal = savedMeals.find((candidate) => candidate.id === mealId);
   if (!meal) return false;
   const foods = meal.ingredients
-    .map((ingredient) => FOODS.find((food) => food.id === ingredient.foodId))
-    .filter((food): food is (typeof FOODS)[number] => Boolean(food));
+    .map((ingredient) => catalogFoods.find((food) => food.id === ingredient.foodId))
+    .filter((food): food is Food => Boolean(food));
   const pattern = constraints?.dietaryPattern.toLowerCase() ?? "";
   const veganForbidden = new Set([
     "food-egg",
@@ -156,7 +169,8 @@ function mealAllowed(
 function chooseFood(
   rotation: string[],
   index: number,
-  constraints?: Pick<UserProfile, "dietaryPattern" | "allergies">,
+  constraints?: Pick<UserProfile, "dietaryPattern" | "allergies" | "foodPreferences" | "cookingTimeMinutes" | "mealBudget">,
+  foods: Food[] = FOODS,
 ): string {
   const allergies = constraints?.allergies.map((a) => a.trim().toLowerCase()).filter(Boolean) ?? [];
   const pattern = constraints?.dietaryPattern.toLowerCase() ?? "";
@@ -164,13 +178,66 @@ function chooseFood(
   return (
     rotation
       .map((_, offset) => rotation[(index + offset) % rotation.length])
-      .find((id) => {
-        const food = FOODS.find((candidate) => candidate.id === id);
+      .filter((id) => {
+        const food = foods.find((candidate) => candidate.id === id);
         if (!food) return false;
         if (pattern.includes("vegan") && veganForbidden.has(id)) return false;
         return !allergies.some((allergy) => foodMatchesAllergy(food, allergy));
-      }) ?? ""
+      })
+      .sort((a, b) => foodPreferenceScore(b, constraints, foods) - foodPreferenceScore(a, constraints, foods))[0] ?? ""
   );
+}
+
+/** The starter catalog has no currency metadata, so budget is a transparent
+ * relative score rather than a currency claim. A low budget keeps the plan
+ * on lower-cost catalog staples; users can still edit every slot. */
+const MEAL_COST_UNITS: Record<string, number> = {
+  "meal-yogurt-bowl": 6,
+  "meal-pb-toast": 4,
+  "meal-chicken-rice": 7,
+  "meal-salmon-potato": 12,
+};
+
+const MEAL_PREP_MINUTES: Record<string, number> = {
+  "meal-yogurt-bowl": 5,
+  "meal-pb-toast": 8,
+  "meal-chicken-rice": 25,
+  "meal-salmon-potato": 35,
+};
+
+function normalizedPreferences(constraints?: Pick<UserProfile, "foodPreferences">) {
+  return (constraints?.foodPreferences ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean);
+}
+
+function preferenceScore(mealId: string, constraints: Pick<UserProfile, "foodPreferences"> | undefined, savedMeals: Meal[], foods: Food[]) {
+  const meal = savedMeals.find((candidate) => candidate.id === mealId);
+  if (!meal) return 0;
+  const preferences = normalizedPreferences(constraints);
+  if (preferences.length === 0) return 0;
+  const foodNames = meal.ingredients
+    .map((ingredient) => foods.find((food) => food.id === ingredient.foodId)?.name.toLowerCase() ?? "")
+    .join(" ");
+  const searchable = `${meal.name.toLowerCase()} ${foodNames}`;
+  return preferences.reduce((score, preference) => score + (searchable.includes(preference) ? 1 : 0), 0);
+}
+
+function foodPreferenceScore(foodId: string, constraints: Pick<UserProfile, "foodPreferences"> | undefined, foods: Food[]) {
+  const food = foods.find((candidate) => candidate.id === foodId);
+  const preferences = normalizedPreferences(constraints);
+  if (!food || preferences.length === 0) return 0;
+  const searchable = `${food.name} ${food.category}`.toLowerCase();
+  return preferences.reduce((score, preference) => score + (searchable.includes(preference) ? 1 : 0), 0);
+}
+
+function mealFitsTimeAndBudget(
+  mealId: string,
+  constraints?: Pick<UserProfile, "cookingTimeMinutes" | "mealBudget">,
+) {
+  const time = constraints?.cookingTimeMinutes;
+  const budget = constraints?.mealBudget;
+  if (time !== undefined && time >= 0 && (MEAL_PREP_MINUTES[mealId] ?? 0) > time) return false;
+  if (budget !== undefined && budget >= 0 && (MEAL_COST_UNITS[mealId] ?? 0) > budget) return false;
+  return true;
 }
 
 function foodMatchesAllergy(food: (typeof FOODS)[number], allergy: string): boolean {

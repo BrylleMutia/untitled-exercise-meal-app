@@ -1,16 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/contexts/AppContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { loadAppSnapshot } from "@/services/supabaseSnapshot";
 import type { AppSnapshot } from "@/types/domain";
-
-const nunito = Nunito({
-  subsets: ["latin"],
-  variable: "--font-nunito",
-});
 
 export const metadata: Metadata = {
   title: "Calisthenics & Nutrition Coach",
@@ -40,7 +34,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" className={nunito.variable}>
+    <html lang="en">
       <body>
         <AppProvider initialSnapshot={initialSnapshot}>
           <AppShell>{children}</AppShell>

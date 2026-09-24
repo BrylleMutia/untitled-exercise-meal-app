@@ -1,6 +1,6 @@
 begin;
 
-select plan(41);
+select plan(42);
 
 select has_schema('private', 'private helper schema exists');
 
@@ -25,20 +25,21 @@ select has_table('public', 'grocery_lists', 'grocery lists table exists');
 select has_table('public', 'grocery_items', 'grocery items table exists');
 select has_table('public', 'mutation_idempotency', 'idempotency table exists');
 select has_table('public', 'progression_decisions', 'progression decisions table exists');
+select has_table('public', 'logged_meals', 'logged meals table exists');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r'
-), 21, 'the public application schema contains exactly 21 tables');
+), 24, 'the public application schema contains exactly 24 tables');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 21, 'every public application table has RLS enabled');
+), 24, 'every public application table has RLS enabled');
 
 select ok((
   select count(*) = 10
@@ -63,14 +64,14 @@ select ok((
 ), 'required date, timestamp, identity, and JSON columns use the expected types');
 
 select ok((
-  select count(*) = 17
+  select count(*) = 18
   from information_schema.columns c
   where c.table_schema = 'public' and c.column_name = 'app_id'
     and c.is_nullable = 'NO'
 ), 'application-facing app_id columns are present and non-null');
 
 select ok((
-  select count(*) = 20
+  select count(*) = 22
   from information_schema.columns c
   join pg_class t on t.relname = c.table_name
   join pg_namespace n on n.oid = t.relnamespace and n.nspname = 'public'

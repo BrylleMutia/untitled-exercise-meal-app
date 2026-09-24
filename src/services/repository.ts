@@ -11,7 +11,10 @@ import type {
   FinishSessionInput,
   GroceryMutationInput,
   MutationOutcome,
+  NotificationPreferenceInput,
   NutritionInput,
+  UpdateNutritionInput,
+  SaveFoodInput,
   OnboardingInput,
   ProfileUpdateInput,
   RegenerateGroceryInput,
@@ -20,6 +23,9 @@ import type {
   SaveMealInput,
   SaveSessionInput,
   SavedMealLogInput,
+  SaveReviewedMealInput,
+  UpdateLoggedMealInput,
+  DeleteLoggedMealInput,
   SkipPlannedMealInput,
   StartSessionInput,
   UpdateUnitsInput,
@@ -37,12 +43,18 @@ export interface SnapshotRepository {
   completeOnboarding(input: OnboardingInput): Promise<MutationOutcome>;
   updateProfile(input: ProfileUpdateInput): Promise<MutationOutcome>;
   updateUnits(input: UpdateUnitsInput): Promise<MutationOutcome>;
+  updateNotificationPreference(input: NotificationPreferenceInput): Promise<MutationOutcome>;
   startSession(input: StartSessionInput): Promise<MutationOutcome>;
   saveSession(input: SaveSessionInput): Promise<MutationOutcome>;
   finishSession(input: FinishSessionInput): Promise<MutationOutcome>;
   abandonSession(input: AbandonSessionInput): Promise<MutationOutcome>;
   saveNutrition(input: NutritionInput): Promise<MutationOutcome>;
+  updateNutrition(input: UpdateNutritionInput): Promise<MutationOutcome>;
+  saveFood(input: SaveFoodInput): Promise<MutationOutcome>;
   saveSavedMealLog(input: SavedMealLogInput): Promise<MutationOutcome>;
+  saveReviewedMeal(input: SaveReviewedMealInput): Promise<MutationOutcome>;
+  updateLoggedMeal(input: UpdateLoggedMealInput): Promise<MutationOutcome>;
+  deleteLoggedMeal(input: DeleteLoggedMealInput): Promise<MutationOutcome>;
   deleteNutrition(input: DeleteNutritionInput): Promise<MutationOutcome>;
   saveWeight(input: WeightInput): Promise<MutationOutcome>;
   updateGrocery(input: GroceryMutationInput, currentSnapshot: AppSnapshot): Promise<MutationOutcome>;

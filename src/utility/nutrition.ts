@@ -1,14 +1,29 @@
-import type { Food, Meal, MealSlot, NutritionLog } from "@/types/domain";
+import type { EstimateTriple, Food, MacroEstimateRange, Meal, MealSlot, NutritionLog } from "@/types/domain";
 
 export interface DayTotals {
   calories: number;
   proteinG: number;
   carbsG: number;
   fatG: number;
+  estimateRange?: MacroEstimateRange;
+}
+
+function addRange(a: EstimateTriple, b: EstimateTriple): EstimateTriple {
+  return { low: a.low + b.low, base: a.base + b.base, high: a.high + b.high };
+}
+
+function rangeForLog(log: NutritionLog): MacroEstimateRange {
+  return log.estimateRange ?? {
+    calories: { low: log.calories, base: log.calories, high: log.calories },
+    proteinG: { low: log.proteinG, base: log.proteinG, high: log.proteinG },
+    carbsG: { low: log.carbsG, base: log.carbsG, high: log.carbsG },
+    fatG: { low: log.fatG, base: log.fatG, high: log.fatG },
+    ...(log.fiberG === undefined ? {} : { fiberG: { low: log.fiberG, base: log.fiberG, high: log.fiberG } }),
+  };
 }
 
 export function totalsForDate(logs: NutritionLog[], date: string): DayTotals {
-  return logs
+  const totals = logs
     .filter((l) => l.date === date)
     .reduce<DayTotals>(
       (acc, l) => ({
@@ -16,9 +31,23 @@ export function totalsForDate(logs: NutritionLog[], date: string): DayTotals {
         proteinG: acc.proteinG + l.proteinG,
         carbsG: acc.carbsG + l.carbsG,
         fatG: acc.fatG + l.fatG,
+        estimateRange: acc.estimateRange
+          ? {
+              calories: addRange(acc.estimateRange.calories, rangeForLog(l).calories),
+              proteinG: addRange(acc.estimateRange.proteinG, rangeForLog(l).proteinG),
+              carbsG: addRange(acc.estimateRange.carbsG, rangeForLog(l).carbsG),
+              fatG: addRange(acc.estimateRange.fatG, rangeForLog(l).fatG),
+              ...(acc.estimateRange.fiberG || rangeForLog(l).fiberG
+                ? { fiberG: addRange(acc.estimateRange.fiberG ?? { low: 0, base: 0, high: 0 }, rangeForLog(l).fiberG ?? { low: 0, base: 0, high: 0 }) }
+                : {}),
+            }
+          : rangeForLog(l),
       }),
-      { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+      { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, estimateRange: undefined },
     );
+  const hasEstimate = logs.some((log) => log.date === date && log.valueSource === "ai_estimate");
+  if (!hasEstimate) return { calories: totals.calories, proteinG: totals.proteinG, carbsG: totals.carbsG, fatG: totals.fatG };
+  return totals;
 }
 
 export type DayStatus = "complete" | "partial" | "unlogged";

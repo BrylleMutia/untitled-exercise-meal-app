@@ -21,6 +21,9 @@ import type {
   Goal,
   WorkoutPlanOverride,
   ProgressionDecision,
+  LoggedMeal,
+  MacroEstimateRange,
+  NutritionValueSource,
 } from "@/types/domain";
 import type { HistoryQuery, HistoryReadModel } from "@/types/backend";
 import { addDays, todayKey } from "@/utility/dates";
@@ -36,6 +39,7 @@ type PlannedMealRow = Tables<"planned_meals">;
 type SessionRow = Tables<"workout_sessions">;
 type ExerciseLogRow = Tables<"exercise_logs">;
 type FoodRow = Tables<"foods">;
+type FoodServingOptionRow = Tables<"food_serving_options">;
 type ExerciseRow = Tables<"exercises">;
 type MealRow = Tables<"meals">;
 type IngredientRow = Tables<"meal_ingredients">;
@@ -46,6 +50,7 @@ type GroceryItemRow = Tables<"grocery_items">;
 type GoalRow = Tables<"goals">;
 type OverrideRow = Tables<"workout_plan_overrides">;
 type ProgressionDecisionRow = Tables<"progression_decisions">;
+type LoggedMealRow = Tables<"logged_meals">;
 
 const isEquipment = (value: string): value is EquipmentId =>
   ["none", "pullup_bar", "bands", "dumbbells", "bench"].includes(value);
@@ -69,6 +74,7 @@ function mapProfile(row: ProfileRow): UserProfile {
     ...(row.food_preferences ? { foodPreferences: row.food_preferences } : {}),
     ...(row.cooking_time_minutes === null ? {} : { cookingTimeMinutes: row.cooking_time_minutes }),
     ...(row.meal_budget === null ? {} : { mealBudget: Number(row.meal_budget) }),
+    notificationsEnabled: row.notifications_enabled,
     revision: row.revision,
     targetEligibility: row.eligibility_status as UserProfile["targetEligibility"],
     eligibilityVersion: row.eligibility_version,
@@ -114,7 +120,8 @@ function mapTarget(row: TargetRow): DailyTarget {
   };
 }
 
-function mapFood(row: FoodRow): Food {
+function mapFood(row: FoodRow, servingOptions: FoodServingOptionRow[] = []): Food {
+  const extended = row as FoodRow & { value_source?: string; estimate_range?: unknown };
   return {
     id: row.app_id,
     name: row.name,
@@ -128,13 +135,24 @@ function mapFood(row: FoodRow): Food {
     ...(row.fiber_g === null ? {} : { fiberG: Number(row.fiber_g) }),
     source: row.source,
     sourceVersion: row.source_version,
+    valueSource: (extended.value_source as NutritionValueSource | undefined) ?? (row.is_system ? "development_catalog" : "user_provided"),
     estimated: row.estimated,
     confidence: row.confidence as Food["confidence"],
     category: row.category as Food["category"],
+    preparationBasis: row.preparation_basis as PreparationBasis,
+    ...(row.fdc_id ? { fdcId: row.fdc_id } : {}),
+    ...(row.record_type ? { recordType: row.record_type } : {}),
+    ...(row.provider_revision ? { providerRevision: row.provider_revision } : {}),
+    ...(row.provider_imported_at ? { providerImportedAt: row.provider_imported_at } : {}),
+    ...(row.nutrients_per_100g ? { nutrientsPer100g: row.nutrients_per_100g as Food["nutrientsPer100g"] } : {}),
+    ...(servingOptions.length > 0
+      ? { servingOptions: servingOptions.map((option) => ({ label: option.label, unit: option.unit, grams: Number(option.grams) })) }
+      : row.serving_options ? { servingOptions: row.serving_options as unknown as Food["servingOptions"] } : {}),
   };
 }
 
 function mapExercise(row: ExerciseRow): Exercise {
+  const bounds = row.progression_bounds as Partial<NonNullable<Exercise["progressionBounds"]>>;
   return {
     id: row.app_id,
     slug: row.slug,
@@ -148,6 +166,19 @@ function mapExercise(row: ExerciseRow): Exercise {
     illustrationAlt: row.illustration_alt,
     ...(row.regression_reference ? { regression: row.regression_reference } : {}),
     ...(row.progression_reference ? { progression: row.progression_reference } : {}),
+    ...(bounds ? {
+      progressionBounds: {
+        minSets: Number(bounds.minSets),
+        maxSets: Number(bounds.maxSets),
+        setStep: Number(bounds.setStep),
+        minReps: Number(bounds.minReps),
+        maxReps: Number(bounds.maxReps),
+        repStep: Number(bounds.repStep),
+        minHoldSeconds: Number(bounds.minHoldSeconds),
+        maxHoldSeconds: Number(bounds.maxHoldSeconds),
+        holdStep: Number(bounds.holdStep),
+      },
+    } : {}),
     safety: row.safety,
   };
 }
@@ -293,7 +324,7 @@ function mapSession(
   };
 }
 
-function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>): NutritionLog {
+function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>, loggedMealsByRow: Map<number, LoggedMealRow>): NutritionLog {
   const food = row.food_row_id === null ? undefined : foodsByRow.get(row.food_row_id);
   return {
     id: row.app_id,
@@ -302,6 +333,8 @@ function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>): Nutr
     ...(food ? { foodId: food.app_id } : {}),
     ...(row.custom_name ? { customName: row.custom_name } : {}),
     servings: Number(row.servings),
+    servingQuantity: Number(row.serving_quantity),
+    servingUnit: row.serving_unit as NutritionLog["servingUnit"],
     calories: Number(row.calories),
     proteinG: Number(row.protein_g),
     carbsG: Number(row.carbs_g),
@@ -309,10 +342,14 @@ function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>): Nutr
     estimated: row.estimated,
     confidence: row.confidence as NutritionLog["confidence"],
     source: row.source,
+    valueSource: row.value_source as NutritionValueSource,
     ...(row.source_version ? { sourceVersion: row.source_version } : {}),
     ...(row.preparation_basis ? { preparationBasis: row.preparation_basis as PreparationBasis } : {}),
     ...(row.fiber_g === null ? {} : { fiberG: Number(row.fiber_g) }),
     ...(row.assumptions ? { assumptions: row.assumptions } : {}),
+    ...(row.estimate_range ? { estimateRange: row.estimate_range as unknown as MacroEstimateRange } : {}),
+    ...(row.logged_meal_row_id === null ? {} : { loggedMealId: loggedMealsByRow.get(row.logged_meal_row_id)?.app_id }),
+    ...(row.ingredient_order === null ? {} : { ingredientOrder: row.ingredient_order }),
     revision: row.revision,
     createdAt: row.created_at,
   };
@@ -370,6 +407,7 @@ function emptySnapshot(userId: string): AppSnapshot {
     userId,
     onboarded: false,
     profile: null,
+    foods: [],
     goal: null,
     target: null,
     plan: null,
@@ -377,6 +415,7 @@ function emptySnapshot(userId: string): AppSnapshot {
     mealPlan: null,
     sessions: [],
     nutritionLogs: [],
+    loggedMeals: [],
     weights: [],
     grocery: null,
     savedMeals: [],
@@ -424,7 +463,7 @@ export async function loadAppSnapshot(
   const currentTarget = targetRows[0] ? mapTarget(targetRows[0]) : null;
 
   const historyFrom = addDays(todayKey(), -365);
-  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions] =
+  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions, servingOptions, loggedMeals] =
     await Promise.all([
       required(client.from("exercises").select("*")),
       required(client.from("foods").select("*")),
@@ -440,6 +479,8 @@ export async function loadAppSnapshot(
       required(client.from("goals").select("*").eq("user_id", userId).order("version", { ascending: false })),
       required(client.from("workout_plan_overrides").select("*").eq("user_id", userId).eq("active", true)),
       required(client.from("progression_decisions").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
+      required(client.from("food_serving_options").select("*")),
+      required(client.from("logged_meals").select("*").eq("user_id", userId).gte("log_date", historyFrom).order("log_date", { ascending: false })),
     ]);
 
   const exerciseRows = exercises as ExerciseRow[];
@@ -456,6 +497,15 @@ export async function loadAppSnapshot(
   const goalRows = goals as GoalRow[];
   const overrideRows = overrides as OverrideRow[];
   const progressionDecisionRows = progressionDecisions as ProgressionDecisionRow[];
+  const servingOptionRows = servingOptions as FoodServingOptionRow[];
+  const loggedMealRows = loggedMeals as LoggedMealRow[];
+  const loggedMealsByRow = new Map(loggedMealRows.map((row) => [row.row_id, row]));
+  const servingOptionsByFood = new Map<number, FoodServingOptionRow[]>();
+  for (const option of servingOptionRows) {
+    const list = servingOptionsByFood.get(option.food_row_id) ?? [];
+    list.push(option);
+    servingOptionsByFood.set(option.food_row_id, list);
+  }
   const mealsByRow = new Map(mealRows.map((row) => [row.row_id, row]));
   const exercisesByRow = new Map(exerciseRows.map((row) => [row.row_id, row]));
   const foodsByRow = new Map(foodRows.map((row) => [row.row_id, row]));
@@ -501,6 +551,7 @@ export async function loadAppSnapshot(
 
   const snapshot = emptySnapshot(userId);
   snapshot.profile = profile ? mapProfile(profile as ProfileRow) : null;
+  snapshot.foods = foodRows.map((row) => mapFood(row, servingOptionsByFood.get(row.row_id)));
   snapshot.onboarded = Boolean(snapshot.profile);
   snapshot.goal = goalRows[0] ? mapGoal(goalRows[0]) : null;
   // Unsupported screening outcomes may retain historical target rows for
@@ -545,7 +596,18 @@ export async function loadAppSnapshot(
     ...(row.ended_at ? { endedAt: row.ended_at } : {}),
   }));
   snapshot.progressionDecisions = progressionDecisionRows.map(mapProgressionDecision);
-  snapshot.nutritionLogs = nutritionRows.map((row) => mapNutrition(row, foodsByRow));
+  snapshot.loggedMeals = loggedMealRows.map((row): LoggedMeal => ({
+    id: row.app_id,
+    date: row.log_date,
+    slot: row.meal_slot as LoggedMeal["slot"],
+    name: row.name,
+    mealId: mealsByRow.get(row.meal_row_id)?.app_id ?? "",
+    sourceMode: row.source_mode as LoggedMeal["sourceMode"],
+    ...(row.assumptions ? { assumptions: row.assumptions } : {}),
+    revision: row.revision,
+    createdAt: row.created_at,
+  }));
+  snapshot.nutritionLogs = nutritionRows.map((row) => mapNutrition(row, foodsByRow, loggedMealsByRow));
   snapshot.weights = weightRows.map((row) => ({
     id: row.app_id,
     date: row.entry_date,
@@ -590,8 +652,14 @@ export async function loadHistoryReadModel(
     .gte("session_date", from)
     .lte("session_date", to)
     .order("started_at", { ascending: false })
+    .order("row_id", { ascending: false })
     .limit(limit + 1);
-  if (query.sessionsCursor) sessionsQuery.lt("started_at", query.sessionsCursor);
+  if (query.sessionsCursor) {
+    const [timestamp, rowId] = query.sessionsCursor.split("|");
+    if (timestamp && rowId && /^\d+$/.test(rowId)) {
+      sessionsQuery.or(`started_at.lt.${timestamp},and(started_at.eq.${timestamp},row_id.lt.${rowId})`);
+    }
+  }
 
   const nutritionQuery = client
     .from("nutrition_logs")
@@ -600,8 +668,14 @@ export async function loadHistoryReadModel(
     .gte("log_date", from)
     .lte("log_date", to)
     .order("created_at", { ascending: false })
+    .order("row_id", { ascending: false })
     .limit(limit + 1);
-  if (query.nutritionCursor) nutritionQuery.lt("created_at", query.nutritionCursor);
+  if (query.nutritionCursor) {
+    const [timestamp, rowId] = query.nutritionCursor.split("|");
+    if (timestamp && rowId && /^\d+$/.test(rowId)) {
+      nutritionQuery.or(`created_at.lt.${timestamp},and(created_at.eq.${timestamp},row_id.lt.${rowId})`);
+    }
+  }
 
   const weightsQuery = client
     .from("weight_entries")
@@ -610,8 +684,14 @@ export async function loadHistoryReadModel(
     .gte("entry_date", from)
     .lte("entry_date", to)
     .order("entry_date", { ascending: false })
+    .order("row_id", { ascending: false })
     .limit(limit + 1);
-  if (query.weightsCursor) weightsQuery.lt("entry_date", query.weightsCursor);
+  if (query.weightsCursor) {
+    const [date, rowId] = query.weightsCursor.split("|");
+    if (date && rowId && /^\d+$/.test(rowId)) {
+      weightsQuery.or(`entry_date.lt.${date},and(entry_date.eq.${date},row_id.lt.${rowId})`);
+    }
+  }
 
   const [sessionResult, nutritionResult, weightResult] = await Promise.all([
     required(sessionsQuery),
@@ -625,7 +705,7 @@ export async function loadHistoryReadModel(
   const visibleNutrition = nutritionRows.slice(0, limit);
   const visibleWeights = weightRows.slice(0, limit);
 
-  const [plannedWorkouts, sessionLogs, foods] = await Promise.all([
+  const [plannedWorkouts, sessionLogs, foods, scheduledWorkouts] = await Promise.all([
     visibleSessions.length
       ? required(client.from("planned_workouts").select("*").eq("user_id", userId).in("row_id", visibleSessions.map((row) => row.planned_workout_row_id)))
       : Promise.resolve([] as PlannedWorkoutRow[]),
@@ -635,6 +715,7 @@ export async function loadHistoryReadModel(
     visibleNutrition.length
       ? required(client.from("foods").select("*").in("row_id", visibleNutrition.flatMap((row) => row.food_row_id === null ? [] : [row.food_row_id])))
       : Promise.resolve([] as FoodRow[]),
+    required(client.from("planned_workouts").select("day_of_week").eq("user_id", userId)),
   ]);
   const workoutsByRow = new Map((plannedWorkouts as PlannedWorkoutRow[]).map((row) => [row.row_id, row]));
   const logsBySession = new Map<number, ExerciseLogRow[]>();
@@ -645,6 +726,27 @@ export async function loadHistoryReadModel(
   }
   const foodsByRow = new Map((foods as FoodRow[]).map((row) => [row.row_id, row]));
 
+  const dateCount = rangeDays;
+  const nutritionDays = new Map<string, Set<string>>();
+  for (const row of visibleNutrition) {
+    const slots = nutritionDays.get(row.log_date) ?? new Set<string>();
+    slots.add(row.meal_slot);
+    nutritionDays.set(row.log_date, slots);
+  }
+  const scheduledDays = new Set((scheduledWorkouts as Array<{ day_of_week: number }>).map((row) => row.day_of_week));
+  let scheduledWorkoutDays = 0;
+  for (let offset = 0; offset < dateCount; offset += 1) {
+    const date = addDays(from, offset);
+    const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay();
+    if (scheduledDays.has(dayOfWeek)) {
+      scheduledWorkoutDays += 1;
+    }
+  }
+  const completeNutritionDays = [...nutritionDays.values()].filter((slots) => slots.size >= 4).length;
+  const partialNutritionDays = [...nutritionDays.values()].filter((slots) => slots.size > 0 && slots.size < 4).length;
+  const completedWorkoutDays = new Set(visibleSessions.filter((row) => row.status === "completed").map((row) => row.session_date)).size;
+  const partialWorkoutDays = new Set(visibleSessions.filter((row) => row.status === "partial" || row.status === "in_progress").map((row) => row.session_date)).size;
+  const skippedWorkoutDays = new Set(visibleSessions.filter((row) => row.status === "abandoned").map((row) => row.session_date)).size;
   return {
     sessions: visibleSessions.map((row) => {
       const logs = logsBySession.get(row.row_id) ?? [];
@@ -660,12 +762,24 @@ export async function loadHistoryReadModel(
         completedExerciseCount: logs.filter((log) => log.status === "completed").length,
       };
     }),
-    nutritionLogs: visibleNutrition.map((row) => mapNutrition(row, foodsByRow)),
+    nutritionLogs: visibleNutrition.map((row) => mapNutrition(row, foodsByRow, new Map())),
     weights: visibleWeights.map((row) => ({ id: row.app_id, date: row.entry_date, weightKg: Number(row.weight_kg) })),
+    summary: {
+      rangeFrom: from,
+      rangeTo: to,
+      scheduledWorkoutDays,
+      completedWorkoutDays,
+      partialWorkoutDays,
+      skippedWorkoutDays,
+      nutritionLoggedDays: nutritionDays.size,
+      nutritionCompleteDays: completeNutritionDays,
+      nutritionPartialDays: partialNutritionDays,
+      nutritionUnloggedDays: Math.max(0, dateCount - nutritionDays.size),
+    },
     nextCursors: {
-      ...(sessionRows.length > limit && visibleSessions.at(-1) ? { sessions: visibleSessions.at(-1)!.started_at } : {}),
-      ...(nutritionRows.length > limit && visibleNutrition.at(-1) ? { nutrition: visibleNutrition.at(-1)!.created_at } : {}),
-      ...(weightRows.length > limit && visibleWeights.at(-1) ? { weights: visibleWeights.at(-1)!.entry_date } : {}),
+      ...(sessionRows.length > limit && visibleSessions.at(-1) ? { sessions: `${visibleSessions.at(-1)!.started_at}|${visibleSessions.at(-1)!.row_id}` } : {}),
+      ...(nutritionRows.length > limit && visibleNutrition.at(-1) ? { nutrition: `${visibleNutrition.at(-1)!.created_at}|${visibleNutrition.at(-1)!.row_id}` } : {}),
+      ...(weightRows.length > limit && visibleWeights.at(-1) ? { weights: `${visibleWeights.at(-1)!.entry_date}|${visibleWeights.at(-1)!.row_id}` } : {}),
     },
   };
 }
