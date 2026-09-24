@@ -60,12 +60,106 @@ export default function GroceryPage() {
     })).then((saved) => setDraftWriteUnavailable(!saved));
   }, [draftReady, list?.revision, name, quantity, unit, userId]);
 
+  const customItemEditor = (
+    <>
+      {draftWasRestored ? (
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
+          <span>Custom-item draft restored from this device.</span>
+          <button
+            type="button"
+            className="shrink-0 underline underline-offset-2"
+            onClick={() => {
+              if (userId) void clearDraft(userId, draftType);
+              suppressDraftWriteRef.current = true;
+              setName("");
+              setQuantity("1");
+              setUnit("pcs");
+              setDraftWasRestored(false);
+            }}
+          >
+            Discard draft
+          </button>
+        </div>
+      ) : null}
+
+      {draftWriteUnavailable ? (
+        <p className="mt-3 rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold text-ink-soft" role="status">
+          Draft recovery is unavailable on this device right now. Keep this form open until the item is confirmed.
+        </p>
+      ) : null}
+
+      <div className="mt-4 flex gap-2">
+        <input
+          value={name}
+          onChange={(e) => {
+            suppressDraftWriteRef.current = false;
+            setName(e.target.value);
+          }}
+          placeholder="Custom item (e.g. dish soap)"
+          className="input flex-1"
+          aria-label="Custom item name"
+        />
+        <input
+          value={quantity}
+          onChange={(e) => {
+            suppressDraftWriteRef.current = false;
+            setQuantity(e.target.value);
+          }}
+          className="input w-16"
+          inputMode="numeric"
+          aria-label="Quantity"
+        />
+        <select
+          value={unit}
+          onChange={(e) => {
+            suppressDraftWriteRef.current = false;
+            setUnit(e.target.value);
+          }}
+          className="input w-20"
+          aria-label="Unit"
+        >
+          <option value="pcs">pcs</option>
+          <option value="g">g</option>
+          <option value="ml">ml</option>
+        </select>
+        <Button
+          className="!min-h-12 !px-4"
+          aria-label="Add custom grocery item"
+          disabled={!name.trim()}
+          onClick={async () => {
+            const saved = await actions.addCustomGrocery(
+              name.trim(),
+              Math.max(1, Number(quantity) || 1),
+              unit,
+            );
+            if (!saved) return;
+            if (userId) void clearDraft(userId, draftType);
+            suppressDraftWriteRef.current = true;
+            setName("");
+            setQuantity("1");
+            setUnit("pcs");
+            setDraftWasRestored(false);
+          }}
+        >
+          <Plus className="h-4 w-4" aria-hidden />
+        </Button>
+      </div>
+    </>
+  );
+
   if (!list || list.items.length === 0) {
     return (
-      <EmptyState
-        title="No grocery list yet"
-        message="A meal plan creates one automatically. Generate a plan first, then tweak here — your checks and edits stay put on regenerations."
-      />
+      <div className="grid gap-4 pb-4">
+        <EmptyState
+          title="No grocery list yet"
+          message="A meal plan creates one automatically. Generate a plan first, then tweak here — your checks and edits stay put on regenerations."
+        />
+        <Card tone="mint">
+          <h2 className="font-extrabold">Custom grocery item</h2>
+          <p className="mt-1 text-xs font-semibold text-ink-soft">Your recoverable draft stays available even while the latest grocery list is unavailable.</p>
+          {customItemEditor}
+        </Card>
+      </div>
     );
   }
 
@@ -87,89 +181,7 @@ export default function GroceryPage() {
           </Button>
         </div>
 
-        {draftWasRestored ? (
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
-            <span>Custom-item draft restored from this device.</span>
-            <button
-              type="button"
-              className="shrink-0 underline underline-offset-2"
-              onClick={() => {
-                if (userId) void clearDraft(userId, draftType);
-                suppressDraftWriteRef.current = true;
-                setName("");
-                setQuantity("1");
-                setUnit("pcs");
-                setDraftWasRestored(false);
-              }}
-            >
-              Discard draft
-            </button>
-          </div>
-        ) : null}
-
-        {draftWriteUnavailable ? (
-          <p className="mt-3 rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold text-ink-soft" role="status">
-            Draft recovery is unavailable on this device right now. Keep this form open until the item is confirmed.
-          </p>
-        ) : null}
-
-        {/* Add custom item */}
-        <div className="mt-4 flex gap-2">
-          <input
-            value={name}
-            onChange={(e) => {
-              suppressDraftWriteRef.current = false;
-              setName(e.target.value);
-            }}
-            placeholder="Custom item (e.g. dish soap)"
-            className="input flex-1"
-            aria-label="Custom item name"
-          />
-          <input
-            value={quantity}
-            onChange={(e) => {
-              suppressDraftWriteRef.current = false;
-              setQuantity(e.target.value);
-            }}
-            className="input w-16"
-            inputMode="numeric"
-            aria-label="Quantity"
-          />
-          <select
-            value={unit}
-            onChange={(e) => {
-              suppressDraftWriteRef.current = false;
-              setUnit(e.target.value);
-            }}
-            className="input w-20"
-            aria-label="Unit"
-          >
-            <option value="pcs">pcs</option>
-            <option value="g">g</option>
-            <option value="ml">ml</option>
-          </select>
-          <Button
-            className="!min-h-12 !px-4"
-            aria-label="Add custom grocery item"
-            disabled={!name.trim()}
-            onClick={async () => {
-              const saved = await actions.addCustomGrocery(
-                name.trim(),
-                Math.max(1, Number(quantity) || 1),
-                unit,
-              );
-              if (!saved) return;
-              if (userId) void clearDraft(userId, draftType);
-              suppressDraftWriteRef.current = true;
-              setName("");
-              setQuantity("1");
-              setUnit("pcs");
-              setDraftWasRestored(false);
-            }}
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-          </Button>
-        </div>
+        {customItemEditor}
       </Card>
 
       <div className="grid gap-3 lg:grid-cols-2">

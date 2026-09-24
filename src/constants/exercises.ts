@@ -305,21 +305,25 @@ const RAW_EXERCISES: Exercise[] = [
   },
 ];
 
-const CATALOG_PROGRESSION_BOUNDS: NonNullable<Exercise["progressionBounds"]> = {
-  minSets: 1,
-  maxSets: 5,
-  setStep: 1,
-  minReps: 1,
-  maxReps: 20,
-  repStep: 2,
-  minHoldSeconds: 5,
-  maxHoldSeconds: 90,
-  holdStep: 5,
-};
+function catalogProgressionBounds(exercise: Exercise): NonNullable<Exercise["progressionBounds"]> {
+  const harderVariation = exercise.difficulty >= 4;
+  const isHold = exercise.measure === "hold";
+  return {
+    minSets: 1,
+    maxSets: harderVariation ? 4 : 5,
+    setStep: 1,
+    minReps: 1,
+    maxReps: harderVariation ? 15 : 20,
+    repStep: harderVariation ? 1 : 2,
+    minHoldSeconds: 5,
+    maxHoldSeconds: isHold ? (harderVariation ? 60 : 120) : 90,
+    holdStep: harderVariation ? 5 : 10,
+  };
+}
 
 export const EXERCISES: Exercise[] = RAW_EXERCISES.map((exercise) => ({
   ...exercise,
-  progressionBounds: exercise.progressionBounds ?? CATALOG_PROGRESSION_BOUNDS,
+  progressionBounds: exercise.progressionBounds ?? catalogProgressionBounds(exercise),
 }));
 
 export function exerciseById(id: string): Exercise | undefined {

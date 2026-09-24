@@ -98,7 +98,7 @@ export default function WorkoutsPage() {
                   const e = exerciseById(pe.exerciseId);
                   const slotKey = pe.slotKey ?? `day:${workout.dayOfWeek}:exercise:${pe.sortOrder ?? exerciseIndex + 1}`;
                   const editing = editingSlot === slotKey;
-                  const suggestion = suggestProgression(pe.id, snapshot.sessions);
+                  const suggestion = suggestProgression(pe.exerciseId, snapshot.sessions);
                   const latestDecision = snapshot.progressionDecisions.find(
                     (decision) => decision.slotKey === slotKey && decision.plannedExerciseId === pe.id,
                   );

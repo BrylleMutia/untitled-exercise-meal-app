@@ -61,6 +61,9 @@ interface Draft {
   sessionMinutes: number;
   dietaryPattern: string;
   allergies: string;
+  foodPreferences: string;
+  cookingTimeMinutes: number;
+  mealBudget: string;
   goal: PrimaryGoal;
   targetWeight: string;
   targetWeeks: string;
@@ -81,6 +84,9 @@ const initialDraft: Draft = {
   sessionMinutes: 45,
   dietaryPattern: "No restrictions",
   allergies: "",
+  foodPreferences: "",
+  cookingTimeMinutes: 30,
+  mealBudget: "",
   goal: "strength",
   targetWeight: "",
   targetWeeks: "",
@@ -171,6 +177,9 @@ export default function OnboardingPage() {
           daysPerWeek: draft.daysPerWeek,
           sessionMinutes: draft.sessionMinutes,
         }),
+        ...(draft.targetEligibility === "not_answered"
+          ? ["Choose an option for the health screening before previewing automated targets."]
+          : []),
       ];
     }
     if (step === 2 && draft.targetWeight) {
@@ -180,8 +189,8 @@ export default function OnboardingPage() {
         return ["Enter a positive number of weeks or leave it blank."];
       }
     }
-    if (step === 0 && draft.targetEligibility === "not_answered") {
-      return ["Choose an option for the health screening before previewing automated targets."];
+    if (step === 1 && draft.mealBudget && (!Number.isFinite(Number(draft.mealBudget)) || Number(draft.mealBudget) < 0)) {
+      return ["Enter a non-negative daily budget unit value or leave it blank."];
     }
     if (step === 2 && draft.targetWeight && draft.targetWeeks) {
       const targetKg =
@@ -220,9 +229,10 @@ export default function OnboardingPage() {
       goal: draft.goal,
       dietaryPattern: draft.dietaryPattern,
       allergies: draft.allergies.split(",").map((item) => item.trim()).filter(Boolean),
-      foodPreferences: app.snapshot.profile?.foodPreferences ?? [],
-      cookingTimeMinutes: app.snapshot.profile?.cookingTimeMinutes,
-      mealBudget: app.snapshot.profile?.mealBudget,
+      foodPreferences: draft.foodPreferences.split(",").map((item) => item.trim()).filter(Boolean),
+      cookingTimeMinutes: draft.cookingTimeMinutes,
+      mealBudget: draft.mealBudget ? Number(draft.mealBudget) : undefined,
+      notificationsEnabled: app.snapshot.profile?.notificationsEnabled ?? false,
       createdAt: new Date().toISOString(),
       targetEligibility: draft.targetEligibility,
       eligibilityVersion: ELIGIBILITY_SCREENING_VERSION,
@@ -276,9 +286,10 @@ export default function OnboardingPage() {
             goal: draft.goal,
             dietaryPattern: draft.dietaryPattern,
             allergies: draft.allergies.split(",").map((item) => item.trim()).filter(Boolean),
-            foodPreferences: app?.snapshot.profile?.foodPreferences ?? [],
-            cookingTimeMinutes: app?.snapshot.profile?.cookingTimeMinutes,
-            mealBudget: app?.snapshot.profile?.mealBudget,
+            foodPreferences: draft.foodPreferences.split(",").map((item) => item.trim()).filter(Boolean),
+            cookingTimeMinutes: draft.cookingTimeMinutes,
+            mealBudget: draft.mealBudget ? Number(draft.mealBudget) : undefined,
+            notificationsEnabled: app?.snapshot.profile?.notificationsEnabled ?? false,
              createdAt: new Date().toISOString(),
              targetEligibility: draft.targetEligibility,
              eligibilityVersion: ELIGIBILITY_SCREENING_VERSION,
@@ -537,6 +548,25 @@ export default function OnboardingPage() {
               />
             </Field>
           </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Food preferences (optional)">
+              <input
+                value={draft.foodPreferences}
+                onChange={(e) => set("foodPreferences", e.target.value)}
+                placeholder="e.g. tofu, berries"
+                className="input"
+              />
+            </Field>
+            <Field label="Cooking time limit">
+              <select value={draft.cookingTimeMinutes} onChange={(e) => set("cookingTimeMinutes", Number(e.target.value))} className="input">
+                {[10, 20, 30, 45, 60, 90].map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
+              </select>
+            </Field>
+            <Field label="Daily meal budget (optional units)">
+              <input value={draft.mealBudget} onChange={(e) => set("mealBudget", e.target.value)} inputMode="decimal" placeholder="e.g. 7" className="input" />
+            </Field>
+          </div>
+          <p className="text-xs font-semibold text-muted">Budget uses transparent relative catalog units because the starter catalog does not claim a currency or live prices. Every generated slot remains editable.</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Days per week">
               <select
@@ -719,6 +749,9 @@ function profileToDraft(profile: UserProfile | null | undefined, goal?: { target
     sessionMinutes: profile.sessionMinutes,
     dietaryPattern: profile.dietaryPattern,
     allergies: profile.allergies.join(", "),
+    foodPreferences: (profile.foodPreferences ?? []).join(", "),
+    cookingTimeMinutes: profile.cookingTimeMinutes ?? 30,
+    mealBudget: profile.mealBudget === undefined ? "" : String(profile.mealBudget),
     goal: profile.goal,
     targetWeight: goalWeightKg === undefined
       ? ""

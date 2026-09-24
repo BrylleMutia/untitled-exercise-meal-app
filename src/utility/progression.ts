@@ -28,7 +28,7 @@ const DEFAULT_BOUNDS = {
   holdStep: 5,
 };
 
-function boundsFor(exercise: Exercise | undefined) {
+export function boundsFor(exercise: Exercise | undefined) {
   return exercise?.progressionBounds ?? DEFAULT_BOUNDS;
 }
 
@@ -67,7 +67,7 @@ export function suggestProgression(
   if (recent.length === 0) return null;
 
   const newest = recent[0].log;
-  const exercise = exerciseById(exerciseId);
+  const exercise = exerciseById(exerciseId) ?? exerciseBySlug(exerciseId);
   const bounds = boundsFor(exercise);
   const sourceSessionIds = recent.map((entry) => entry.sessionId);
   if (newest.pain || (newest.rpe !== undefined && newest.rpe >= 9)) {

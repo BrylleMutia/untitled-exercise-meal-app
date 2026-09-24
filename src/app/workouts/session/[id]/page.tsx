@@ -183,7 +183,6 @@ export default function SessionPage() {
     if (await actions.finishSession(sessionId)) {
       setFinished(true);
       if (snapshot.userId) await clearDraft(snapshot.userId, `workout-session:${sessionId}`);
-      try { window.localStorage.removeItem(`calicoach:session:${sessionId}`); } catch { /* compatibility cleanup */ }
       router.push("/workouts");
     }
   };
@@ -192,7 +191,6 @@ export default function SessionPage() {
     if (!sessionId) return;
     if (await actions.abandonSession(sessionId)) {
       if (snapshot.userId) await clearDraft(snapshot.userId, `workout-session:${sessionId}`);
-      try { window.localStorage.removeItem(`calicoach:session:${sessionId}`); } catch { /* compatibility cleanup */ }
       router.push("/workouts");
     }
   };

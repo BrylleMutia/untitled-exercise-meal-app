@@ -141,6 +141,16 @@ function idbKey(userId: string, draftType: string) {
   return `${userId}:${draftType}`;
 }
 
+function unpackIndexedDraft<T>(raw: unknown): DraftEnvelope<T> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as { value?: unknown };
+  // Older records were written flat; newer records use an explicit value
+  // field. Read both shapes so a browser upgrade never loses a recoverable
+  // draft.
+  const value = "value" in record ? record.value : raw;
+  return isFresh<T>(value, undefined, undefined) ? value : null;
+}
+
 export function createDraftEnvelope<T>(input: {
   userId: string;
   draftType: string;
@@ -182,8 +192,8 @@ async function readIndexed<T>(
       const transaction = db.transaction(STORE_NAME, "readonly");
       const request = transaction.objectStore(STORE_NAME).get(idbKey(userId, draftType));
       request.onsuccess = () => {
-        const value = request.result?.value as DraftEnvelope<T> | undefined;
-        resolve(isFresh<T>(value ?? null, userId, draftType) ? value ?? null : null);
+        const value = unpackIndexedDraft<T>(request.result);
+        resolve(value && isFresh<T>(value, userId, draftType) ? value : null);
       };
       request.onerror = () => resolve(null);
       transaction.onabort = () => resolve(null);
@@ -205,7 +215,7 @@ async function writeIndexed<T>(value: DraftEnvelope<T>, db: IDBDatabase): Promis
   return new Promise((resolve) => {
     try {
       const transaction = db.transaction(STORE_NAME, "readwrite");
-      transaction.objectStore(STORE_NAME).put({ ...value, key: idbKey(value.userId, value.draftType) });
+      transaction.objectStore(STORE_NAME).put({ key: idbKey(value.userId, value.draftType), value });
       transaction.oncomplete = () => resolve(true);
       transaction.onerror = () => resolve(false);
       transaction.onabort = () => resolve(false);
@@ -229,9 +239,6 @@ export async function clearDraft(userId: string, draftType: string): Promise<voi
       // Remove the pre-envelope keys written by the first draft implementation.
       if (draftType === "onboarding") {
         window.localStorage.removeItem(`calicoach:onboarding-draft:${userId}`);
-      }
-      if (draftType.startsWith("workout-session:")) {
-        window.localStorage.removeItem(`calicoach:session:${draftType.slice("workout-session:".length)}`);
       }
     } catch { /* best effort */ }
   }
@@ -258,8 +265,7 @@ export async function clearUserDrafts(userId: string): Promise<void> {
         const key = window.localStorage.key(index);
         if (
           key?.startsWith(prefix) ||
-          key === `calicoach:onboarding-draft:${userId}` ||
-          key?.startsWith("calicoach:session:")
+          key === `calicoach:onboarding-draft:${userId}`
         ) window.localStorage.removeItem(key);
       }
     } catch { /* best effort */ }
@@ -319,8 +325,8 @@ export async function listDrafts(userId: string): Promise<DraftEnvelope<unknown>
           resolve(values);
           return;
         }
-        const value = cursor.value?.value as unknown;
-        if (isFresh<unknown>(value, userId)) values.push(value);
+        const value = unpackIndexedDraft<unknown>(cursor.value);
+        if (value && isFresh<unknown>(value, userId)) values.push(value);
         cursor.continue();
       };
       request.onerror = () => resolve(values);

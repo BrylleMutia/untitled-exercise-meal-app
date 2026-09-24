@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
+import { Button } from "@/components/ui/Button";
 import { averages, dayStatus } from "@/utility/nutrition";
 import { addDays, monthMatrix, sameMonth, startOfWeek, todayKey } from "@/utility/dates";
 import type { Tone } from "@/components/progress/progressShared";
@@ -11,18 +12,49 @@ import { HistoryList, Sparkline } from "@/components/progress/progressShared";
 import type { HistoryReadModel } from "@/types/backend";
 
 export default function ProgressPage() {
-  const { snapshot, actions } = useApp();
+  const { snapshot, actions, error } = useApp();
   const today = todayKey();
   const [month] = useState(today);
   const [history, setHistory] = useState<HistoryReadModel | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
     void actions.loadHistory({ from: addDays(today, -365), to: today, limit: 50 }).then((loaded) => {
       if (active && loaded) setHistory(loaded);
-    });
+    }).finally(() => { if (active) setHistoryLoading(false); });
     return () => { active = false; };
   }, [actions, today]);
+
+  const loadMore = async () => {
+    if (!history || historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const next = await actions.loadHistory({
+        from: history.summary.rangeFrom,
+        to: history.summary.rangeTo,
+        limit: 50,
+        sessionsCursor: history.nextCursors.sessions,
+        nutritionCursor: history.nextCursors.nutrition,
+        weightsCursor: history.nextCursors.weights,
+      });
+      if (!next) return;
+      setHistory((current) => current ? {
+        ...next,
+        sessions: current.nextCursors.sessions ? [...current.sessions, ...next.sessions] : current.sessions,
+        nutritionLogs: current.nextCursors.nutrition ? [...current.nutritionLogs, ...next.nutritionLogs] : current.nutritionLogs,
+        weights: current.nextCursors.weights ? [...current.weights, ...next.weights] : current.weights,
+        nextCursors: {
+          ...(current.nextCursors.sessions ? (next.nextCursors.sessions ? { sessions: next.nextCursors.sessions } : {}) : {}),
+          ...(current.nextCursors.nutrition ? (next.nextCursors.nutrition ? { nutrition: next.nextCursors.nutrition } : {}) : {}),
+          ...(current.nextCursors.weights ? (next.nextCursors.weights ? { weights: next.nextCursors.weights } : {}) : {}),
+        },
+        summary: current.summary,
+      } : next);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const sessions = history?.sessions ?? snapshot.sessions;
   const nutritionLogs = history?.nutritionLogs ?? snapshot.nutritionLogs;
@@ -32,7 +64,9 @@ export default function ProgressPage() {
     (s) => s.status === "completed",
   );
   const weekOf = startOfWeek(today);
-  const scheduled = snapshot.plan?.workouts.length ?? 0;
+  const scheduledDayOfWeek = new Set(snapshot.plan?.workouts.map((workout) => workout.dayOfWeek) ?? []);
+  const scheduled = Array.from({ length: 7 }, (_, offset) => addDays(weekOf, offset))
+    .filter((date) => scheduledDayOfWeek.has(new Date(`${date}T00:00:00Z`).getUTCDay())).length;
   const completedThisWeek = new Set(
     completedSessions
       .filter((s) => s.date >= weekOf && s.date <= today)
@@ -46,6 +80,7 @@ export default function ProgressPage() {
 
   const grid = monthMatrix(month);
   const completedDates = new Set(completedSessions.map((s) => s.date));
+  const scheduledDays = scheduledDayOfWeek;
   const nutritionDays = new Map(
     [...new Set(nutritionLogs.map((l) => l.date))].map((d) => [
       d,
@@ -127,10 +162,11 @@ export default function ProgressPage() {
               const inMonth = sameMonth(day, month);
               const status = nutritionDays.get(day);
               const hasWorkout = completedDates.has(day);
+              const scheduledWorkout = scheduledDays.has(new Date(`${day}T00:00:00Z`).getUTCDay());
               return (
                 <div
                   key={day}
-                  title={`${day} — workout ${hasWorkout ? "completed" : "no completed workout"}, nutrition ${
+                  title={`${day} — workout ${hasWorkout ? "completed" : scheduledWorkout ? "scheduled but unlogged" : "rest day"}, nutrition ${
                     status ?? "unlogged"
                   }`}
                   className={`grid h-9 place-items-center rounded-lg text-xs font-bold tabular-nums ${
@@ -140,7 +176,7 @@ export default function ProgressPage() {
                   <span className="relative">
                     {Number(day.slice(8, 10))}
                     <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5">
-                      {hasWorkout ? <Dot tone="lav" /> : null}
+                      {hasWorkout ? <Dot tone="lav" /> : scheduledWorkout ? <Dot tone="slate" /> : null}
                       {status === "complete" ? <Dot tone="mint" /> : null}
                       {status === "partial" ? <Dot tone="peach" /> : null}
                     </span>
@@ -151,6 +187,7 @@ export default function ProgressPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-[10px] font-bold text-muted">
             <span className="flex items-center gap-1"><Dot tone="lav" /> workout done</span>
+            <span className="flex items-center gap-1"><Dot tone="slate" /> scheduled / unlogged</span>
             <span className="flex items-center gap-1"><Dot tone="mint" /> nutrition complete</span>
             <span className="flex items-center gap-1"><Dot tone="peach" /> nutrition partial</span>
           </div>
@@ -159,7 +196,13 @@ export default function ProgressPage() {
 
       <Card>
         <h2 className="font-extrabold">Recent history</h2>
+        {error && history === null ? <p className="mt-2 rounded-xl bg-peach-100 p-3 text-xs font-bold" role="alert">History could not be loaded. Your current snapshot remains available; retry below.</p> : null}
         <HistoryList history={history} />
+        {history?.nextCursors.sessions || history?.nextCursors.nutrition || history?.nextCursors.weights ? (
+          <Button variant="soft" className="mt-3 !min-h-11 !px-3 text-xs" disabled={historyLoading} onClick={() => void loadMore()}>
+            {historyLoading ? "Loading…" : "Load more history"}
+          </Button>
+        ) : null}
       </Card>
 
       <p className="text-center text-[11px] font-semibold text-muted">
@@ -170,7 +213,7 @@ export default function ProgressPage() {
   );
 }
 
-function Dot({ tone }: { tone: Tone }) {
-  const classes = { lav: "bg-lav-500", mint: "bg-mint-200", peach: "bg-peach-200" };
+function Dot({ tone }: { tone: Tone | "slate" }) {
+  const classes = { lav: "bg-lav-500", mint: "bg-mint-200", peach: "bg-peach-200", slate: "bg-ink-soft" };
   return <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${classes[tone]}`} />;
 }

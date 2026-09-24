@@ -87,6 +87,22 @@ describe("draftStore", () => {
     expect(await listDrafts("user-b")).toHaveLength(1);
   });
 
+  it("does not clear legacy unscoped workout-session keys during account cleanup", async () => {
+    const values = installLocalStorage();
+    values.set("calicoach:session:legacy-session", JSON.stringify({ status: "in_progress" }));
+    await writeDraft(createDraftEnvelope({
+      userId: "user-a",
+      draftType: "workout-session:current-session",
+      payload: { status: "in_progress" },
+      ttlMs: draftTtlMs("workout-session:current-session"),
+    }));
+
+    await clearUserDrafts("user-a");
+
+    expect(values.has("calicoach:session:legacy-session")).toBe(true);
+    expect(await listDrafts("user-a")).toHaveLength(0);
+  });
+
   it("normalizes optional base versions and fails closed for malformed versions", async () => {
     const values = installLocalStorage();
     const envelope = createDraftEnvelope({

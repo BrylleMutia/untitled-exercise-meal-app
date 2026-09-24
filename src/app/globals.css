@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-nunito), ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font-sans: ui-rounded, "Segoe UI", system-ui, sans-serif;
 
   /* Pastel palette derived from assets/ui_reference_01.jpg */
   --color-cream: #f6f5fa;

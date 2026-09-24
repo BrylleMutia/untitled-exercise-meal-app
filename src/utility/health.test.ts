@@ -88,6 +88,7 @@ describe("health utilities", () => {
         goal: "strength",
         dietaryPattern: "none",
         allergies: [],
+        notificationsEnabled: false,
         createdAt: new Date(0).toISOString(),
       },
       "2026-09-07",
@@ -116,6 +117,7 @@ describe("health utilities", () => {
       goal: "lose",
       dietaryPattern: "none",
       allergies: [],
+      notificationsEnabled: false,
       createdAt: new Date(0).toISOString(),
     }, "2026-09-07")).toThrow(UnsupportedTargetError);
   });
@@ -137,6 +139,7 @@ describe("health utilities", () => {
       dietaryPattern: "none",
       allergies: [],
       targetEligibility: "unsupported",
+      notificationsEnabled: false,
       createdAt: new Date(0).toISOString(),
     }, "2026-09-07")).toThrow("not available");
   });
