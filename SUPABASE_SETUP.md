@@ -2,10 +2,17 @@
 
 This document is the operational checklist for the app's Supabase boundary.
 The repository contains the forward-only domain schema, authored catalog seed
-data, and the first authenticated RPC/repository phase. The linked remote
-project is `untitled-exercise-meal-app` (`ifunkhvbvkdxolhpxjvk`) in
-`ap-northeast-1`; the local database includes the new hardening migration,
-while the linked remote remains at the previously applied nineteen migrations.
+data, and the authenticated RPC/repository phase. The linked remote project is
+`untitled-exercise-meal-app` (`ifunkhvbvkdxolhpxjvk`) in `ap-northeast-1`.
+Remote history now contains 39 matching migrations through
+`20260924103000_mvp1_export_owned_foods.sql`; the linked dry run is up to date.
+The remote unified schema/function rollout is complete. On 2026-09-24 the
+retained User B passed authenticated USDA search, batch matching, DeepSeek
+extraction, and an explicit low-confidence estimate; the guarded smoke also
+persisted a weighted USDA record through `save_food`. A later rerun correctly
+returned `rate_limited` after the per-user provider quota was consumed. The
+two confirmed disposable accounts are intentionally retained for later testing
+and are not release evidence requiring deletion.
 
 The MVP authority is Supabase Auth plus Postgres. Browser storage may cache
 read models or preserve recoverable drafts later, but it must not become a
@@ -41,7 +48,8 @@ revoked.
   and settings UI scaffold exists.
 - [x] `supabase/config.toml` has been created with the Supabase CLI.
 - [x] The local Supabase stack uses the repository-specific `5632x` ports and
-  has been reset from an empty database successfully.
+  a clean 2026-09-24 reset applied all 39 forward-only migrations, including
+  notification, unified-meal, grocery-conflict, and export-food migrations.
 - [x] Forward-only migrations exist under
   `supabase/migrations/`, in dependency order: eleven schema/seed migrations,
   one foreign-key-index correction, authenticated RPC migrations, export-shape
@@ -53,24 +61,25 @@ revoked.
   explicit grants/revokes, and idempotency storage.
 - [x] The seed migration contains 21 exercises, 22 starter foods, and 4
   starter meals with the authored application IDs preserved.
-- [x] The previous 23-migration local reset, migration listing, and database
-  lint passed with no schema errors; rerun is pending for the new profile-only
-  follow-up migration.
+- [x] The clean local reset, migration listing, and database lint passed with no
+  schema errors, including the current unified-meal migration.
 - [x] The remote project is linked to this repository with project ref
   `ifunkhvbvkdxolhpxjvk`.
-- [x] The schema/RLS/catalog batch and the authenticated RPC batch are deployed
-  remotely; remote migration history matches the previously applied nineteen
-  migrations. The local integrity and MVP-0 hardening migrations are
-  intentionally not remote-applied.
+- [x] The reviewed schema/RLS/catalog and authenticated RPC batches are
+  deployed remotely; remote migration history matches the 39-migration
+  local set, including `20260924103000_mvp1_export_owned_foods`. The remote
+  profile default and authenticated-only execute grant were verified after
+  the migration was applied.
 - [x] Remote read-only checks confirm 20 expected public tables, 20 RLS-enabled
   tables, 20 policies, four anonymous catalog SELECT grants, 20 authenticated
   SELECT grants, zero direct authenticated/anonymous table-write grants, and
   no unexpected public application tables.
 - [x] Remote catalog checks confirm 21 system exercises, 22 system foods, 4
   system meals, and 14 meal ingredients.
-- [x] Keep `src/types/database.generated.ts` synchronized with the local
-  hardening columns and RPC wrappers. Regenerate from the linked schema only
-  after the pending migrations are explicitly authorized and deployed.
+- [x] Keep `src/types/database.generated.ts` synchronized with the final local
+  and linked schema, including notification, provenance/range, grouped-meal
+  columns, and grouped RPC wrappers. Linked regeneration passed after the
+  unified migration rollout.
 - [x] The first authenticated repository boundary maps normalized database
   rows to the existing domain snapshot, preserves `app_id` values, hides
   internal `row_id` values, loads authenticated state, and refreshes state only
@@ -84,7 +93,7 @@ revoked.
 - [x] Focused local pgTAP suites have been added beside the baseline:
   `schema_catalog_test.sql`, `constraints_test.sql`, `rls_isolation_test.sql`,
   `privileges_rpc_security_test.sql`, and `domain_mutations_test.sql`.
-  Together with the baseline they execute 384 assertions covering schema
+  Together with the baseline they execute 433 assertions covering schema
   contracts, catalog metadata, constraints, ownership isolation, direct-write
   denial, wrapper security, RPC behavior, idempotency, export shape, and
   account deletion, profile-only/version validation, planned-meal editing,
@@ -98,9 +107,9 @@ revoked.
   invoke the deployed public RPC wrappers, including unit updates,
   plan reset, skipped meals, abandoned sessions, nutrition deletion, and
   recipe saves.
-- [x] `scripts/test-supabase-rpc-smoke.mjs` runs the complete 27-wrapper
+- [x] `scripts/test-supabase-rpc-smoke.mjs` runs the complete 31-wrapper
   matrix through two independent local Auth clients with unique run IDs,
-  replay/hash-mismatch checks, cross-user checks, and deletion cleanup.
+  grouped-meal replay/stale/cross-user/delete checks, and deletion cleanup.
 - [x] `scripts/test-supabase-rpc-remote.mjs` provides a separately guarded
   remote runner. It reads only the existing client-safe `.env.local` URL/key,
   requires `SUPABASE_RPC_REMOTE_CONFIRM=ifunkhvbvkdxolhpxjvk`, rejects local
@@ -120,20 +129,20 @@ revoked.
 - [x] Finish the local database-test gate. The new hardening migration is
   applied locally; baseline/focused suites pass, including non-blank checks for
   the three catalog `app_id` columns and the atomic `log_saved_meal` wrapper.
-- [x] Re-run the full test gate after the MVP-0/M1.2 migrations. All 384
+- [x] Re-run the full test gate after the MVP-0/M1.2/unified-meal migrations. All 433
   pgTAP assertions pass, including anonymous denial, cross-user
   denial, user-ID reassignment protection, invalid inputs, owner-only custom
   catalogs, direct table-write denial, wrapper authorization, controlled
   `SECURITY DEFINER` settings, every ownership/foreign-key index, RPC
    idempotency, export shape, deletion safety, revision triggers, stale-version
    rejection, finite-number/date validation, and unsupported-screening guards.
-- [ ] Complete the remote manual RPC/Auth smoke flow with disposable
-  authenticated accounts. The local 103-assertion RPC suite and the
-  two-client Data API runner exercise all 25 wrappers, including the M1.2
-  meal-editing wrappers with duplicate retries and ownership checks. The remote project has
-  passed linked migration/dry-run preflight, but remote account creation,
-  email confirmation, 27-RPC execution, and cleanup remain pending until two
-  confirmed disposable credentials are supplied transiently.
+- [x] Complete the guarded remote grouped-meal RPC smoke flow with two
+  confirmed disposable authenticated accounts. On 2026-09-23 the remote
+  runner exercised all 31 public wrappers, including grouped-meal replay,
+  stale-edit, cross-user ownership, historical-edit independence, and delete
+  behavior, then cleaned up both accounts through the authorized deletion RPC.
+  Separate sign-up/confirmation UI coverage remains listed under the P0
+  browser/Auth checks below.
 
 #### P0 — Complete backend correctness and security
 
@@ -177,20 +186,36 @@ revoked.
 - [ ] Add remote manual Auth smoke tests with a disposable test account:
   sign-up, confirmation, sign-in, onboarding, reload, nutrition save, workout
   start/finish, sign-out, and protected-route redirect behavior.
-- [ ] Add server-side CSV formatting and a cache-clearing workflow around the
-  deployed JSON export and account-deletion RPCs.
+- [x] Persist the opt-in notification preference through the forward-only
+  profile migration and authorized RPC. Reminder delivery remains post-MVP-1.
+- [x] Package the authorized JSON export as a deterministic ZIP with manifest,
+  metadata, and entity CSV files while retaining JSON compatibility.
 
 #### P1 — Nutrition and AI trust boundary
 
-- [ ] Select and load a trusted, versioned production nutrition database. The
-  authored starter foods remain estimated seed data and are not production
-  nutrition authority.
-- [ ] Add protected server-side AI text-meal extraction. AI may produce a
-  schema-validated review candidate, but trusted nutrition data, deterministic
-  calculations, and explicit user confirmation must own persistence.
-- [ ] Test raw/cooked/prepared serving assumptions, restaurant uncertainty,
+- [x] Implement the local trusted-nutrition contract: canonical per-100-g
+  fields, USDA provenance, normalized serving-option rows, owner-controlled
+  custom foods, expected-revision correction, and protected USDA search.
+- [x] Implement protected server-side AI text-meal extraction. AI returns only
+  a schema-validated review candidate; trusted nutrition data, deterministic
+  calculations, and explicit user confirmation own persistence.
+- [x] Implement the unified “Search or describe a meal” review contract:
+  protected batch USDA matching, explicit DeepSeek estimate fallback, hidden
+  ingredient opt-in, low/base/high ranges, grouped logged meals, reusable
+  recipe creation, and atomic grouped mutations.
+- [x] Complete the direct provider smoke gate. The server-only USDA release/API
+  and DeepSeek key names are configured remotely, all four functions are
+  deployed/JWT-protected, and authenticated USDA search, batch matching,
+  DeepSeek extraction, and explicit estimate smoke passed on 2026-09-24. The
+  production strategy is on-demand FDC API access; no bulk catalog import is
+  part of MVP-1. The authenticated remote provider smoke uses the retained
+  account runner; the browser suite verifies the protected UI boundary with
+  mocked provider responses and preserves drafts on failures.
+- [x] Test raw/cooked/prepared serving assumptions, restaurant uncertainty,
   source/version/confidence display, estimated flags, corrections, and the
-  rule that missing days are not represented as zero intake.
+  rule that missing days are not represented as zero intake in local handlers,
+  database tests, and the unified review implementation. Browser and remote
+  evidence remain release gates.
 
 #### P2 — Production configuration and release dependencies
 
@@ -201,27 +226,54 @@ revoked.
   presenting unsynchronized mutations as persisted.
 
 The current test implementation is local-first and does not change the linked
-remote project. The previous local verification gate is complete; the latest
-profile-only/version-validation/M1.2 migrations are applied locally. The last verified
-results are:
+remote project. The local verification gate was rerun on 2026-09-22 after the
+local Supabase stack became available. The current results are:
 
-- `npx supabase@latest db reset --local`: clean 30-file local migration gate
-  passed, including the profile-only/version-validation and M1.2 meal-editing
-  migrations.
+- `npx supabase@latest db reset --local`: pass; all 39 migrations applied from
+  an empty local database.
 - `npx supabase@latest migration list --local`: pass; the local migration
   history is complete.
 - `npx supabase@latest db lint --local`: pass with no schema errors.
-- `npx supabase@latest test db --local`: 384/384 assertions passed across eight
+- `npx supabase@latest db advisors --local --type security --level warn`: pass;
+  no issues found.
+- `npx supabase@latest test db --local`: 433 assertions passed across ten
   suites.
-- `npm run supabase:test:rpc`: pass; all 27 public wrappers were exercised
+- `npm run supabase:test:rpc`: pass; all 31 public wrappers were exercised
   through two disposable local Auth users and both accounts were cleaned up
   through `delete_account`.
 - `npm run supabase:test:concurrency`: pass against
   `http://127.0.0.1:56321`, including disposable-user cleanup.
 - `npm run typecheck` and `npm run lint`: pass.
-- `npm run build`: pass; the configured Google-hosted Nunito font was fetched
-  with network access (the initial sandbox attempt was blocked only by that
-  external font fetch).
+- `npm run test:local`: pass; 55 tests across 13 files.
+- `npm run build`: pass; 19 routes generated and 21 exercise assets copied.
+- Local TypeScript generation was run from the final schema; the committed
+  contract includes the provider-quota table and final progression-bound/RPC
+  definitions.
+
+Remote rollout evidence on 2026-09-24 and provider smoke evidence on 2026-09-24:
+
+- `npx supabase@latest db push --dry-run`: pass; remote database is up to date
+  after applying `20260924103000_mvp1_export_owned_foods.sql`.
+- Linked database types were regenerated after the remote migration and
+  `npm run typecheck` passed.
+- Deployed protected functions: `nutrition-search` v7,
+  `nutrition-text-parse` v7, `nutrition-meal-match` v2, and
+  `nutrition-macro-estimate` v1; JWT verification is enabled for all four.
+- Authenticated USDA search and batch matching passed after both functions were
+  changed to send `dataType` as the documented JSON array in a POST body. User
+  A's batch returned two normalized matches for cooked egg and cooked rice.
+- Authenticated DeepSeek extraction passed through `nutrition-text-parse` v7
+  for `2 cups fried rice with 2 eggs`; the response included the meal label,
+  candidates, and questions. Authenticated macro estimation returned one
+  validated estimate. No meal confirmation or durable log save was performed.
+- User B's ordinary USDA search returned eight candidates. Anonymous POST
+  probes returned 401 for all four provider functions.
+- The browser tab used for the earlier local check was unauthenticated after
+  the previous session ended and correctly redirected to sign-in. The current
+  repeatable browser gate has since passed its mocked protected-provider,
+  failure-retention, offline-retry, and account-isolation scenarios.
+- No raw meal text, API key, or upstream response was logged.
+- Anonymous POST probes returned `401` for all four provider functions.
 
 The remote advisor review found one expected design warning for authenticated
 `SECURITY DEFINER` RPC wrappers: the wrappers are deliberately callable by
@@ -234,10 +286,11 @@ findings are resolved by the deployed index migration. Supabase Auth's leaked
 password protection is still disabled and must be enabled before production.
 
 The auth UI, schema, deployed RPC boundary, initial repository hydration, and
-Context integration are implemented. The backend is not production-ready
-until the P0 correctness/security work and P1 authenticated integration work
-are complete and the guarded remote RPC/Auth smoke flow is verified against
-confirmed disposable users.
+Context integration are implemented and covered by the guarded remote RPC/Auth
+smoke flow against confirmed disposable users. Public deployment still needs
+the production Site URL/redirect configuration, the live confirmation and
+recovery-email check, and an explicit review of the Free-tier security
+limitations.
 
 ## 2. Client-safe environment
 
@@ -299,9 +352,10 @@ If the confirmation template is customized, use:
 ```
 
 For password recovery, use the same callback with `type=recovery` and
-`next=/auth/update-password`. Configure custom SMTP before production email
-delivery; the default Supabase sender is rate-limited and intended for
-testing.
+`next=/auth/update-password`. Brevo custom SMTP is configured for the remote
+project; complete a live confirmation and recovery-email test before inviting
+anyone beyond the controlled beta. The default Supabase sender remains
+rate-limited and intended for testing.
 
 ## 4. Local migration set
 
@@ -491,8 +545,7 @@ ownership IDs, and normalized foreign-key implementation columns.
 Adds non-blank checks for catalog application IDs, an atomic
 `log_saved_meal` nutrition mutation, and an authorized
 `apply_workout_override` mutation. The migration has been applied and verified
-locally; it remains pending on the linked remote until an explicitly authorized
-staging/remote rollout.
+locally and through the linked remote rollout.
 
 ## 5. Security and ownership contract
 
@@ -568,7 +621,7 @@ minimum:
 - A reset from an empty database reproduces the same schema and seed state.
 - The focused pgTAP suites and local two-session concurrency lane execute
   without weakening a contract assertion; the full local gate is green.
-- The RPC smoke path signs up two disposable local users, exercises all 23
+- The RPC smoke path signs up two disposable local users, exercises all 31
   public wrappers, checks replay/hash-mismatch and cross-user behavior, and
   cleans up through `delete_account`.
 
@@ -581,11 +634,17 @@ The current linked-project rollout has completed the reviewed dry run and push:
 
 - Project ref: `ifunkhvbvkdxolhpxjvk`
 - Remote region: `ap-northeast-1`
-- Remote history: all nineteen local migrations, confirmed through the linked
-  project migration listing
+- Remote history: all 39 local migrations, confirmed through the linked project
+  migration listing
 - Linked dry run: up to date with no pending migrations
 - Linked lint: pass; `npx supabase@latest db lint --linked` reports no schema
-  errors after the RPC batch and export-shape hardening migration.
+  errors after the grocery-conflict and export-food migrations. The four
+  protected provider functions are deployed with JWT verification. The final
+  sanitized User B smoke passed search, batch matching, extraction, one
+  explicit low-confidence estimate, weighted USDA persistence, and export;
+  separate anonymous probes returned 401 for all four functions. Earlier
+  `rate_limited` responses are retained as expected quota evidence, not an
+  unhandled provider failure.
 
 For future changes, only after local verification and review of the migration
 list:
@@ -596,11 +655,11 @@ npx supabase@latest link --project-ref <project-ref>
 npx supabase@latest db push --dry-run
 ```
 
-After creating and confirming two disposable remote Auth accounts through
-the existing sign-up flow, the complete remote RPC matrix can be run with the
-guarded client-only harness. Supply the two confirmed account credentials
-only in the current process environment; do not add them to `.env.local`, a
-committed file, or shell-history-backed configuration:
+The older complete-RPC runner below deletes its two temporary users and is not
+the runner used for the retained accounts in the MVP-1 release candidate.
+Keep the two confirmed identities intact for later testing. Supply credentials
+only through the current process environment or the ignored local env file;
+never commit them or print their values:
 
 ```powershell
 $env:SUPABASE_RPC_REMOTE_CONFIRM = "ifunkhvbvkdxolhpxjvk"
@@ -609,17 +668,96 @@ $env:SUPABASE_RPC_REMOTE_CONFIRM = "ifunkhvbvkdxolhpxjvk"
 npm run supabase:test:rpc:remote
 ```
 
-The remote runner reads only `NEXT_PUBLIC_SUPABASE_URL` and
+The destructive remote runner reads only `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the existing `.env.local`, refuses
 any project other than `ifunkhvbvkdxolhpxjvk`, and performs all writes through
 authenticated RPCs. It deletes both disposable accounts through
-`delete_account` at the end. Do not run it until the accounts are confirmed,
-and do not mark remote RPC verification complete until the command succeeds
-and cleanup is confirmed.
+`delete_account` at the end, so it must not be run against the retained
+release-candidate accounts.
+
+The retained-account provider evidence uses the sanitized runner below. It
+never logs credentials, meal text, provider payloads, or keys; `B` selects the
+second retained account and the same idempotency key safely replays the USDA
+save:
+
+```powershell
+$env:SUPABASE_PROVIDER_SMOKE_USER = "B"
+node scripts/test-supabase-provider-remote.mjs
+```
+
+The runner verifies USDA search, DeepSeek extraction, batch matching, explicit
+macro estimation, authorized USDA persistence, and account export. The
+provider quota is five estimates per ten minutes per user; a later
+`rate_limited` response is expected and must be recorded rather than bypassed.
 
 The dry run must be reviewed against the linked migration history before any
 future push. Do not use blind pulls, force flags,
 `--include-all`, guessed migration repairs, or dashboard-only schema changes.
+
+Historical 2026-09-21 rollout checkpoint (superseded by the current 39-version
+inventory above): the linked 19-migration baseline was proven
+identical to a local baseline across full `public`/`private` schema dumps and
+authored catalog digests. The authorized push applied nine migrations through
+`20260918031759_mvp1_meal_editing_hardening.sql` and then stopped on duplicate
+legacy planned-exercise `sort_order` values. The repository now includes
+`20260918033000_repair_legacy_planned_exercise_order.sql`, a guarded data-only
+correction placed before the dependent unique-index migration. Full local reset
+and 403 database assertions pass. After explicit approval, the guarded repair
+and all six later migrations applied successfully. At that checkpoint, all 35
+local/remote migration versions agreed; the current 39-version history also
+includes grocery conflict and owned-food export hardening. `db push --dry-run`
+is up to date, and the full 7,184-line
+local/remote `public`/`private` schema dumps match. The nine planned-exercise
+rows and historical log reference remain intact, with no duplicate slot keys.
+Remote lint has no schema errors. The security advisor reports expected
+authenticated `SECURITY DEFINER` RPC warnings, an intentionally private quota
+table with no read policy, and disabled leaked-password protection in Auth.
+Do not edit an applied migration; use a new forward migration for corrections.
+
+The remote `nutrition-search`, `nutrition-text-parse`,
+`nutrition-meal-match`, and `nutrition-macro-estimate` functions are now
+JWT-protected and deployed from the reviewed working tree. Anonymous probes
+returned 401 for all four. The user reports that `USDA_FDC_API_KEY` and
+`DEEPSEEK_API_KEY` are configured remotely, and the USDA release label is
+configured. Authenticated USDA search passed; authenticated DeepSeek extraction
+passed the guarded authenticated smoke on User B; later `rate_limited` results
+were returned by the documented per-user quota after repeated verification.
+Values in `.env` do not configure remote Edge Function secrets. The deployed
+text parser uses DeepSeek's Responses API with optional
+`DEEPSEEK_NUTRITION_MODEL=deepseek-flash`; `USDA_FDC_RELEASE` must be set as a
+server-only value before authenticated USDA verification can be signed off.
+
+Set the DeepSeek key and the USDA API key in the target project's Edge Function
+secrets (Dashboard or Supabase CLI) without committing or pasting their values
+into a public file. Set `USDA_FDC_RELEASE` as a server-only Edge Function
+configuration value; it is not a secret, but it must never be a
+`NEXT_PUBLIC_*` variable. The selected rollout evidence is:
+
+- Source: [USDA FoodData Central API](https://fdc.nal.usda.gov/api-guide/)
+- Scope: on-demand Foundation, SR Legacy, FNDDS, and Branded search records;
+  no full-catalog import is claimed.
+- Release label: `FoodData Central API verified 2026-09-22`.
+- Official release context checked 2026-09-22: Foundation/Branded April 2026
+  downloads, FNDDS 2021–2023 published October 2024, and SR Legacy final April
+  2018 release. Branded records continue to receive API updates.
+- License/terms: follow USDA FoodData Central attribution and API terms; keep
+  the source/version and FDC ID with every persisted selection.
+
+Release evidence procedure: set the release label remotely, run the mocked
+handler fixtures, deploy the reviewed provider functions, perform authenticated
+simple USDA search and batch matching, save one reviewed FDC record, and record
+its FDC ID, data type, source version, provider revision, serving options, save
+result, verification date, and number of persisted smoke records. Then run
+authenticated DeepSeek extraction and one explicit estimate request, followed
+by a confirmation-only grouped save. Record exact deployed function versions,
+schema revision, and disposable-user cleanup. Do not report a bulk record
+count for the on-demand strategy.
+
+Set the DeepSeek key in the target project's Edge Function secrets (Dashboard
+or Supabase CLI) without committing or pasting its value into a public file.
+Keep the Supabase Studio `openai_api_key` setting separate: it is not used by
+this app's nutrition parser. Photo analysis remains post-MVP-1 and would need
+its own privacy and accuracy review before deployment.
 
 If a remote schema already contains equivalent changes, prove equivalence for
 columns, constraints, indexes, policies, grants, function bodies, and relevant

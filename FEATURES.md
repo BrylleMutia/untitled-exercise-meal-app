@@ -278,8 +278,9 @@ exists. User-provided values must remain distinguishable from catalog estimates.
 
 ### 8. AI-Assisted Nutrition Estimation
 
-The initial AI feature should estimate meals from text, not claim to identify
-exact nutrition from photos.
+The MVP-1 AI feature uses DeepSeek `deepseek-flash` to extract reviewable meals
+from the unified “Search or describe a meal” input. It
+must not claim to identify exact nutrition from photos.
 
 Example input:
 
@@ -291,23 +292,40 @@ Implementation flow:
    server-side AI endpoint after an explicit user action.
 2. Have the model extract food names, quantities, units, preparation, and
    uncertainties into validated structured JSON.
-3. Match extracted items against a trusted nutrition database.
-4. Calculate calories and macros in application code from the matched database
-   records, never from model-generated numbers.
-5. Show matches, assumptions, confidence, and serving sizes for confirmation.
-6. Let the user correct the food or portion before saving the entry.
+3. Match each stated ingredient against the local catalog and protected,
+   on-demand USDA FoodData Central search.
+4. Calculate macros from matched catalog records. If no trusted match exists,
+   the user may explicitly request a separate DeepSeek estimate for selected
+   unresolved ingredients; it returns only a low-confidence low/base/high range.
+5. Show matches, hidden-ingredient questions, assumptions, confidence, source,
+   preparation basis, and serving sizes for confirmation.
+6. Let the user correct the food or portion before one atomic confirmation.
+   A confirmed composite meal creates one reusable recipe and one expandable
+   grouped history card; editing history does not edit the reusable recipe.
 
 The AI endpoint must never contain provider secrets in the Next.js browser
-bundle or any `NEXT_PUBLIC_*` variable. The endpoint only creates a reviewable
-extraction candidate; it must not save a nutrition entry or mutate user data. A
-separate confirmed mutation persists the user's reviewed result.
+bundle or any `NEXT_PUBLIC_*` variable. Extraction and estimate endpoints only
+create reviewable candidates; they must not save a nutrition entry or mutate
+user data. A separate confirmed mutation persists the reviewed result. AI
+estimates remain `estimated: true`, `confidence: low`, `valueSource:
+ai_estimate`, and retain a complete low/base/high range.
 
 The UI should call out uncertainty for foods with hidden ingredients, such as
 restaurant meals, sauces, cooking oil, and mixed dishes. Do not display false
 precision for estimates.
 
-Photo recognition, voice input, and social-media recipe extraction are later
-features.
+After MVP-1, guided meal-photo logging may use `deepseek-flash` to suggest
+visible foods, not calories or macros. The flow is: capture a photo; review
+suggested foods; ask about portion sizes, oils, sauces, cooking method, and
+ingredients the image cannot reveal; let the user correct food and quantity;
+match trusted nutrition records and calculate estimates; then save only after
+explicit confirmation. If a food or amount remains unknown, show uncertainty
+and allow manual entry instead of false precision. Do not retain meal images in
+the app after analysis. Disclose the provider's image/data handling before
+launch, and validate accuracy and usability against representative weighed
+meals. Photo recognition, voice input, and social-media recipe extraction are
+not MVP-1 signoff requirements. Photo capture/upload and image analysis remain
+outside MVP-1.
 
 ### 9. Custom Meals and Recipes
 
@@ -331,7 +349,10 @@ recipe archive is a soft-delete so historical planned meals and nutrition logs
 remain resolvable. Recipe saves and active-plan grocery reconciliation use one
 authorized transaction. Custom-food persistence, multiple same-slot ordering,
 preference/cooking-time/budget-aware generation, and recipe-specific draft
-recovery remain M1.2/M1.3 follow-up work.
+recovery are implemented in the MVP-1 pass. Local, browser, and authorized
+remote evidence is tracked in `MVP_Priority_Matrix.md`; the modular
+implementation commits and final candidate tag are the remaining repository
+release gate.
 
 ### 10. Grocery List
 
@@ -401,7 +422,8 @@ Include:
 - Edit profile and targets
 - Reset plan while retaining history
 - Delete account data and clear cached browser data
-- Export user data in a simple JSON or CSV format
+- Export user data as lossless JSON plus a deterministic ZIP containing
+  metadata and one CSV per exported entity collection
 - Nutrition and health disclaimer
 
 All important screens need loading, empty, error, offline, and retry-friendly
@@ -550,7 +572,7 @@ Do not start with AI-generated plans or photo recognition. First make the
 underlying exercise, food, serving, and progression data reliable; AI should
 make input faster without becoming the authority for calculations or safety.
 
-## Implementation status note (2026-09-17)
+## Implementation status note (2026-09-20)
 
 The current implementation persists onboarding goal fields and profile food
 preferences, hydrates historical workout plans and sessions, supports
@@ -562,6 +584,53 @@ IndexedDB/localStorage draft repository and are never treated as durable until
 the Supabase mutation succeeds. MVP-0 now also
 includes revision-aware stale conflict handling, health eligibility metadata,
 RPC preflight validation, and profile-only onboarding for unsupported health
-screening outcomes (manual logging remains available). Trusted production nutrition data, server-side AI
-extraction, nutrition correction controls, and full staging verification remain
-release work.
+screening outcomes (manual logging remains available). The local MVP-1 pass now
+includes trusted USDA search/selection, normalized serving options, custom-food
+persistence, correction controls, protected candidate-only AI extraction,
+unified guided meal review, grouped recipe/history persistence, bounded
+ progress history, and recoverable plan/recipe drafts. USDA release selection,
+ provider deployment, grouped schema rollout, protected-function smoke, and
+ the repeatable public/authenticated browser gates are recorded in
+ `MVP_Priority_Matrix.md`. The two confirmed remote test accounts are retained
+ for later testing; they are not deleted as part of candidate signoff.
+
+### MVP-1 Settings and export contract
+
+Settings stores `notificationsEnabled` as an authenticated profile preference.
+It defaults to `false` for new and existing users, is opt-in, and is changed
+through the authorized profile RPC. MVP-1 does not send reminders, push
+notifications, or email notifications; delivery is a later feature. The shell
+notification control is a link to this preference and never presents a
+decorative unread state.
+
+Export keeps the existing lossless JSON download and adds a deterministic ZIP
+bundle. The bundle contains `manifest.json`, `export.json`, `metadata.csv`, and
+one CSV file for every entity collection returned by `export_account_data`.
+CSV fields preserve original units, ISO dates, source/version, assumptions,
+confidence, estimated/user-provided flags, and nested values as JSON strings.
+
+### MVP-1 conflict and draft contract
+
+Every editable aggregate uses the shared expected-version and idempotency path.
+An unchanged transport retry reuses its idempotency key; an explicit reapply
+after a stale response refreshes the authoritative snapshot and uses a new key.
+The active draft remains visible until the authoritative mutation succeeds or
+the user explicitly discards it. Drafts are account-scoped, versioned, and
+stored IndexedDB-first with a localStorage fallback. Legacy unscoped workout
+keys are not bulk-cleared or exposed across accounts.
+
+### MVP-1 nutrition provider contract
+
+Production nutrition search is protected, on-demand USDA FoodData Central API
+access. Search candidates include FDC ID, USDA data type, the configured
+release/source label, preparation basis, canonical nutrients per 100 g, and a
+provider revision of `<dataType>:<fdcId>`. Household serving options are shown
+only when USDA supplies a positive gram weight. Starter foods remain explicitly
+development/estimated fixtures and are not production USDA records.
+
+Meal-photo analysis remains outside MVP-1. Its later guided contract is
+photo → visible-food suggestions → questions about portions, oils, sauces, and
+hidden ingredients → user correction → trusted nutrition calculation → explicit
+save. Images are not retained by this app after analysis; provider-side
+handling must be disclosed and the photo flow needs separate accuracy,
+privacy, and usability verification before release.

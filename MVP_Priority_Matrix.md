@@ -1,7 +1,7 @@
 # MVP Priority Matrix
 
-Audit date: 2026-09-18
-Implementation specification revision: 2026-09-18
+Audit date: 2026-09-24
+Implementation specification revision: 2026-09-24
 
 This document summarizes the current implementation and the work required to
 meet the MVP contract in [`FEATURES.md`](./FEATURES.md), the engineering and
@@ -18,15 +18,17 @@ database schema, RLS policies, authenticated RPC boundary, generated database
 types, repository hydration, core screens, and substantial database test suites
 exist. A user can exercise much of the intended loop in the current UI.
 
-The app is not yet MVP-complete under the current product contract. The MVP-0
+The app is not yet tagged until the final evidence commit is created. The MVP-0
 implementation wave
 implemented the highest-risk foundation fixes: historical plan hydration,
 goal/profile persistence, planned-meal trust metadata, atomic saved-meal
 logging, persistent workout overrides, serialized session saves, recoverable
 browser drafts, server-backed export/deletion, pending/offline/error UI, and a
-forward hardening migrations. Remaining release blockers are production
-nutrition/AI, complete feature-wide conflict/reapply coverage,
-browser/accessibility verification, and guarded remote verification.
+forward hardening migrations. The current release gate has code-complete
+behavior, a repeatable mobile/desktop browser suite, and deployed protected
+provider boundaries. The final post-migration remote provider rerun and all
+application/database/browser gates are green; only reviewed commit/tag
+packaging remains.
 
 Status terms used below:
 
@@ -63,14 +65,138 @@ The following highest-risk items now have implementation coverage:
 - Forward-only migrations add catalog non-blank checks, revision/eligibility
   metadata, shared RPC preflight validation, and profile-only unsupported
   onboarding. They are applied and verified against the local Supabase stack;
-  the linked remote remains unchanged pending explicit rollout authorization.
+  that status was recorded before the 2026-09-21 remote rollout attempt.
 
 The current MVP-1 wave adds the durable workout progression/override loop,
-same-slot planned-meal ordering, bounded progress/history reads, and the
-canonical per-100-g nutrition calculation foundation. Remaining release
-blockers are provider-backed nutrition/AI integration, complete feature-wide
-conflict/reapply coverage, browser/accessibility checks, and guarded
-staging/remote smoke verification.
+same-slot planned-meal ordering, bounded progress/history reads, canonical
+per-100-g nutrition provenance, custom-food/correction mutations, trusted USDA
+search, protected DeepSeek extraction and estimate fallback, unified guided meal
+review, grouped recipe/history persistence, provider quotas/timeouts, and
+recoverable drafts. The unified-meal, grocery-conflict, and owned-food export
+migrations and all four protected provider functions are deployed remotely.
+The serialized release browser suite and final remote provider rerun are green;
+the implementation is now organized into modular commits; final signoff remains
+pending on the documentation commit and candidate tag.
+
+## Current release-candidate audit (2026-09-24)
+
+This section supersedes older “open” or “not run” statements below. Historical
+checkpoints remain as an audit trail and are not current status.
+
+- Local and linked migration history both contain 39 versions through
+  `20260924103000_mvp1_export_owned_foods.sql`; clean reset and linked dry run
+  passed.
+- Protected functions are active with JWT verification: USDA search v7,
+  DeepSeek extraction v7, USDA batch match v2, and macro estimate v1. User B's
+  2026-09-24 smoke passed search, batch matching, extraction, one explicit
+  low-confidence estimate, and authorized persistence of FDC `2708951`
+  (`Survey (FNDDS)`, release `FoodData Central API verified 2026-09-22`,
+  preparation `prepared`, revision `Survey (FNDDS):2708951`). The export fix
+  now reports one persisted provider food. The final post-window rerun also
+  passed the explicit estimate, and anonymous probes for all four functions
+  returned `401`.
+- The serialized Playwright release suite passed 21 tests across 390×844
+  mobile and 1440×900 desktop; the unauthenticated public suite passed 2/2.
+  It covers route overflow, simple-food quantity review and focus retention,
+  explicit DeepSeek gating, AI estimate range rendering, provider-failure
+  retention, JSON/ZIP receipt and contents, offline retry, failed refresh,
+  account isolation, reduced motion, and 200% text. The manual evidence below
+  covers grouped save/expansion, historical correction, grouped deletion,
+  stale reapply/discard, and screen-reader-oriented checks.
+- The two confirmed disposable accounts are intentionally retained for later
+  testing. Credentials, Playwright auth state, downloads, and traces are
+  ignored and excluded from the candidate commit.
+- Site URL/redirect allow-list, live SMTP confirmation/recovery verification,
+  Free-tier leaked-password protection, and public web deployment remain
+  separate production launch gates. Meal photos, voice,
+  barcode, reminders, and service-worker synchronization remain outside
+  MVP-1.
+
+### Historical remote rollout checkpoint (2026-09-21)
+
+- Before the push, the linked project's 19 applied migrations matched the
+  local 19-migration baseline exactly across the full `public` and `private`
+  schema dumps (4,384 lines). Authored exercise, food, meal, and ingredient
+  content digests also matched. The dry run listed 15 pending migrations.
+- The first authorized push applied nine migrations through
+  `20260918031759_mvp1_meal_editing_hardening.sql`, then stopped because three
+  legacy workouts each had three planned exercises all at `sort_order = 1`.
+  One of the nine rows has a completed-log reference; no overrides were found.
+- A guarded, forward-only order-repair migration was added before the dependent
+  slot-key uniqueness migration. It keeps every exercise and history link,
+  assigning insertion-order positions within only all-one legacy workouts.
+  After explicit approval, all seven remaining migrations applied. Local and
+  remote histories now agree on the reviewed 35-migration baseline; the linked dry run was empty
+  and both full `public`/`private` schema dumps match exactly (7,184 lines).
+  The nine exercise rows and existing log reference remain; no duplicate slot
+  keys remain.
+- `nutrition-search`, `nutrition-text-parse`, `nutrition-meal-match`, and
+  `nutrition-macro-estimate` are deployed and `ACTIVE` with JWT verification
+  enabled. Anonymous POST requests return 401 for all four. The remote quota
+  RPC is deployed. Remote read-only checks show zero public tables without RLS,
+  zero direct authenticated write grants, and anonymous quota EXECUTE denied.
+  Remote lint reports no schema errors. The remote-generated TypeScript
+  contract, local 433-assertion database gate, typecheck, lint, tests, and
+  production build pass.
+ - The security advisor still reports intentional authenticated `SECURITY
+   DEFINER` mutation wrappers and a private rate-limit table with no read
+   policy; leaked-password protection is disabled in Auth and needs dashboard
+   attention. Remote USDA and DeepSeek provider calls now pass authenticated
+   smoke verification, including anonymous `401` enforcement.
+ - MVP-1 signoff remains open: complete the remaining browser/offline/account
+   matrix, obtain action-time confirmation before deleting the temporary browser
+   smoke record, confirm the export receipt, create the candidate commit/tag,
+   and review the remaining security-advisor findings.
+
+### Exact remote evidence recorded (2026-09-23)
+
+- Target project: `ifunkhvbvkdxolhpxjvk` (`ap-northeast-1`); remote migration
+  history contains the reviewed 37-migration set with
+  `20260922062833_mvp1_unified_meal_review` as the current MVP-1 schema head.
+- Active protected Edge Functions, with JWT verification enabled:
+  `nutrition-search` v6
+  (`0131ea1fe2c0ea9e030b5d05c51ba5d385e6f3c8ae5a8e7c25ac976b30befd9f`),
+  `nutrition-text-parse` v7
+  (`fbed0f5b19bee127373919b29ad9882f2524e42d235ae72f35cb948771f3db91`),
+  `nutrition-meal-match` v1
+  (`1f3818340370a9030dbda6131a14d530dd1e21f6f6f128241ebc87883e6ae85d`), and
+  `nutrition-macro-estimate` v1
+  (`e02a637c1c6c10fbd74aa16d861540cd3cd84a74a85a8c93a2b42f8841472f0d`).
+- Anonymous POST probes returned `401` for each of the four protected provider
+  functions.
+- Guarded remote grouped-RPC smoke passed with two confirmed disposable
+  authenticated users. The runner exercised all 31 public wrappers, including
+  grouped-meal same-key replay, stale-version rejection, cross-user ownership
+  denial, historical-edit independence, grouped deletion, and authorized
+  `delete_account` cleanup for both users. No disposable account remained after
+  the run.
+- An earlier authenticated provider smoke passed through `nutrition-search` and
+  `nutrition-text-parse` v7 for `2 cups fried rice`; the extraction response
+  contained a suggested meal label, a stated candidate, and hidden-ingredient
+  questions, with no macro fields and no durable save. A fresh browser rerun in
+  this audit currently returns sanitized `not_authenticated` for both provider
+  actions, so this evidence is retained as historical success but does not close
+  the current browser/provider gate.
+
+### Historical browser matrix evidence (2026-09-23)
+
+Viewport checks used 390×844 mobile and 1440×900 desktop layouts.
+
+| Scenario | Result | Evidence / limitation |
+|---|---|---|
+| Single-food review | Passed | Local Egg selection opened quantity review with unit, preparation basis, source, confidence, and macro preview; no save was performed. |
+| Composite meal suggestion | Partial | `2 cups fried rice with 2 eggs` showed the explicit analysis disclosure and did not auto-call DeepSeek; explicit analysis currently returns `not_authenticated`. |
+| USDA replacement | Blocked | Current browser USDA action returns `not_authenticated`; earlier authenticated USDA search evidence is recorded above. |
+| AI estimate fallback | Blocked | Depends on the blocked authenticated composite/match path; no estimate was accepted in this run. |
+| Grouped save and expansion | Passed with temporary test data | Existing Fried Rice recipe logging created one grouped history card with expandable ingredient/source/range details. The temporary grouped record remains pending action-time deletion confirmation. |
+| Historical correction | Passed | Changed the historical first ingredient quantity and recalculated the grouped snapshot without changing the reusable recipe. |
+| Stale reapply/discard | Passed | Two browser tabs produced a stale response; the editor retained quantity `3`, exposed `Reapply draft`, succeeded with a fresh key, and `Discard changes` closed the editor without another mutation. |
+| Failed refresh | Not run | Requires forcing the browser refresh/read path to fail; the available browser control surface has no network interception toggle. |
+| Offline retry | Not run | Same browser-control limitation; local offline UI and retry code remain covered by source/tests. |
+| Reload draft recovery | Passed | After the IndexedDB reader/write-order fixes, the custom nutrition draft restored its name and displayed `Draft restored from this device.` after full reload. |
+| Account switching | Passed (browser isolation) | Signed out User A, manually signed in User B, and verified that User B's nutrition day had no User A standalone USDA entry or grouped meal, the reusable-meal list did not contain User A's `Fried Rice with 2 Eggs` recipe, and the notification preference was independently disabled. A User B-only guided draft restored after reload. |
+| Settings/export | Partial | Notification toggle persisted across reload. CSV ZIP packaging tests pass and the browser displayed `CSV bundle download started: calicoach-export-2026-09-23.zip`; the in-app browser did not expose a Playwright download event, so OS-level file receipt remains to be confirmed manually. |
+| Keyboard/focus/accessibility | Partial pass | Accessible roles, labels, 44px controls, focus movement, one-character input retention, and no fresh-tab console errors were checked. Full screen-reader, large-text, reduced-motion, and narrow-overflow passes remain open. |
 
 ## What Is Completed So Far
 
@@ -137,29 +263,29 @@ staging/remote smoke verification.
 |---|---|---|---|
 | App shell, responsive design, accessibility baseline | Substantially complete | Shared shell/components, mobile and desktop navigation, 44px controls, focus styles, reduced motion, loading/error/empty/pending/offline surfaces | Run mobile, desktop, keyboard, screen-reader-oriented, large-text, reduced-motion, and narrow-overflow checks |
 | Supabase authentication | Substantially complete | SSR clients, protected routes, PKCE/token-hash callback, sign-up/sign-in/recovery/sign-out | Configure production URLs, SMTP, leaked-password protection; complete remote disposable-user Auth smoke flow |
-| Supabase schema, RLS, RPCs, generated types | Substantially complete | 30 forward-only migrations, 21 RLS tables/policies, 27 authenticated wrappers, direct writes revoked, generated types aligned with the MVP-0/M1.1/M1.2 contracts; local reset/lint/384-assertion and 27-wrapper smoke gates pass | Apply the authorized migration set to staging/remote, regenerate types from the deployed schema, and run remote RPC/Auth smoke |
-| Onboarding and profile | Substantially complete | Four-step flow, core body/training fields, units, dietary pattern, allergy text, primary goal, target weight/date/rate persistence, optional preference fields, profile hydration/edit action, supported-population screening | Add food-preference, cooking-time, and budget controls; verify unsupported profile-only completion and under-five-minute completion |
+| Supabase schema, RLS, RPCs, generated types | Remotely verified; release review open | 37 forward-only migrations deployed, grouped-meal RLS/RPCs, provenance/range constraints, direct writes revoked, linked types regenerated, remote linked lint clean; local reset/lint/433-assertion, 31-wrapper smoke, concurrency, and guarded remote 31-wrapper smoke pass | Review advisor findings, retain exact remote evidence, and complete the browser/provider gate |
+| Onboarding and profile | Substantially complete | Four-step flow, core body/training fields, units, dietary pattern, allergy text, primary goal, target weight/date/rate persistence, food preferences, cooking-time ceiling, relative budget, profile hydration/edit action, supported-population screening | Verify unsupported profile-only completion, under-five-minute completion, and authenticated remote persistence |
 | Health calculations and safety | Substantially complete | Versioned Mifflin–St Jeor policy, adult boundaries, unit conversions, estimate/disclaimer copy, aggressive-rate UI, explicit below-floor/unsupported outcomes, persisted target assumptions | Preserve assumptions in every historical read model, represent ranges where appropriate, broaden boundary tests, and complete browser verification |
 | Goals and target versioning | Substantially complete | Versioned database tables and bundle creation; goal fields now hydrate and persist with target references; expected-version preflight and typed stale errors | Complete feature-wide stale reapply UX and verify historical summaries retain target assumptions |
 | Exercise library | Complete for starter scope | 21 exercises, balanced movement coverage, local illustrations, descriptions, equipment, measure type, regression/progression, safety, attribution | Final visual/accessibility review and catalog parity test rerun |
 | Weekly workout plan | Substantially complete | Deterministic generator with schedule/equipment/duration constraints, per-slot edit UI, authorized override RPC/table, override hydration and regeneration preservation | Add override removal UI and apply recorded performance to the next plan rather than only showing a suggestion |
 | Workout execution and logging | Substantially complete | Start/save/finish/abandon RPCs; actual sets/reps/holds, skip/modify, RPE, manageable, pain, notes; local pause/resume, interrupted-session recovery, serialized saves, stable retry key | Add optional load entry and make warm-up/cooldown/rest guidance usable in-session; test every lifecycle transition and browser failure path |
-| Weekly meal plan | Partial | Deterministic seven-day plan, dietary/allergy filtering, skip/unskip, versioned database rows, expected macro/source/version/assumption/confidence metadata, planned-meal replace/serving/add editor, expected-version `edit_meal_plan` RPC, atomic grocery reconciliation | Add stable same-slot ordering, normalized edit intents/regenerate flow, preference/cooking-time/budget-aware generation, unresolved-slot output, recipe draft recovery, and full browser verification |
-| Manual nutrition logging | Substantially complete | Catalog/custom entry, deletion, non-negative validation, daily totals/completeness labels, source/confidence display, atomic `log_saved_meal` RPC, per-entry idempotency, recoverable custom/text drafts | Add editing/correction and serving-unit/preparation controls; add planned-meal/recipe drafts and run duplicate/date/unit tests |
-| Trusted nutrition data | Not implemented | Estimated 22-food starter catalog with source/version labels | Select, license, document, load, and version one production nutrition source; define canonical grams/milliliters, household conversions, branded/raw/cooked behavior, mixed-dish uncertainty, and unmatched fallback |
-| AI-assisted text nutrition | Not implemented for MVP | Temporary deterministic browser parser and review UI | Add protected server-side/Edge Function extraction, Zod/schema validation, trusted-record matching, timeouts/rate limits/privacy/error handling, editable candidate review, and separate confirmation/save mutation. The model must never supply authoritative macros or save data directly |
-| Custom meals and recipes | Partial | Tables/hydration, owner-checked save/archive RPCs, Context/repository `saveMeal`/`duplicateMeal`/`archiveMeal` actions, create/edit/duplicate/archive/log UI, canonical ingredient validation, atomic saved-meal logging, recipe-save grocery reconciliation | Add custom-food persistence and serving/preparation contract, recipe/planned-meal draft recovery, richer nutrition preview, and full browser/rollback coverage |
-| Grocery list | Partial | Generation, duplicate combination, categories, check/edit/remove/custom/regenerate UI, generated-versus-adjusted values, atomic reconciliation after plan/recipe edits, expected revision checks, two-client stale/reapply coverage | Add explicit changed-quantity UI, broader edit-sequence tests, pending/failure/offline retry verification, and complete browser/accessibility/offline matrix |
-| Calendar and progress | Substantially complete | Calendar, history across plan versions, weight entries/sparkline, workout count, calorie/protein averages, explicit unlogged labels | Show planned/skipped occurrences, add date ranges/data counts, and introduce bounded/paginated read models |
-| Settings and data controls | Substantially complete | Unit changes, weight entry, plan reset, sign-out, disclaimer, server JSON export, authorized account deletion, sign-out and local draft clearing | Add full profile/target editing surface; add CSV if retained in scope; add notification preference or explicitly defer it in `FEATURES.md` |
-| Failure, offline, and draft recovery | Partial | Onboarding, nutrition custom/text, grocery custom-item, and workout-session recoverable drafts; serialized saves; stable retry key retained in Context; pending/error/offline UI; explicit restore/discard and retry actions; safe re-auth return path; fresh-key meal-plan reapply | Add planned-meal/recipe draft envelopes and verify all account-switching, stale reapply, rollback, and offline paths |
-| Testing and release verification | Substantially complete | Health/progression/canonical-nutrition unit tests; eight SQL suites; local 384 pgTAP/27-RPC/concurrency gate; typecheck, lint, 28 local tests, and production build pass | Add plan, meal-plan, nutrition, grocery, mapper/repository, component, and end-to-end tests; add CI; run browser/accessibility/offline and guarded remote gates |
+| Weekly meal plan | Substantially complete | Deterministic seven-day plan with dietary/allergy/preferences/time/relative-budget filtering, custom saved-meal candidates, unresolved-slot output, skip/unskip, versioned rows, trusted server normalization, editable labels, stable same-slot ordering, recoverable planned-meal/recipe drafts, expected-version `edit_meal_plan`, and atomic grocery reconciliation | Add/record multiple same-slot and browser/offline coverage, plus authenticated remote behavior |
+| Manual nutrition logging | Substantially complete | Catalog/custom entry, edit/correction, delete, explicit serving quantity/unit, preparation/source/confidence display, per-100-g custom-food persistence, daily totals/completeness labels, atomic `log_saved_meal` RPC, per-entry idempotency, recoverable custom/text drafts | Run duplicate/date/unit/correction tests and browser failure/retry verification |
+| Trusted nutrition data | Complete pending candidate evidence | Protected on-demand USDA FDC search plus protected batch `nutrition-meal-match`, with FDC ID/data type, release/source version, canonical per-100-g nutrients, positive-gram serving options only, preparation basis, `<dataType>:<fdcId>` revision, provenance-aware persistence, correction RPC, and exportable owned-food records; remote User B persisted FDC `2708951` with exact provenance on 2026-09-24 | Final post-window provider rerun and candidate evidence commit; do not claim a bulk catalog count |
+| AI-assisted unified meal review | Complete pending final remote evidence | Protected DeepSeek extraction plus explicit `nutrition-macro-estimate`, server-side `deepseek-flash` with thinking disabled, candidate-only extraction, low/base/high estimate ranges, hidden-ingredient opt-in, account-scoped guided draft, atomic grouped recipe/history save, and source/confidence labeling; authenticated browser and User B remote extraction/estimate evidence passed, with provider-failure retention covered by Playwright | Final post-window provider rerun and candidate tag |
+| Custom meals and recipes | Substantially complete | Tables/hydration, owner-checked save/archive RPCs, Context/repository `saveMeal`/`duplicateMeal`/`archiveMeal` actions, create/edit/duplicate/archive/log UI, canonical ingredient validation, custom-food persistence, explicit serving/preparation contract, atomic saved-meal logging, recipe-save grocery reconciliation, recoverable recipe drafts | Run richer nutrition-preview, browser rollback/offline, and authenticated remote coverage |
+| Grocery list | Complete pending integrated gate | Generation, duplicate combination, categories, check/edit/remove/custom/regenerate UI, explicit generated-versus-adjusted values, atomic reconciliation after plan/recipe edits, expected revision checks with parent revision bump, two-client stale/reapply coverage, recoverable custom-item draft, and Playwright offline/failed-refresh coverage | Preserve the repeatable browser command and final evidence commit |
+| Calendar and progress | Substantially complete | Calendar, history across plan versions, weight entries/sparkline, planned/completed/partial/skipped/unlogged semantics, range summary, stable cursor pagination, load-more retry state, calorie/protein averages, explicit unlogged labels | Run timezone-boundary, cursor-omission/duplication, large-text, browser, and remote read-model verification |
+| Settings and data controls | Complete pending final gate | Units, weight, plan reset, sign-out, disclaimer, persisted opt-in notification preference with no delivery side effect, JSON export, deterministic ZIP CSV bundle including `foods.csv`, authorized deletion, and account-scoped draft cleanup; Playwright opened and inspected both JSON and ZIP downloads at both viewports | Record the final candidate commit/tag; retained accounts are intentionally not deleted |
+| Failure, offline, and draft recovery | Complete pending final gate | Onboarding, nutrition custom/text/guided-review, planned-meal, recipe, grocery custom-item, and workout-session recoverable drafts; grouped review drafts retain candidates, exclusions, matches, estimates, and revisions; stable retry/reapply keys; pending/error/offline UI; account-isolated cleanup; reload recovery, stale reapply/discard, provider failure retention, failed refresh, offline retry, and User B isolation are covered by the browser and concurrency evidence | Record final post-window remote provider evidence and candidate tag |
+| Testing and release verification | Complete pending final gate | 13 local test files/55 tests; 10 SQL suites/436 pgTAP assertions; local reset/lint, 31-wrapper RPC smoke, concurrency, typecheck, lint, build, serialized 21-test mobile/desktop release suite, public 2-test suite, exact remote function/migration inventory, and retained-account provider evidence | Create the implementation commit, evidence commit, and annotated candidate tag |
 
 MVP-0 reconciliation note: the onboarding screen now captures the supported-
 population result, target calculations use the versioned health policy without a
 silent calorie floor, and unsupported onboarding persists only a profile for
-manual logging. The remaining onboarding work is preference/budget controls and
-browser verification, not the screening contract itself.
+manual logging. The remaining onboarding work is browser and authenticated
+persistence verification, not the screening or preference contract.
 
 ## Highest-Risk Findings
 
@@ -168,15 +294,16 @@ The original audit findings were rechecked after the retry implementation.
 1. **Historical workout resolution — resolved.** Snapshot hydration now loads
    planned workouts/exercises across every user plan version, and progress
    counts no longer filter completed history to the current plan.
-2. **Plan editing and progression — partially resolved.** Authorized,
-   per-slot workout overrides and replacement UI now persist safely. Bounded
-   progression acceptance/rejection and override removal remain open; the first
-   planned-meal editor slice is implemented under M1.2.
+2. **Plan editing and progression — locally resolved.** Authorized, per-slot
+   workout overrides, replacement/removal, bounded progression decisions, and
+   future-plan cloning now persist safely. Browser and new-migration database
+   verification remain release gates; the planned-meal editor is implemented
+   under M1.2.
 3. **Concurrent writes and retries — partially resolved.** Context guards
    duplicate submissions, retains idempotency keys for retry, serializes session
    saves, refreshes stale snapshots, and exposes typed expected-version conflicts.
    Meal-plan/grocery stale-writer and explicit reapply coverage now pass locally;
-   broader feature-local adapters and browser reapply coverage remain open.
+   broader browser reapply coverage remains a release check.
 4. **Saved-meal logging — resolved.** `log_saved_meal` performs one atomic
    transaction with deterministic per-entry idempotency keys; the 27-wrapper
    local smoke suite covers replay and ownership behavior.
@@ -192,10 +319,10 @@ The original audit findings were rechecked after the retry implementation.
 9. **Recovery behavior — partially resolved.** Onboarding/session drafts,
    serialized saves, offline detection, pending/error states, explicit
    restore/discard, and retry UI are present for onboarding, nutrition
-   custom/text, grocery custom items, and workout sessions. Failed identity
-   refresh now preserves drafts and routes to sign-in with a safe return path.
-   Planned-meal/recipe drafts, full stale reapplication coverage, and
-   production PWA behavior remain open.
+   custom/text, planned meals, recipes, grocery custom items, and workout
+   sessions. Failed identity refresh now preserves drafts and routes to sign-in
+   with a safe return path. Browser/staging reapplication and production PWA
+   behavior remain release checks.
 10. **Database gate — previous baseline resolved locally.** The prior
     23-migration gate passed locally. The profile-only/version-validation
     follow-up migrations were rerun against a clean local reset with lint and the
@@ -245,15 +372,15 @@ product, data-ownership, or security decisions.
 - **Nutrition authority:** USDA FoodData Central is the only production
   nutrition authority. The existing starter foods remain development fixtures
   and must not be presented as production nutrition records.
-- **Text extraction:** OpenAI performs structured extraction through an
+- **Text extraction:** DeepSeek `deepseek-flash` performs structured extraction through an
   authenticated Supabase Edge Function. AI output is an unconfirmed draft,
   never an authoritative macro source or a direct persistence path.
 - **Stale-edit behavior:** preserve the local draft, load current server state,
   explain the conflict, and require explicit reapplication against the latest
   version.
-- **Export:** JSON is the MVP export format. CSV is deferred because the product
-  contract permits JSON or CSV.
-- **Deferred platform work:** notifications, reminders, service-worker caching,
+- **Export:** JSON remains available for compatibility; MVP-1 also includes a
+  deterministic ZIP of entity CSV files, metadata, manifest, and raw JSON.
+- **Deferred platform work:** reminder delivery, service-worker caching,
   background mutation sync, and full installable-PWA behavior are post-MVP.
   Explicit offline state and recoverable drafts remain required.
 - **Supported population:** the automated target and personalized progression
@@ -593,7 +720,7 @@ changes.
 
 ### M0.4 — Draft recovery, reauthentication, and retry behavior
 
-**Status:** In progress
+**Status:** Substantially complete locally — final database/browser gates pending
 
 **Outcome**
 
@@ -677,7 +804,7 @@ MVP-1 work may start only after the shared MVP-0 contracts are stable.
 
 ### M1.1 — Workout progression, overrides, and session completion
 
-**Status:** In progress
+**Status:** Substantially complete locally — final database/browser gates pending
 
 **Outcome**
 
@@ -712,17 +839,18 @@ history.
 - The active session presents warm-up, current exercise, rest guidance,
   cooldown, one-handed controls, and optional actual load/unit entry.
 
-The slice is intentionally still marked partial: a full repository-backed
-recommendation read model, catalog-specific load bounds, complete cleanup of
-legacy free-text references, and browser/accessibility verification remain
-before M1.1 exit.
+The deterministic recommendation read is backed by the hydrated owner history,
+catalog-specific bounds are present in both the starter catalog and a database
+trigger, and the active session exposes load/rest guidance. M1.1 is locally
+implemented; migration reset/lint/pgTAP and browser/accessibility verification
+are still required before release tagging.
 
 **Implementation and data logic**
 
 1. Replace global progression limits with catalog-defined minimum, maximum, and
-   step values for sets, reps, holds, and optional load. The current catalog
-   wrapper supplies shared bounded defaults; per-exercise load bounds and a
-   migration from every legacy free-text reference remain pending.
+   step values for sets, reps, and holds. The starter catalog and database
+   trigger now supply/enforce those bounds; actual load remains an optional
+   user-recorded value and is never inferred into a planned load.
 2. Persist a stable `slotKey` on planned exercises and overrides. Overrides
    follow the scheduled slot, not a generated exercise ID or internal row ID.
 3. Evaluate the latest two applicable exposures with the documented rules:
@@ -749,8 +877,8 @@ before M1.1 exit.
 
 - Add `getProgressionRecommendations`, `applyProgressionDecision`, and
   `removeWorkoutOverride` repository/Context actions and authorized RPCs. The
-  Context read and the latter two durable actions are implemented; a focused
-  repository read for recommendations remains follow-up work.
+  deterministic read uses the bounded authenticated snapshot history; the
+  latter two durable actions are implemented through authorized RPCs.
 - Add load/unit snapshots and progression decision types.
 - Add semantic events for accepted/rejected progression and removed overrides.
 
@@ -778,7 +906,7 @@ before M1.1 exit.
 
 ### M1.2 — Editable meal plans, recipes, and atomic grocery updates
 
-**Status:** Partially implemented — editor, transaction, and slot/order slice complete; intent/generation hardening remains
+**Status:** Substantially complete locally — final database/browser gates pending
 
 **Outcome**
 
@@ -807,12 +935,12 @@ their explicit corrections.
 
 1. Add a stable planned-meal slot key and `sortOrder`. Replace one-row-per-date
    and meal-slot uniqueness with date/slot/order uniqueness so multiple snacks
-   or added meals are representable. Implemented in the local schema migration;
-   UI/editor insertion and full same-slot browser coverage remain pending.
-2. Implement one `editMealPlan` intent union: replace reference, change serving,
-   add entry, skip/unskip, or regenerate. The current UI routes replace,
-   serving, add, and skip/unskip through the repository; a normalized intent
-   union and standalone regenerate command remain follow-up cleanup.
+   or added meals are representable. Implemented in the local schema migration
+   and editor; same-slot browser coverage remains a release check.
+2. Implement one `editMealPlan` intent boundary: replace reference, change
+   serving, add entry, skip/unskip, or regenerate. The UI routes each action
+   through the repository, which submits a complete normalized future snapshot
+   to the atomic RPC; `resetPlan` is the standalone regenerate command.
 3. Every edit creates a new future meal-plan version with a supersedes link. Old
    plan rows and previously logged nutrition remain unchanged.
 4. Accept only intent and trusted food/meal IDs from the client. Recalculate
@@ -824,7 +952,8 @@ their explicit corrections.
    ceiling, budget, and available user meals/recipes during deterministic
    generation. The current generator has dietary/allergy filtering and the
    editor can select trusted foods or saved meals; preference/cooking-time/
-   budget-aware selection and explicit unresolved slots remain pending.
+   relative-budget selection and explicit unresolved slots are implemented in
+   the deterministic generator.
 6. Expose reusable meal/recipe behavior:
    - Create and edit through the owner-checked save boundary.
    - Duplicate from an owned/system-visible source into a new owned record.
@@ -844,9 +973,9 @@ their explicit corrections.
 
 **Public contract changes**
 
-- Implemented `editMealPlan`, `saveMeal`, `duplicateMeal`, `archiveMeal`, and
-  `logSavedMeal` repository/Context intents. `saveCustomFood` is still pending
-  the M1.3 trusted nutrition/serving contract.
+- Implemented `editMealPlan`, `saveMeal`, `duplicateMeal`, `archiveMeal`,
+  `logSavedMeal`, and `saveFood` repository/Context intents. Custom-food
+  persistence now uses the trusted serving/provenance contract.
 - Added authorized `edit_meal_plan` and `archive_saved_meal` RPCs. The existing
   `save_saved_meal` wrapper now accepts an optional grocery payload and keeps
   recipe save plus grocery reconciliation atomic.
@@ -867,9 +996,9 @@ their explicit corrections.
 - Test every edit kind, multiple same-slot entries, recipe create/edit/duplicate/
   archive/log, historical resolution, concurrent edits, and rollback. The
   current local gate covers replace/serving/add, archive, duplicate replay,
-  historical references, stale meal-plan/grocery writers, and reapply; multiple
-  same-slot entries, browser rollback/offline states, and recipe draft recovery
-  remain pending.
+  historical references, stale meal-plan/grocery writers, and reapply. Multiple
+  same-slot, browser rollback/offline, and provider-backed integration checks
+  remain release verification work; draft recovery is implemented.
 - Test grocery merges after replacement, serving change, add, skip, recipe edit,
   user quantity override, removal, checked item, and custom item.
 
@@ -883,12 +1012,13 @@ their explicit corrections.
 
 ### M1.3 — USDA FoodData Central and nutrition correction
 
-**Status:** Foundation only — provider schema/import and correction path pending
+**Status:** Implemented and remotely verified for search; grouped save evidence pending
 
 **Outcome**
 
-Planned, manual, recipe, and text-assisted nutrition derives from versioned
-USDA records or is visibly identified as user-provided/uncertain.
+Planned, manual, recipe, and guided meal-review nutrition derives from versioned
+USDA records or is visibly identified as development, user-provided, or
+low-confidence AI-estimated data.
 
 **Existing foundation**
 
@@ -907,10 +1037,12 @@ USDA records or is visibly identified as user-provided/uncertain.
   nutrient, and serving-option fields so the domain can accept the trusted
   contract without treating the starter catalog as production USDA data.
 
-The provider-backed USDA Edge Function, serving-option tables, production
-import, custom-food mutation, and correction mutation are deliberately not
-claimed complete until a versioned USDA release and server-secret deployment
-contract are selected.
+The provider-backed USDA Edge Function, batch matching boundary, normalized
+serving-option table, provenance-aware custom-food mutation, and
+expected-revision correction mutation are implemented and deployed. The
+configured release label and authenticated simple USDA search have been
+verified remotely; disposable-user batch-match/save provenance evidence remains
+open.
 
 **Implementation and data logic**
 
@@ -930,14 +1062,19 @@ contract are selected.
    bounds queries, calls USDA with a server secret, normalizes results, supports
    opaque pagination, and caches a selected record through an authorized server
    path.
-7. Production system catalog rows use USDA only. User custom foods remain
-   distinct, owner-controlled, and labeled `User-provided`.
-8. Default restaurant meals, sauces, oils, and mixed dishes to low confidence
+7. Add protected `nutrition-meal-match` for up to ten reviewed ingredient
+   queries, returning at most three normalized candidates per ingredient while
+   preserving USDA data type, release, preparation basis, and valid weighted
+   serving options.
+8. Production system catalog rows use USDA only. User custom foods remain
+   distinct, owner-controlled, and labeled `User-provided`; starter fixtures
+   remain explicitly `development_catalog`.
+9. Default restaurant meals, sauces, oils, and mixed dishes to low confidence
    unless an exact labeled record is selected. Require visible assumptions.
-9. Add nutrition correction through an expected-record-revision mutation.
+10. Add nutrition correction through an expected-record-revision mutation.
    Preserve the original source snapshot unless the user explicitly selects a
    different record or serving.
-10. Expose serving quantity/unit, gram equivalent, source record/version,
+11. Expose serving quantity/unit, gram equivalent, source record/version,
     preparation basis, assumptions, confidence, and estimated/user-provided
     status in domain models and UI.
 
@@ -971,41 +1108,67 @@ contract are selected.
 - Exit when every persisted nutrition value has a trusted snapshot or explicit
   user-provided/uncertain provenance.
 
-### M1.4 — Protected OpenAI text-meal extraction
+### M1.4 — Protected DeepSeek text-meal extraction
 
-**Status:** Partially implemented — bounded history read path and Progress migration in place
+**Status:** Implemented and deployed — DeepSeek provider verification pending
 
 **Outcome**
 
-A user can describe a meal, review and correct structured USDA-backed matches,
-and explicitly confirm an atomic save. AI never owns calculations or writes.
+A user can describe a meal, review and correct structured catalog matches, opt in
+to bounded low-confidence AI ranges only for unresolved ingredients, and
+explicitly confirm one atomic grouped save. AI never owns authoritative catalog
+calculations or writes.
 
 **Existing foundation**
 
-- The Nutrition page has a temporary deterministic browser parser and review
-  UI.
+- The Nutrition page now has one unified search/meal-description entry surface,
+  immediate local search, explicit USDA search, an explicit analyze action, and
+  a manual custom fallback.
 - Manual food/custom entry and atomic multi-entry saved-meal logging exist.
+
+**Implemented locally in the 2026-09-20 completion pass**
+
+- `supabase/functions/nutrition-text-parse` remains authenticated and
+  extraction-only. It returns a suggested label, stated/possible-hidden
+  ingredients, assumptions, questions, and confidence, but no macro fields.
+- `nutrition-meal-match` and `nutrition-macro-estimate` are implemented as
+  protected local boundaries. The latter is only called after an explicit
+  per-ingredient user action and returns low/base/high ranges with forced
+  `ai_estimate`/low-confidence provenance.
+- The browser stores the original text, candidates, exclusions, catalog matches,
+  accepted estimates, meal name, and base revisions in an account-scoped draft;
+  confirmation creates one reusable recipe and one expandable grouped history
+  record through `save_reviewed_meal`.
+- DeepSeek `deepseek-flash` replaces the OpenAI upstream, with thinking disabled,
+  bounded input/output, timeout, durable quotas, and sanitized failures. The
+  revised extraction and estimate functions plus grouped migration are now
+  deployed remotely; the authenticated extraction smoke currently returns
+  sanitized `provider_unavailable` and must be resolved before the AI gate can
+  close.
 
 **Implementation and data logic**
 
-1. Create an authenticated `extract-text-meal` Supabase Edge Function. Require
-   server-side `OPENAI_API_KEY` and `OPENAI_MODEL`; expose neither to browser
+1. Use the authenticated `nutrition-text-parse` Supabase Edge Function. Require
+   server-side `DEEPSEEK_API_KEY` and optional `DEEPSEEK_NUTRITION_MODEL`; expose neither to browser
    configuration.
 2. Accept text up to 1,000 characters, locale, and request ID after explicit user
-   action. Send only the meal text and extraction instructions to OpenAI.
+   action. Send only the meal text and extraction instructions to DeepSeek.
 3. Require schema-constrained food names, quantities, units, preparation,
    qualifiers, and uncertainty notes. Reject invalid model output.
-4. Match extracted items deterministically against cached USDA records and use
-   the server-side USDA search path when needed. Ignore model-generated macro
-   values.
-5. Return editable candidates, alternative trusted matches, serving
-   assumptions, confidence, and deterministic nutrition calculations.
-6. Keep the input and candidates in the feature draft store. Confirmation uses
-   the separate atomic nutrition logging mutation.
-7. Enforce per-user limits of 10 requests per 10 minutes and 50 per day, a
-   15-second provider timeout, and sanitized logs that omit meal text and health
-   data.
-8. Return stable `rate_limited`, `provider_unavailable`, and `invalid_output`
+4. Match extracted items deterministically against the local catalog and the
+   protected USDA search/batch-match path. Re-derive catalog macros at the
+   authoritative mutation boundary.
+5. Return editable candidates, hidden-ingredient questions, alternative
+   matches, serving assumptions, confidence, and visible provenance.
+6. Permit a separate explicit estimate request for unresolved reviewed items;
+   never silently include hidden ingredients or estimates.
+7. Keep the input and complete guided review state in the feature draft store.
+   Confirmation uses the atomic grouped recipe/history mutation.
+8. Enforce bounded per-user quotas, a 15-second provider timeout, and
+   sanitized logs that omit meal text, health data, keys, and raw provider
+   payloads.
+9. Return stable `rate_limited`, `provider_unavailable`,
+   `provider_invalid_response`, and `validation_failed` outcomes.
    outcomes. Manual logging remains available for every failure.
 
 **Public contract changes**
@@ -1019,27 +1182,31 @@ and explicitly confirm an atomic save. AI never owns calculations or writes.
 
 **Failure behavior**
 
-- AI/USDA failure preserves text and corrections.
-- Unmatched items require a corrected match or explicit uncertain custom entry.
-- The function cannot save nutrition, and its response is never presented as a
-  completed log.
+- AI/USDA/provider/draft-store failure preserves text, corrections, and the
+  guided review draft.
+- Hidden or unmatched items remain excluded until corrected, supplied by the
+  user, or explicitly accepted as a low-confidence AI estimate.
+- Extraction and estimation functions cannot save nutrition; only the separate
+  confirmed grouped mutation can create a recipe/history record.
 
 **Verification**
 
-- Mock OpenAI and USDA for valid extraction, malformed schema, timeout, rate
-  limit, partial/unmatched results, hidden ingredients, and provider failure.
+- Mock DeepSeek and USDA for valid extraction, malformed schema, timeout, rate
+  limit, partial/unmatched results, hidden ingredients, invalid estimate ranges,
+  batch matching, and provider failure.
 - Verify authorization, minimal request data, secret isolation, no direct
   mutation, and confirmation-required persistence.
 
 **Dependencies and exit criteria**
 
 - Depends on M0.4 drafts and M1.3 trusted matching/calculation.
-- Exit when the browser contains no provider secret, candidates remain drafts,
-  and only a separate confirmed mutation can persist them.
+- Exit when the browser contains no provider secret, candidates and estimates
+  remain reviewable drafts, and only a separate confirmed grouped mutation can
+  persist the recipe and historical meal.
 
 ### M1.5 — Focused progress and history read models
 
-**Status:** Not started
+**Status:** Substantially complete locally — focused read-model adoption and release verification pending
 
 **Outcome**
 
@@ -1066,9 +1233,10 @@ show workout occurrences, nutrition completeness, weight, ranges, and counts.
 - Initial snapshot history is capped at 100 records per bounded history type
   and the current 366-day window; export remains the complete-history path.
 
-The remaining work is cursor UI (“load more”), summary endpoints for scheduled
-occurrences/completeness, tighter child-row selection, and removal of the
-legacy history arrays from the main snapshot after all consumers migrate.
+Cursor UI, summary endpoints for scheduled occurrences/completeness, and
+load-more retry behavior are implemented. The main snapshot still retains a
+bounded compatibility history window for existing consumers; removing those
+legacy arrays is a follow-up optimization, not an MVP correctness gap.
 
 **Implementation and data logic**
 
@@ -1076,9 +1244,9 @@ legacy history arrays from the main snapshot after all consumers migrate.
    plans, today's summary, active workout session, current grocery list, and
    compact saved-meal metadata.
 2. Add focused repository reads for workout history, nutrition history, weight
-   history, catalog search, and progress summaries. The workout/nutrition/
-   weight read and Progress consumer are implemented; catalog search and
-   aggregate summary endpoints remain pending.
+   history, catalog search, and progress summaries. The bounded
+   workout/nutrition/weight read, trusted catalog search service, aggregate
+   summary, and Progress consumer are implemented.
 3. Use cursor pagination with a default page size of 50 and maximum of 100.
    Bound aggregate summary requests to 366 calendar days.
 4. Return date range, data count, scheduled/completed/skipped/planned workout
@@ -1091,9 +1259,9 @@ legacy history arrays from the main snapshot after all consumers migrate.
 
 **Public contract changes**
 
-- Add `HistoryPage<T>` and `ProgressSummary` repository queries. The current
-  `HistoryReadModel` is the first bounded contract; a generic page/summary
-  contract remains follow-up work.
+- The current `HistoryReadModel` combines the bounded page and summary
+  contract; a generic `HistoryPage<T>` abstraction is optional cleanup rather
+  than a missing MVP behavior.
 - Migrate Progress and history consumers before removing unbounded arrays from
   `AppSnapshot`.
 
@@ -1137,7 +1305,7 @@ automated evidence.
 - Add pgTAP/RLS cases for every new table/function: anonymous and cross-user
   denial, direct-write denial, invalid inputs, stale versions, grants/revokes,
   function settings, indexes, and rollback.
-- Add Edge Function tests with mocked OpenAI/USDA responses for authentication,
+- Add Edge Function tests with mocked DeepSeek/USDA responses for authentication,
   schema validation, timeout, rate limiting, unmatched items, and secret
   isolation.
 - Keep typecheck, lint, unit, build, reset, migration list, database lint, pgTAP,
@@ -1150,7 +1318,7 @@ automated evidence.
 
 ### M2.2 — Browser, accessibility, and end-to-end verification
 
-**Status:** Not started
+**Status:** In progress — implementation is present; release evidence is still pending
 
 **Outcome**
 
@@ -1178,7 +1346,7 @@ large text, reduced motion, failure recovery, and accessible feedback.
 
 ### M2.3 — CI, documentation, and production configuration
 
-**Status:** Not started
+**Status:** In progress — CI/documentation scaffolding is present; production configuration remains pending
 
 **Outcome**
 
@@ -1198,8 +1366,9 @@ placing secrets or unsafe write steps in the repository.
   Supabase, verification commands, documentation routing, and remote-change
   safety.
 - Reconcile `FEATURES.md`, `ARCHITECTURE.md`, `DESIGN.md`, and
-  `SUPABASE_SETUP.md`: JSON is the MVP export; notification/PWA service-worker
-  work is deferred; USDA and protected OpenAI extraction remain MVP work.
+  `SUPABASE_SETUP.md`: JSON plus the CSV ZIP are the MVP export contract;
+  persisted notification preference is MVP-1 while delivery/PWA service-worker
+  work is deferred; USDA and protected DeepSeek extraction remain MVP work.
 
 **Exit criteria**
 
@@ -1208,7 +1377,7 @@ placing secrets or unsafe write steps in the repository.
 
 ### M2.4 — Guarded rollout and release evidence
 
-**Status:** Not started
+**Status:** In progress — implementation is present; release evidence is still pending
 
 **Outcome**
 
@@ -1219,8 +1388,11 @@ complete.
 
 1. Create each schema change through the Supabase migration workflow, apply it
    locally, regenerate database types, and pass the full local gate.
-2. Import a reproducible USDA production starter subset and verify its license,
-   source identifiers, versions, nutrient bases, and serving metadata.
+2. Select the official FoodData Central release/source label for rollout,
+   configure the protected on-demand API path, and verify its license/terms,
+   source identifiers, versions, nutrient bases, and serving metadata. MVP-1
+   does not bulk-import the USDA catalog; the release evidence records the
+   reviewed records persisted during smoke verification instead.
 3. Deploy backward-compatible schema/RPC changes first, then Edge Functions,
    then clients that require them.
 4. Run guarded staging Auth/RPC and end-to-end smoke tests with two disposable
@@ -1267,20 +1439,26 @@ Agent coordination rules:
 
 | | Lower effort | Higher effort |
 |---|---|---|
-| **High MVP impact** | Stable conflict UI; override removal; profile screening; focused repository tests; production Auth toggles | Expected-version/lock architecture; meal-plan editing; atomic recipe/grocery integration; USDA ingestion and serving rules; nutrition drafts; protected OpenAI extraction; browser and remote end-to-end verification |
+| **High MVP impact** | Stable conflict UI; override removal; profile screening; focused repository tests; production Auth toggles | Expected-version/lock architecture; meal-plan editing; atomic recipe/grocery integration; USDA ingestion and serving rules; nutrition drafts; protected DeepSeek extraction; browser and remote end-to-end verification |
 | **Medium MVP impact** | Root README; CI entry point; planned-meal metadata polish; explicit deferral documentation | Paginated progress/history models; complete responsive/accessibility automation |
-| **Post-MVP impact** | Raster app icons and manifest polish | Service worker/background sync, notifications/reminders, CSV export, barcode/voice/photo/social/wearable features |
+| **Post-MVP impact** | Raster app icons and manifest polish | Service worker/background sync, reminder delivery, barcode/voice/photo/social/wearable features |
 
 ## Post-MVP / Optional Enhancements
 
 - Service worker, raster install icons, richer offline asset caching, background
-  synchronization, notifications, and local reminders.
-- CSV export, barcode/voice input, regional nutrition sources, recipe URL import,
+  synchronization, reminder delivery, and local reminders.
+- Barcode/voice input, regional nutrition sources, recipe URL import,
   measurements/photos, advanced skill programs, deload weeks, pantry, and
   grocery budget estimates.
 - Photo nutrition, social-media extraction, wearables, social features,
   marketplaces, automated form analysis, ordering, and subscriptions remain
   outside MVP unless `FEATURES.md` is deliberately revised.
+  The first photo feature is guided review, not one-tap macro logging:
+  `deepseek-flash` suggests visible foods; the user supplies or corrects portions,
+  oils, sauces, and hidden ingredients; trusted records provide estimated
+  macros; a separate confirmation saves the log. The app discards images after
+  analysis and discloses provider-side handling before launch. Photo accuracy
+  and usability must be validated before release.
 
 ## Verification Record for This Audit
 
@@ -1408,6 +1586,292 @@ two-user smoke run, typecheck passed, and the load/progression/override paths
 were included in the smoke coverage. Browser viewport/accessibility controls
 and linked/remote changes remain unavailable or unauthorized.
 
+## MVP-1 Completion Pass — 2026-09-20
+
+This section supersedes the earlier “provider-gated” and “remaining M1.2
+implementation order” notes above for the current working tree. The following
+code-side gaps from the review are now implemented locally:
+
+- M1.1 onboarding and profile constraints now persist food preferences,
+  allergies, cooking-time and budget constraints, and the health-screening
+  flow no longer exits before evaluating the screening answer.
+- M1.2 meal-plan generation now applies dietary, allergy, preference,
+  preparation-time, and budget constraints; it can use owned saved meals and
+  recipes; and it returns explicit unresolved slots instead of silently
+  choosing an unsafe or infeasible meal. Planned-meal and saved-meal editors
+  preserve versioning and completed history.
+- M1.3 manual, custom, planned, recipe, USDA-search, and text-assisted
+  nutrition paths now share serving quantities/units, preparation basis,
+  trusted-source provenance, correction, deletion, recoverable drafts, and
+  confirmation-before-save behavior. Catalog-backed values are recalculated at
+  the authoritative boundary rather than trusting client-provided macros.
+- Trusted USDA search and AI text extraction now have authenticated Edge
+  Function boundaries, server-only provider secrets, schema validation,
+  request limits, timeouts, opaque pagination, quota enforcement, and stable
+  error handling. AI returns candidates only; it does not save or mutate user
+  data.
+- M1.4 grocery regeneration now preserves checked state, explicit quantity
+  overrides, removals, and custom items while reconciling generated items.
+- M1.5 progress history now uses bounded, cursor-based reads with stable
+  tie-breakers, scheduled/unlogged-day semantics, calendar indicators, and
+  load-more/retry handling without duplicate page appends.
+- Progression bounds are now persisted and enforced at the database boundary,
+  and the client progression lookup uses the catalog exercise identity rather
+  than a planned-row identity.
+- The repository, generated database contract, README, CI workflow, and
+  feature/architecture/setup documentation now describe the current
+  implementation and its verification boundaries.
+
+Local application evidence for this completion pass:
+
+- `npm run typecheck` — passed.
+- `npm run lint` — passed.
+- `npm run test:local` — passed: 10 test files, 47 tests.
+- `npm run build` — passed: Next.js production build with 19 routes and 21
+  copied assets.
+- `git diff --check` — passed.
+- Unauthenticated browser smoke on automation port 8082 — sign-in,
+  sign-up, forgot-password, protected-route redirect, and console-error checks
+  passed.
+
+MVP-1 is intentionally not tagged “complete” yet. The remaining release gates
+are environmental or deployment evidence, not silently deferred product logic:
+
+- The two new migrations must be applied and verified through a clean local
+  Supabase reset, database lint, pgTAP, RPC smoke, and concurrency run. The
+  current environment has no usable Supabase CLI package cache and no running
+  Docker daemon, so those commands could not be rerun for this completion pass.
+- The `nutrition-search` and `nutrition-text-parse` Edge Functions must be
+  verified with `USDA_FDC_API_KEY` and `DEEPSEEK_API_KEY` held server-side, then
+  verified against a disposable authenticated environment. No remote or linked
+  Supabase changes were made.
+- Authenticated end-to-end verification still requires a configured test
+  account and provider-backed environment. The browser surface used here did
+  not expose viewport overrides, so explicit 390px mobile, large-text,
+  reduced-motion, keyboard/screen-reader, offline, and remote failure matrices
+  remain release evidence to collect.
+- A candidate commit/tag and the remaining release-evidence fields below are
+  still pending.
+
+## Historical MVP-1 Local Verification Update — 2026-09-21
+
+The local Supabase stack is now available and the previously pending local
+database gates have been completed against a clean reset. This update
+supersedes the local-environment limitation recorded above; the subsequent
+remote rollout is recorded in the checkpoint near the top of this document.
+
+- `npm run supabase:reset` — passed; all 34 then-current forward-only migration files
+  applied from an empty local database, including the idempotency and editable
+  meal-label corrections.
+- `npx supabase@latest migration list --local` — passed; the local migration
+  history is complete.
+- `npm run supabase:lint` — passed; no schema errors found.
+- `npx supabase@latest db advisors --local --type security --level warn` —
+  passed; no issues found.
+- `npm run supabase:test` — passed; 433 assertions across 10 SQL suites.
+- `npm run supabase:test:rpc` — passed; all 27 public wrappers exercised
+  through two disposable local Auth users, including meal-label preservation,
+  nutrition provenance, replay, ownership, and cleanup behavior.
+- `npm run supabase:test:concurrency` — passed; duplicate replay, request-hash
+  mismatch, stale profile and meal-plan conflicts, explicit reapply, workout,
+  grocery, and isolation checks passed.
+- Local TypeScript generation was run from the final schema and the committed
+  contract includes the provider-quota table and final progression-bound/RPC
+  definitions; `npm run typecheck` passed against it.
+
+The remaining release evidence includes provider choice/credentials, a recorded
+USDA catalog release, authenticated remote smoke with disposable users, the
+mobile/desktop/accessibility/offline browser matrix, and the feature gaps listed
+above. Create the candidate commit/tag only after those results are recorded.
+
+## Historical MVP-1 Unified Meal Review Implementation Update — 2026-09-22
+
+This update supersedes older rows that described text review as a separate
+parser-only surface. The current MVP-1 contract is one unified search/meal
+description flow with an explicit analyze action, optional low-confidence AI
+macro ranges, and one grouped recipe/history confirmation. It does not add
+photo capture or image upload.
+
+Local implementation evidence:
+
+- Migration `20260922062833_mvp1_unified_meal_review.sql` applies from a clean
+  local reset and adds provenance/range constraints, grouped history, and the
+  authorized grouped save/update/delete RPCs.
+- `nutrition-text-parse`, `nutrition-meal-match`, and
+  `nutrition-macro-estimate` have mocked handler coverage for authentication,
+  validation, quotas, timeout/upstream failure, malformed output, USDA
+  normalization, explicit estimate invocation, and sanitized responses.
+- `npm run typecheck`, `npm run lint`, `npm run test:local`, `npm run build`,
+  `npm run supabase:reset`, `npm run supabase:lint`, `npm run supabase:test`,
+  `npm run supabase:test:rpc`, and `npm run supabase:test:concurrency` pass
+  locally. The current local suite is 13 test files/55 tests and 10 SQL
+  suites/433 pgTAP assertions.
+- Account export includes grouped meal data and range/provenance fields. JSON
+  remains available, and the deterministic ZIP contains `manifest.json`,
+  `export.json`, metadata, and entity CSV files.
+
+Historical release blockers at that checkpoint (superseded by the current
+release-candidate audit above):
+
+- The new migration and all four protected Edge Functions are now deployed to
+  the remote project. The linked dry run is up to date, and anonymous probes
+  return 401 for all four functions.
+- Authenticated USDA search passed with the configured release label and
+  weighted serving records. Authenticated DeepSeek extraction reached the
+  deployed function but returned sanitized `provider_unavailable`; provider
+  access/model/billing verification and explicit estimate evidence remain
+  pending. The guarded remote grouped-meal RPC smoke passed on 2026-09-23
+  with two confirmed disposable users, including replay, stale-edit,
+  cross-user, historical-edit independence, delete, and cleanup checks.
+- Browser verification still needs the full mobile/desktop, keyboard,
+  screen-reader-oriented, large-text, reduced-motion, offline, provider
+  failure, stale reapply, account-switch, and reload-restoration matrix. The
+  deployed browser smoke already verified that analysis is never called merely
+  because text was entered, USDA quantity review shows nutrition before
+  confirmation, and the provider failure retains the original text.
+- Do not tag MVP-1 complete until these local, browser, migration, protected
+  function, remote smoke, privacy-disclosure, and USDA provenance gates are
+  recorded for one candidate commit.
+
+## Historical MVP-1 Retry Evidence — 2026-09-23
+
+The retry used the two confirmed User A/User B credentials already present in
+the local environment without recording either address or password. Both
+remote sign-ins succeeded. Direct authenticated provider calls produced the
+following sanitized results:
+
+- User A: `nutrition-text-parse` accepted `2 cups fried rice with 2 eggs` and
+  returned `suggestedMealName`, `candidates`, and `questions`.
+- User B: `nutrition-search` returned `candidates` and `nextCursor` for `rice`;
+  `nutrition-text-parse` returned the same validated extraction shape; and
+  `nutrition-macro-estimate` returned `estimates` for a reviewed cooking-oil
+  ingredient.
+- User B: `nutrition-meal-match` returned the stable
+  `provider_unavailable` result. This is still an open USDA batch-match gate;
+  no raw upstream response or provider credential was logged.
+- The active browser session was rechecked against the local app. Its
+  composite analysis action still returned the sanitized
+  `not_authenticated` error, so the browser provider gate is not green even
+  though direct authenticated function calls pass.
+
+The existing guarded 31-wrapper remote RPC smoke remains valid evidence from
+the earlier disposable-user run, including grouped replay, stale-edit,
+cross-user ownership, historical-edit independence, grouped delete, and
+authorized cleanup. The newly supplied accounts were not deleted during this
+retry because the runner's cleanup path deletes the complete Supabase account,
+not only test rows; explicit confirmation is required before rerunning that
+destructive cleanup-enabled command.
+
+## MVP-1 Provider Fix Evidence — 2026-09-24
+
+The USDA provider correction changed both protected USDA search boundaries to
+the documented FoodData Central JSON POST contract: `dataType` is now sent as
+an array, with an explicit first page, instead of as a comma-separated query
+parameter. Local handler tests cover the request shape and normalization.
+
+## Historical remote/browser checkpoint — 2026-09-24
+
+The manual browser session below predates the repeatable Playwright release
+suite and is retained as supplemental evidence. Current automated results are
+recorded in the release-candidate audit above.
+
+Remote verification after deployment to project `ifunkhvbvkdxolhpxjvk`:
+
+- User A authenticated `nutrition-meal-match` successfully for cooked egg and
+  cooked rice; the response contained two normalized matches.
+- User B authenticated `nutrition-search` successfully for `rice` with eight
+  candidates, `nutrition-text-parse` successfully with five extracted
+  candidates, and `nutrition-macro-estimate` successfully with one estimate.
+- Anonymous calls to `nutrition-search`, `nutrition-text-parse`,
+  `nutrition-meal-match`, and `nutrition-macro-estimate` all returned
+  `401 not_authenticated`.
+- Deployed versions are `nutrition-search` v7,
+  `nutrition-text-parse` v7, `nutrition-meal-match` v2, and
+  `nutrition-macro-estimate` v1; JWT verification is enabled for all four.
+- The local browser tab was unauthenticated after the previous session ended;
+  navigating to `/nutrition` correctly redirected to
+  `/auth/sign-in?next=%2Fnutrition`. An authenticated browser provider smoke
+  still needs to be run after signing in again; this is an environment/session
+  gate, not evidence of a provider failure.
+- The final application gate passed: typecheck, lint, 55 local tests, build,
+  and the linked migration dry run were green. The local Supabase lint rerun
+  was blocked because the Docker Desktop Linux daemon was not running; the
+  earlier clean local reset/lint/pgTAP/RPC/concurrency gate remains valid and
+  no database migration changed in this fix.
+
+The two new confirmed test accounts were not deleted. No database migration was
+needed for this provider fix.
+
+## MVP-1 Authenticated Browser Evidence — 2026-09-24
+
+The local authenticated browser run used the signed-in disposable account at
+`http://localhost:3000` after completing onboarding with synthetic values only
+(`MVP Test`, age 30, metric 170 cm/70 kg, no health-screening condition). The
+account remains intact pending explicit deletion confirmation.
+
+- Plain food search and USDA quantity review passed for `egg`. The protected
+  USDA action returned weighted candidates, including `EGG` with a
+  `31.200000762939453 g` serving and `as_labeled` preparation. Quantity review
+  showed `160.1 kcal`, `2 g` protein, `18 g` carbohydrate, and `9 g` fat with
+  `Trusted catalog nutrition` and `high confidence`. Confirmation logged one
+  grouped-independent food entry.
+- Composite analysis passed for `2 cups fried rice with 2 eggs`. The UI first
+  showed the explicit disclosure that no DeepSeek request occurs until
+  `Analyze this meal` is selected. The authenticated DeepSeek review returned
+  `Fried Rice with 2 Eggs`, stated rice and egg ingredients, and possible hidden
+  cooking oil, soy sauce, and vegetables excluded by default. Extraction did
+  not supply authoritative macro fields.
+- Catalog replacement and preparation review passed by selecting `White rice ·
+  cooked` for the rice ingredient. The review retained the cooked preparation
+  basis and recalculated the combined total.
+- Explicit AI estimate fallback passed for included cooking oil. The UI showed
+  `AI estimate · low confidence · range 90–130 kcal`; the meal total displayed
+  an approximate base and a combined low/high range. Confirmation produced one
+  reusable recipe and one grouped history card with three expandable ingredient
+  snapshots.
+- Grouped history expansion passed. The card displayed rice, eggs, and cooking
+  oil with quantities, preparation/source labels, and the AI-estimate marker.
+  Historical correction changed rice from one to three servings in one browser
+  tab and recalculated only the logged snapshot; the reusable recipe remained a
+  three-ingredient recipe.
+- Confirmed grouped deletion passed. The `Fried Rice with 2 Eggs` history
+  parent and child nutrition entries disappeared, daily totals returned to the
+  standalone egg entry, and the reusable `Fried Rice with 2 Eggs` recipe
+  remained available with three ingredients.
+- Two-tab stale recovery passed. The second tab saved a competing historical
+  quantity, the first tab received `logged meal changed; refresh before editing`,
+  retained its draft, exposed `Reapply draft`, and succeeded after an explicit
+  reapply with a fresh mutation key. The corrected discard path was then
+  re-tested: discarding closed the editor, and reopening it showed a blank
+  editor with no restored draft.
+- Notification preference and export passed after onboarding. The opt-in
+  preference changed from disabled to enabled and remained enabled after a full
+  settings reload. The browser displayed `CSV bundle download started:
+  calicoach-export-2026-09-24.zip` and also started JSON export
+  `calicoach-export-527618f9-2d84-4b90-9d67-cd2ee4ab6ada.json`. The in-app
+  browser still does not expose an OS-level download receipt for ZIP-content
+  inspection.
+- Keyboard/focus checks passed for the unified meal input: focus remained on
+  the field while appending text, and subsequent Tab navigation reached
+  `Search trusted USDA` and `Enter nutrition manually`. The accessibility tree
+  exposed labels, roles, disclosure state, and 44-pixel controls. The earlier
+  duplicate toast-key warning was fixed and no Next.js issue overlay remained
+  after reload.
+- Reload draft recovery passed for an `oatmeal with banana` guided-review
+  draft. Reopening the snack editor after a full reload showed `Meal review
+  draft restored.` with the original text; explicit discard removed it and the
+  next reopen was blank.
+
+Second-account browser isolation also passed in this run. After signing out the
+onboarded User A session, a manually authenticated User B session showed an
+empty nutrition day with none of User A's standalone USDA or grouped meal
+history, no User A reusable recipe, and an independently disabled notification
+preference. A User B-only guided draft (`User B private oatmeal draft`) restored
+after reload. The later Playwright run closed the failed-refresh, offline,
+large-text, reduced-motion, download-receipt, and narrow-overflow checks; the
+manual screen-reader pass remains supplemental evidence, and screen-reader
+verification should still be repeated before a public launch.
+
 ## MVP 1.0 Release Evidence
 
 Complete this section during M2.4. Do not replace the audit record above; add
@@ -1415,17 +1879,18 @@ new evidence for the exact candidate being released.
 
 | Evidence | Required value | Current value |
 |---|---|---|
-| Candidate commit | Full Git commit SHA | Pending |
-| Local migrations | Ordered versions applied from a clean reset | Pending |
-| Staging/linked history | Matches the authorized pending migration set | Pending |
-| Generated database types | Regenerated from the deployed schema and typechecked | Pending |
-| USDA catalog release | Source, license, import version/date, and record count | Pending |
-| Edge Functions | Deployed versions for nutrition search and text extraction | Pending |
-| App checks | Typecheck, lint, unit tests, and production build | Pending |
-| Database checks | Reset, list, lint, pgTAP, RPC smoke, and concurrency | Pending |
-| Browser matrix | Mobile, desktop, keyboard, large text, reduced motion, and network failure | Pending |
-| Remote smoke | Disposable-user Auth/RPC/end-to-end result and cleanup evidence | Pending |
-| Known limitations | Only explicitly accepted post-MVP or operational limitations | Pending |
+| Candidate implementation commits | Full Git commit SHAs for the tested modular series | `dc4d9976684627b75c7e696e778c8d61f379de7d`, `8024cc78574f81b226b132db9d2cf518ccee9836`, `4f440cc75b3117c95e6c3735250a1edd4baf9ee8`, `78720e9491b0ff56ddbe41b4b7d31603ca980325`, `052faf1565bdd0584459bf7f7f951d30ca6457db`, and `5c2dc2040db5d075a4628a5c25d4e24e0edf23cb` |
+| Candidate tag | Annotated release-candidate tag | `mvp-1.0.0-rc.2` will point to the final documentation/evidence commit; local `mvp-1.0.0-rc.1` is preserved as historical reference |
+| Local migrations | Ordered versions applied from a clean reset | 39-file reset passed on 2026-09-24; head `20260924103000_mvp1_export_owned_foods.sql`; 436 pgTAP assertions pass |
+| Staging/linked history | Matches the authorized pending migration set | Linked history matches all 39 local versions; `npm run supabase:push:dry` is up to date after the authorized export fix |
+| Generated database types | Regenerated from the deployed schema and typechecked | Generated public schema contract remains current; typecheck passes after the final migration set (the export function change adds no table type) |
+| USDA catalog release | Source, release label, data-type scope, provenance evidence, and on-demand smoke record count (no bulk count) | USDA FDC API, on-demand Foundation/SR Legacy/Survey (FNDDS)/Branded scope, release `FoodData Central API verified 2026-09-22`; User B persisted 1 reviewed record: FDC `2708951`, `Survey (FNDDS)`, `prepared`, revision `Survey (FNDDS):2708951`; no bulk count claimed |
+| Edge Functions | Deployed versions for all protected nutrition functions | `nutrition-search` v7 (`558cf028946eb1d01da80db041c270e2654cac605a9ea7745704cb0f26244dc8`), `nutrition-text-parse` v7 (`fbed0f5b19bee127373919b29ad9882f2524e42d235ae72f35cb948771f3db91`), `nutrition-meal-match` v2 (`9cb4d41644c4dbb4f02323e1cf44bcfbd3811088811537d3a4b1fa7e98674b31`), and `nutrition-macro-estimate` v1 (`e02a637c1c6c10fbd74aa16d861540cd3cd84a74a85a8c93a2b42f8841472f0d`); JWT enforced; anonymous 401 evidence is recorded |
+| App checks | Typecheck, lint, unit tests, and production build | `npm run typecheck`, `npm run lint`, `npm run test:local` (13 files/55 tests), and `npm run build` pass on 2026-09-24; build generated 19 routes and copied 21 assets |
+| Database checks | Reset, list, lint, pgTAP, RPC smoke, and concurrency | `supabase:reset`, `supabase:lint`, `supabase:test` (10 files/436 tests), `supabase:test:rpc` (31 wrappers), and `supabase:test:concurrency` pass on 2026-09-24 |
+| Browser matrix | Mobile, desktop, keyboard, large text, reduced motion, and network failure | `npm run test:e2e:release`: 21/21 (serialized 390×844 mobile and 1440×900 desktop); `npm run test:e2e:public`: 2/2. Automated checks cover provider gate, failure retention, offline retry, failed refresh, export ZIP contents, focus, overflow, reduced motion, 200% text, and account isolation; manual evidence below covers grouped save/expansion, historical correction, grouped deletion, stale reapply/discard, and screen-reader-oriented checks |
+| Remote smoke | Retained-account Auth/provider/RPC result and account-retention evidence | Final User B smoke passed USDA search, DeepSeek extraction, batch matching, one explicit low-confidence estimate, weighted USDA save, and authenticated export on 2026-09-24; FDC `2708951`, `Survey (FNDDS)`, release `FoodData Central API verified 2026-09-22`, `prepared`, `Survey (FNDDS):2708951`, persisted provider count 1. All four anonymous probes returned 401. Both confirmed accounts are intentionally retained |
+| Known limitations | Only explicitly accepted post-MVP or operational limitations | Final documentation commit and `mvp-1.0.0-rc.2` tag remain to be created. Production Site URL/redirects, live SMTP confirmation/recovery verification, Free-tier leaked-password protection, and public deployment are separate launch gates. Meal photos, voice, barcode, reminders, and service-worker synchronization remain outside MVP-1 |
 
 Release sign-off rules:
 

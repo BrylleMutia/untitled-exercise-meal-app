@@ -312,9 +312,10 @@ The design follows the accessibility and motion guidance in `ARCHITECTURE.md`.
 - **Saved meals:** `src/constants/meals.ts` exports `SAVED_MEALS` (recipes
   referencing catalog food IDs with per-serving quantities).
 - **Visibility:** source, version, confidence, estimated/user-provided flags,
-  and serving basis are shown on nutrition entries and text-meal candidates
-  (see `nutrition/page.tsx`). See `FEATURES.md` for the production nutrition
-  database requirement.
+  value provenance, estimate ranges, and serving basis are shown on nutrition
+  entries and the unified meal review. Composite confirmations render one
+  collapsed grouped meal card with an accessible ingredient disclosure. See
+  `FEATURES.md` for the production nutrition database requirement.
 
 ## Domain, State, and Setup Architecture
 
@@ -322,7 +323,7 @@ The design follows the accessibility and motion guidance in `ARCHITECTURE.md`.
 
 `AppSnapshot` is the compact durable read state: `schemaVersion`, `userId`,
 `onboarded`, `profile`, `target`, `plan` (`WorkoutPlan`), `mealPlan`
-(`MealPlan`), `sessions`, `nutritionLogs`, `weights`, `grocery`
+(`MealPlan`), `sessions`, `nutritionLogs`, `loggedMeals`, `weights`, `grocery`
 (`GroceryList`), and `savedMeals`. Derived values (BMR/TDEE, totals, trends,
 completion, recommendations) are recomputed from these durable facts by pure
 utilities, never stored. Date keys are `YYYY-MM-DD`; durable events are ISO

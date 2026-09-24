@@ -26,8 +26,12 @@ session-refresh Proxy, PKCE callback route, auth pages, authenticated RPC
 repository, RLS migrations, snapshot hydration, export, deletion, and the
 atomic saved-meal logging path are implemented. Browser storage is limited to
 recoverable form/session drafts and never replaces Supabase authority.
-Trusted production nutrition data, protected AI extraction, and linked remote
-smoke verification remain release dependencies.
+Trusted production nutrition data, protected AI extraction, and the serving/
+correction boundary are implemented through Supabase Edge Functions and
+forward migrations. The selected USDA release, server-side secrets, linked
+migration rollout, and authenticated provider evidence are recorded in
+`MVP_Priority_Matrix.md`; public deployment and production Auth configuration
+remain separate launch gates.
 
 ### Client
 
@@ -144,12 +148,12 @@ draft recovery must never make an unsaved or stale mutation appear persisted.
 
 | Data kind | Owner | Examples |
 |-----------|-------|----------|
-| User inputs and preferences | Supabase repository and Postgres | `UserProfile`, unit preference, dietary pattern, equipment |
+| User inputs and preferences | Supabase repository and Postgres | `UserProfile`, unit preference, `notificationsEnabled`, dietary pattern, equipment |
 | Goals and target assumptions | Supabase repository and Postgres | `Goal`, `DailyTarget`, effective date, calculation assumptions |
 | Authored catalogs | Versioned constants or trusted catalog read models | `Exercise`, trusted `Food` records |
 | Planned prescriptions | Supabase repository and Postgres snapshots | `WorkoutPlan`, `PlannedWorkout`, `PlannedExercise`, `MealPlan`, `PlannedMeal` |
 | Actual workout facts | Supabase repository and Postgres history | `WorkoutSession`, `ExerciseLog`, notes, RPE |
-| Actual nutrition facts | Supabase repository and Postgres history | `NutritionLog`, serving, source, source version, confidence, date |
+| Actual nutrition facts | Supabase repository and Postgres history | `NutritionLog`, `LoggedMeal`, serving, source, source version, confidence, date |
 | User observations | Supabase repository and Postgres history | `WeightEntry` |
 | Grocery state | Supabase repository and Postgres list state | `GroceryList`, `GroceryItem`, checked and edited values |
 | Derived domain state | Pure utilities and selectors | BMR, BMI, TDEE, totals, trends, completion status, recommendations |
@@ -266,6 +270,16 @@ For every new durable mutation:
 - Add repository and RPC parity tests for the same input sequence when more than one implementation exists.
 - Define loading, error, offline, retry, and partial-completion behavior.
 
+Notification preference updates are a profile-owned authorized mutation. The
+preference is persisted but has no reminder-delivery side effect in MVP-1.
+`export_account_data` is the only authoritative export read; the client treats
+its response as the typed `AccountExport` contract and packages deterministic
+CSV files plus the original JSON into a ZIP with `fflate`.
+The contract includes user-owned food records (including USDA FDC ID, data
+type, release/source version, provider revision, preparation basis, serving
+options, and nutrition provenance) as `foods.csv`; shared starter catalog rows
+are not copied into an account export.
+
 The MVP must not silently discard a user input because Supabase or an optional
 AI service is unavailable. Preserve the active draft, show the mutation as
 unsaved, and provide retry behavior. Do not silently queue server mutations
@@ -297,6 +311,7 @@ type MutationOutcome = {
   snapshot: AppSnapshot;
   events: Array<
     | { type: "profile-updated" }
+    | { type: "notification-preference-updated" }
     | { type: "target-updated"; targetId: string }
     | { type: "plan-generated"; planId: string }
     | { type: "plan-edited"; planId: string }
@@ -335,6 +350,10 @@ must not infer business events by comparing arbitrary snapshots.
   applies feature-specific lifetimes, reports storage failure without closing
   the active form, exposes account-scoped inspection, and clears drafts on
   sign-out or deletion.
+- Draft keys contain the authenticated user ID and feature/draft type. The
+  legacy unscoped `calicoach:session:*` namespace is never bulk-cleared during
+  another account's sign-out; only account-scoped keys and the known
+  user-scoped onboarding compatibility key are removed.
 
 Automated target calculations use policy version `calicoach-health-v1`. The
 eligibility outcome (`eligible`, `unsupported`, or `not_answered`) and screening
@@ -358,6 +377,10 @@ Apply these rules to every exposed user-data table and every server mutation:
 - Test cross-user denial, anonymous denial, invalid IDs, duplicate retries, concurrent edits, and direct-table-write denial.
 - Regenerate `src/types/database.generated.ts` after schema changes.
 - Keep AI and nutrition-provider credentials in server-side secret management only.
+- USDA nutrition search is protected and on-demand rather than a bulk catalog
+  import. `USDA_FDC_API_KEY` and `USDA_FDC_RELEASE` are Edge Function
+  configuration, with the release label persisted as food provenance and the
+  candidate revision formatted as `<dataType>:<fdcId>`.
 
 Public authored exercise and nutrition catalog data may be readable without
 ownership checks when it contains no user data. Custom foods, recipes, logs,
@@ -473,14 +496,22 @@ screen reading.
   secret manager, never in `NEXT_PUBLIC_*`.
 - The Next.js browser client must call a protected application endpoint, not an
   AI or nutrition provider directly.
-- The nutrition AI endpoint accepts user text only after an explicit user action and returns schema-validated food candidates, quantities, units, preparation details, and uncertainties.
-- Trusted nutrition records and deterministic application code own nutrition calculations; model-generated nutrition numbers are never authoritative.
+- The MVP-1 nutrition endpoints send only the minimum reviewed context to
+  DeepSeek `deepseek-flash` after explicit user actions. Extraction returns
+  schema-validated candidates, preparation, hidden-ingredient uncertainty, and
+  questions. The separate estimate endpoint returns a low/base/high range only
+  for explicitly selected unresolved items.
+- Trusted nutrition records and deterministic application code own calculation;
+  AI estimates are optional, low-confidence, visibly approximate, and cannot be
+  promoted to trusted catalog provenance.
 - The endpoint must return matches, assumptions, serving sizes, and confidence in a form the user can review and correct.
-- AI output must remain a draft until the user confirms it through a separate nutrition-save mutation.
+- AI output must remain a draft until the user confirms it through the separate
+  `save_reviewed_meal` mutation, which creates the reusable recipe, grouped
+  parent, and ordered historical child snapshots atomically.
 - Restaurant meals, sauces, cooking oils, and mixed dishes must remain visibly uncertain and must not display false precision.
 - Do not send complete profiles, full histories, credentials, or unrelated user data to the model. Send only the minimum context required for the requested extraction.
 - Define request timeouts, rate limits, sanitized error logging, provider failure behavior, and data retention before enabling the integration.
-- Photo recognition, voice input, social-media extraction, and other later features must not become implicit dependencies of text meal logging.
+- Post-MVP photo assistance uses a protected server boundary and `deepseek-flash` for visual candidates only. Require guided correction of portions and hidden ingredients before trusted calculation and explicit save. Do not persist meal images in app storage after analysis; disclose provider-side handling before launch. Photo, voice, and social-media extraction must not become implicit dependencies of MVP-1 text meal logging.
 - Manual nutrition input must remain available as a recoverable draft when offline or when the AI/provider is unavailable; saving it requires a confirmed server mutation.
 
 ## Styling and Design System
