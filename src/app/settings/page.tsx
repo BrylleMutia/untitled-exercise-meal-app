@@ -16,12 +16,14 @@ import { Button } from "@/components/ui/Button";
 import { HEALTH_DISCLAIMER, kgToLb, lbToKg } from "@/utility/health";
 import { signOutAction } from "@/app/auth/actions";
 import { clearUserDrafts } from "@/services/draftStore";
+import { buildAccountExportZip } from "@/utility/exportBundle";
 
 export default function SettingsPage() {
-  const { snapshot, actions } = useApp();
+  const { snapshot, actions, pendingMutation } = useApp();
   const router = useRouter();
   const [weight, setWeight] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const profile = snapshot.profile;
@@ -34,6 +36,7 @@ export default function SettingsPage() {
 
   const exportData = async () => {
     setExporting(true);
+    setExportStatus(null);
     const data = await actions.exportData();
     setExporting(false);
     if (!data) return;
@@ -44,9 +47,36 @@ export default function SettingsPage() {
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `calicoach-export-${snapshot.userId}.json`;
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }, 1000);
+    setExportStatus(`JSON export download started: ${anchor.download}`);
     actions.notify("Export downloaded.");
+  };
+
+  const exportCsvBundle = async () => {
+    setExporting(true);
+    setExportStatus(null);
+    const data = await actions.exportData();
+    setExporting(false);
+    if (!data) return;
+    const exportedAt = new Date().toISOString();
+    const zip = buildAccountExportZip(data, exportedAt);
+    const url = URL.createObjectURL(new Blob([zip as unknown as BlobPart], { type: "application/zip" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `calicoach-export-${exportedAt.slice(0, 10)}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    window.setTimeout(() => {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }, 1000);
+    setExportStatus(`CSV bundle download started: ${anchor.download}`);
+    actions.notify("CSV export bundle downloaded.");
   };
 
   const deleteAccount = async () => {
@@ -57,7 +87,10 @@ export default function SettingsPage() {
     if (deleted) {
       try {
         for (const key of Object.keys(window.localStorage)) {
-          if (key.startsWith("calicoach:onboarding-draft:") || key.startsWith("calicoach:session:")) window.localStorage.removeItem(key);
+          if (key.startsWith("calicoach:draft:v1:") && key.includes(encodeURIComponent(snapshot.userId))) {
+            window.localStorage.removeItem(key);
+          }
+          if (key === `calicoach:onboarding-draft:${snapshot.userId}`) window.localStorage.removeItem(key);
         }
       } catch { /* best-effort cleanup */ }
       router.push("/auth/sign-in");
@@ -88,6 +121,29 @@ export default function SettingsPage() {
             <Pencil className="h-4 w-4" aria-hidden /> Edit
           </Button>
         </Link>
+      </Card>
+
+      <Card id="notifications">
+        <h2 className="font-extrabold">Notifications</h2>
+        <div className="mt-3 flex items-start justify-between gap-4 rounded-2xl bg-cream p-3">
+          <div>
+            <p className="text-sm font-extrabold">Allow future reminders</p>
+            <p className="mt-1 text-xs font-semibold text-muted">
+              Your preference is saved now. Reminder delivery is not enabled in MVP-1.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={profile?.notificationsEnabled ?? false}
+            aria-label="Allow future reminders"
+            className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${profile?.notificationsEnabled ? "bg-ink" : "bg-lav-200"}`}
+            onClick={() => void actions.updateNotificationPreference(!(profile?.notificationsEnabled ?? false))}
+            disabled={pendingMutation === "update_notification_preference"}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-chip transition-transform ${profile?.notificationsEnabled ? "translate-x-7" : "translate-x-1"}`} />
+          </button>
+        </div>
       </Card>
 
       <Card>
@@ -169,6 +225,10 @@ export default function SettingsPage() {
           <Button variant="soft" onClick={() => void exportData()} disabled={exporting}>
             <Download className="h-4 w-4" aria-hidden /> Export JSON
           </Button>
+          <Button variant="soft" onClick={() => void exportCsvBundle()} disabled={exporting}>
+            <Download className="h-4 w-4" aria-hidden /> Export CSV bundle
+          </Button>
+          {exportStatus ? <p className="rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">{exportStatus}</p> : null}
           <Button variant="soft" onClick={actions.resetPlan}>
             <RefreshCw className="h-4 w-4" aria-hidden />
             Regenerate plan from current profile

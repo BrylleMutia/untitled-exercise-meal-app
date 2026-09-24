@@ -112,14 +112,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Link
+            href="/settings#notifications"
             aria-label="Notifications"
             className="relative grid h-11 w-11 place-items-center rounded-full bg-white text-ink shadow-chip"
           >
             <Bell className="h-5 w-5" aria-hidden />
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-coral-300" />
-          </button>
+          </Link>
           <Link
             href="/settings"
             aria-label="Settings"
