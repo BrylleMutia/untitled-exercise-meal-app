@@ -1,4 +1,4 @@
-# Calisthenics and Nutrition Coach — Design Decisions
+# Cali - Exercise and Meal Planner — Design Decisions
 
 > **Purpose:** Record the current visual direction, design tokens, UX patterns,
 > responsive/navigation model, and auth-first setup for the app. This file is
@@ -33,7 +33,7 @@
 ## Purpose and Scope
 
 `DESIGN.md` records the current visual, UX, and setup decisions for the
-Calisthenics and Nutrition Coach app as it is implemented today. It reconciles
+Cali - Exercise and Meal Planner app as it is implemented today. It reconciles
 wording with the canonical plans and architecture documents rather than
 inventing product behavior.
 
@@ -365,8 +365,9 @@ types in `src/types/`, and pure logic in `src/utility/`.
 
 ## PWA and Metadata
 
-- **Manifest** (`src/app/manifest.ts`): `name` "Calisthenics & Nutrition
-  Coach", `short_name` "CaliCoach", `display` "standalone", `start_url` "/",
+- **Manifest** (`src/app/manifest.ts`): `name` "Cali - Exercise and Meal
+  Planner", `short_name` "Cali - Exercise and Meal Planner", `display`
+  "standalone", `start_url` "/",
   `background_color` `#f6f5fa` (cream), `theme_color` `#e2def6` (lav-100),
   and SVG icons (192px any + 512px maskable) pointing at `/icon.svg`.
 - **App icon** (`src/app/icon.svg`): a rounded-square lavender tile with an

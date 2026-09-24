@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Calisthenics & Nutrition Coach",
-    short_name: "CaliCoach",
+    name: "Cali - Exercise and Meal Planner",
+    short_name: "Cali - Exercise and Meal Planner",
     description:
       "Follow a realistic calisthenics routine, eat toward your goal, and see whether your habits are working.",
     start_url: "/",

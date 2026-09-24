@@ -1,6 +1,6 @@
-# Calisthenics and Nutrition Coach
+# Cali - Exercise and Meal Planner
 
-Authenticated Next.js application for the core calisthenics, nutrition, meal-plan,
+Authenticated Next.js application for the core exercise, nutrition, meal-plan,
 grocery, and progress loop. Supabase is the authoritative store for durable
 user data; browser storage is used only for recoverable drafts and read-model
 fallbacks.

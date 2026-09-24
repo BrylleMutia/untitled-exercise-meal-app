@@ -198,7 +198,7 @@ test.describe("MVP-1 release browser gate", () => {
     const jsonPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export JSON" }).click();
     const jsonDownload = await jsonPromise;
-    expect(jsonDownload.suggestedFilename()).toMatch(/^calicoach-export-.*\.json$/);
+    expect(jsonDownload.suggestedFilename()).toMatch(/^cali-exercise-meal-planner-export-.*\.json$/);
     const jsonPath = await jsonDownload.path();
     expect(jsonPath).toBeTruthy();
     const jsonExport = JSON.parse(fs.readFileSync(jsonPath!, "utf8")) as { loggedMeals?: unknown };
@@ -207,7 +207,7 @@ test.describe("MVP-1 release browser gate", () => {
     const zipPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export CSV bundle" }).click();
     const zipDownload = await zipPromise;
-    expect(zipDownload.suggestedFilename()).toMatch(/^calicoach-export-.*\.zip$/);
+    expect(zipDownload.suggestedFilename()).toMatch(/^cali-exercise-meal-planner-export-.*\.zip$/);
     const zipPath = await zipDownload.path();
     expect(zipPath).toBeTruthy();
     const files = unzipSync(fs.readFileSync(zipPath!));

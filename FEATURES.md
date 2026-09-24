@@ -1,4 +1,4 @@
-# Calisthenics and Nutrition Coach
+# Cali - Exercise and Meal Planner
 
 Initial feature plan for a responsive web app built with Next.js, with optional
 Progressive Web App (PWA) installation support.

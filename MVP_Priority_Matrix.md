@@ -195,7 +195,7 @@ Viewport checks used 390×844 mobile and 1440×900 desktop layouts.
 | Offline retry | Not run | Same browser-control limitation; local offline UI and retry code remain covered by source/tests. |
 | Reload draft recovery | Passed | After the IndexedDB reader/write-order fixes, the custom nutrition draft restored its name and displayed `Draft restored from this device.` after full reload. |
 | Account switching | Passed (browser isolation) | Signed out User A, manually signed in User B, and verified that User B's nutrition day had no User A standalone USDA entry or grouped meal, the reusable-meal list did not contain User A's `Fried Rice with 2 Eggs` recipe, and the notification preference was independently disabled. A User B-only guided draft restored after reload. |
-| Settings/export | Partial | Notification toggle persisted across reload. CSV ZIP packaging tests pass and the browser displayed `CSV bundle download started: calicoach-export-2026-09-23.zip`; the in-app browser did not expose a Playwright download event, so OS-level file receipt remains to be confirmed manually. |
+| Settings/export | Partial | Notification toggle persisted across reload. CSV ZIP packaging tests pass and the browser displayed `CSV bundle download started: cali-exercise-meal-planner-export-2026-09-23.zip`; the in-app browser did not expose a Playwright download event, so OS-level file receipt remains to be confirmed manually. |
 | Keyboard/focus/accessibility | Partial pass | Accessible roles, labels, 44px controls, focus movement, one-character input retention, and no fresh-tab console errors were checked. Full screen-reader, large-text, reduced-motion, and narrow-overflow passes remain open. |
 
 ## What Is Completed So Far
@@ -1847,8 +1847,8 @@ account remains intact pending explicit deletion confirmation.
 - Notification preference and export passed after onboarding. The opt-in
   preference changed from disabled to enabled and remained enabled after a full
   settings reload. The browser displayed `CSV bundle download started:
-  calicoach-export-2026-09-24.zip` and also started JSON export
-  `calicoach-export-527618f9-2d84-4b90-9d67-cd2ee4ab6ada.json`. The in-app
+  cali-exercise-meal-planner-export-2026-09-24.zip` and also started JSON export
+  `cali-exercise-meal-planner-export-527618f9-2d84-4b90-9d67-cd2ee4ab6ada.json`. The in-app
   browser still does not expose an OS-level download receipt for ZIP-content
   inspection.
 - Keyboard/focus checks passed for the unified meal input: focus remained on

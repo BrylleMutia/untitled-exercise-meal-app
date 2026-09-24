@@ -1,4 +1,4 @@
-# Calisthenics and Nutrition Coach Engineering Architecture
+# Cali - Exercise and Meal Planner Engineering Architecture
 
 > **Purpose:** Define the stable client, backend, security, persistence, testing, and delivery standards that every feature must follow.
 >

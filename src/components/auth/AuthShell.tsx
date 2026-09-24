@@ -22,7 +22,7 @@ export function AuthShell({
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-lav-200 text-ink shadow-chip">
             <Dumbbell className="h-5 w-5" aria-hidden />
           </span>
-          <span>CaliCoach</span>
+          <span className="text-left leading-tight">Cali - Exercise and Meal Planner</span>
         </Link>
       </div>
       <section className="rounded-3xl bg-white p-6 shadow-card sm:p-8">

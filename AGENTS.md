@@ -1,7 +1,7 @@
-# Calisthenics and Nutrition Coach Agent Guide
+# Cali - Exercise and Meal Planner Agent Guide
 
 This file contains the repository-wide workflow, safety rules, and
-documentation-routing rules for the Calisthenics and Nutrition Coach app. Read
+documentation-routing rules for the Cali - Exercise and Meal Planner app. Read
 only the task-relevant documents; do not load unrelated documentation or
 invent product behavior that is not supported by the product plan and
 architecture.

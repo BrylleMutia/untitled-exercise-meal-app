@@ -46,7 +46,7 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `calicoach-export-${snapshot.userId}.json`;
+    anchor.download = `cali-exercise-meal-planner-export-${snapshot.userId}.json`;
     document.body.appendChild(anchor);
     anchor.click();
     window.setTimeout(() => {
@@ -68,7 +68,7 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(new Blob([zip as unknown as BlobPart], { type: "application/zip" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `calicoach-export-${exportedAt.slice(0, 10)}.zip`;
+    anchor.download = `cali-exercise-meal-planner-export-${exportedAt.slice(0, 10)}.zip`;
     document.body.appendChild(anchor);
     anchor.click();
     window.setTimeout(() => {

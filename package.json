@@ -1,8 +1,8 @@
 {
-  "name": "calisthenics-nutrition-coach",
+  "name": "cali-exercise-meal-planner",
   "version": "0.1.0",
   "private": true,
-  "description": "Calisthenics and Nutrition Coach — authenticated responsive Next.js web app",
+  "description": "Cali - Exercise and Meal Planner — authenticated responsive Next.js web app",
   "scripts": {
     "dev": "node scripts/copy-exercise-assets.mjs && next dev",
     "build": "node scripts/copy-exercise-assets.mjs && next build",

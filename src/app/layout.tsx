@@ -7,10 +7,10 @@ import { loadAppSnapshot } from "@/services/supabaseSnapshot";
 import type { AppSnapshot } from "@/types/domain";
 
 export const metadata: Metadata = {
-  title: "Calisthenics & Nutrition Coach",
+  title: "Cali - Exercise and Meal Planner",
   description:
-    "A pastel calisthenics and nutrition coach: editable weekly plans, meal logging, groceries, and progress. Estimates only, not medical advice.",
-  applicationName: "CaliCoach",
+    "Cali - Exercise and Meal Planner helps you build editable workout and meal plans, log food, manage groceries, and review progress. Estimates only, not medical advice.",
+  applicationName: "Cali - Exercise and Meal Planner",
 };
 
 export const viewport: Viewport = {
