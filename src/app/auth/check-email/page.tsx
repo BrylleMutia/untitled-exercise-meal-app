@@ -16,7 +16,7 @@ export default function CheckEmailPage() {
     <AuthShell
       eyebrow="One more step"
       title="Check your email"
-      description="Use the confirmation link from Supabase to finish creating your account. It will return you to onboarding when the session is ready."
+      description="If you are creating a new account, use the confirmation link from Supabase to finish setup. If you already have an account, sign in instead. A confirmed link will return you to onboarding."
       footer={
         <Link href="/auth/sign-in" className="font-extrabold text-ink underline underline-offset-4">
           Back to sign in
@@ -30,7 +30,7 @@ export default function CheckEmailPage() {
         {state.error ? <AuthError>{state.error}</AuthError> : null}
         {state.success ? <AuthSuccess>{state.success}</AuthSuccess> : null}
         <p className="rounded-2xl bg-mint-100 p-4 text-sm font-bold text-ink">
-          If you do not see it soon, check spam or request a new link below.
+          If you do not see it soon, check spam or request a new link below. If you already have an account, use the sign-in link instead.
         </p>
         <form action={formAction} className="grid gap-3 text-left">
           <label className="grid gap-1.5">

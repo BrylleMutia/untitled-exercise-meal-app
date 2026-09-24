@@ -7,4 +7,7 @@ export default defineConfig({
       "@": path.resolve("src"),
     },
   },
+  test: {
+    exclude: ["e2e/**", "node_modules/**"],
+  },
 });

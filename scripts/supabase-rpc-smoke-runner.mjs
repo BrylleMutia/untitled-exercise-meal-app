@@ -5,6 +5,7 @@ export const EXPECTED_RPCS = [
   "complete_onboarding",
   "update_profile",
   "update_units",
+  "update_notification_preference",
   "reset_plan",
   "skip_planned_meal",
   "edit_meal_plan",
@@ -14,6 +15,9 @@ export const EXPECTED_RPCS = [
   "abandon_workout_session",
   "save_nutrition_log",
   "log_saved_meal",
+  "save_reviewed_meal",
+  "update_logged_meal",
+  "delete_logged_meal",
   "delete_nutrition_log",
   "save_weight_entry",
   "save_saved_meal",
@@ -339,6 +343,44 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     );
     assert(profileAfterUnits.units === "imperial", `${label} update_units did not persist imperial units`);
 
+    const profileRevision = await selectOne(
+      userA.client,
+      "profiles",
+      "revision",
+      "id",
+      userA.userId,
+      `${label} profile revision before notifications`
+    );
+    const notificationPayload = {
+      enabled: true,
+      expectedVersions: { profileRevision: profileRevision.revision },
+      idempotencyKey: id("notifications"),
+    };
+    await rpc(
+      userA.client,
+      "update_notification_preference",
+      notificationPayload,
+      `${label} notification preference`,
+      calls
+    );
+    const notificationReplay = await rpc(
+      userA.client,
+      "update_notification_preference",
+      notificationPayload,
+      `${label} notification preference replay`,
+      calls
+    );
+    assert(notificationReplay.replayed === true, `${label} notification preference replay was not marked replayed`);
+    const profileAfterNotification = await selectOne(
+      userA.client,
+      "profiles",
+      "notifications_enabled",
+      "id",
+      userA.userId,
+      `${label} profile after notifications`
+    );
+    assert(profileAfterNotification.notifications_enabled === true, `${label} notification preference did not persist`);
+
     const resetPlan = bundle(id("reset"), {
       units: "imperial",
       name: "RPC Smoke Reset",
@@ -607,6 +649,116 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
     );
     assert(savedMealLogResult.result_refs?.nutrition_log_ids?.length === 2, `${label} saved meal log returned incomplete references`);
     assert(savedMealLogReplay.replayed === true, `${label} saved meal log replay was not marked replayed`);
+
+    const groupedMealPayload = {
+      name: "Smoke-test guided meal",
+      date: "2026-09-10",
+      slot: "breakfast",
+      sourceMode: "ai_assisted",
+      assumptions: "fixture review",
+      meal: {
+        id: id("guided-recipe"),
+        name: "Smoke-test guided meal",
+        servings: 1,
+        ingredients: [
+          { foodId: "food-egg", servings: 2 },
+          { foodId: "food-milk", servings: 1 },
+        ],
+      },
+      ingredients: [
+        { id: id("guided-entry-egg"), foodId: "food-egg", servings: 2, assumptions: "fixture" },
+        { id: id("guided-entry-milk"), foodId: "food-milk", servings: 1, assumptions: "fixture" },
+      ],
+      loggedMealId: id("guided-log"),
+      idempotencyKey: id("guided-save"),
+    };
+    const groupedMealResult = await rpc(
+      userA.client,
+      "save_reviewed_meal",
+      groupedMealPayload,
+      `${label} save reviewed grouped meal`,
+      calls,
+    );
+    const groupedMealId = groupedMealResult.result_refs?.logged_meal_id;
+    assert(groupedMealId === groupedMealPayload.loggedMealId, `${label} grouped save returned the wrong parent ID`);
+    const groupedMealRow = await selectOne(
+      userA.client,
+      "logged_meals",
+      "row_id, revision, meal_row_id, name",
+      "app_id",
+      groupedMealId,
+      `${label} grouped meal parent`,
+    );
+    assert(groupedMealRow.revision === 1 && groupedMealRow.name === groupedMealPayload.name, `${label} grouped parent metadata was not persisted`);
+    assert(
+      (await countRows(userA.client, "nutrition_logs", "logged_meal_row_id", groupedMealRow.row_id, `${label} grouped child rows`)) === 2,
+      `${label} grouped save did not persist both child snapshots`,
+    );
+    const groupedReplay = await rpc(
+      userA.client,
+      "save_reviewed_meal",
+      groupedMealPayload,
+      `${label} grouped save replay`,
+      calls,
+    );
+    assert(groupedReplay.replayed === true, `${label} grouped save replay was not marked replayed`);
+
+    const staleGroupedUpdate = await rawRpc(
+      userA.client,
+      "update_logged_meal",
+      {
+        loggedMeal: { id: groupedMealId, name: "Stale grouped edit" },
+        ingredients: [{ foodId: "food-egg", servings: 1 }],
+        expectedVersions: { recordRevision: 0 },
+        idempotencyKey: id("guided-stale-update"),
+      },
+      calls,
+    );
+    assertError(staleGroupedUpdate, `${label} stale grouped update`, "P0001");
+    assert(
+      (await countRows(userA.client, "nutrition_logs", "logged_meal_row_id", groupedMealRow.row_id, `${label} stale grouped update preservation`)) === 2,
+      `${label} stale grouped update changed child snapshots`,
+    );
+
+    const groupedUpdatePayload = {
+      loggedMeal: { id: groupedMealId, name: "Updated historical meal" },
+      ingredients: [{ foodId: "food-egg", servings: 1 }],
+      expectedVersions: { recordRevision: 1 },
+      idempotencyKey: id("guided-update"),
+    };
+    await rpc(userA.client, "update_logged_meal", groupedUpdatePayload, `${label} update grouped meal`, calls);
+    const updatedGroupedMeal = await selectOne(
+      userA.client,
+      "logged_meals",
+      "revision, name, meal_row_id",
+      "app_id",
+      groupedMealId,
+      `${label} updated grouped meal`,
+    );
+    assert(updatedGroupedMeal.revision === 2 && updatedGroupedMeal.name === "Updated historical meal", `${label} grouped revision did not advance`);
+    assert(
+      (await countRows(userA.client, "nutrition_logs", "logged_meal_row_id", groupedMealRow.row_id, `${label} updated grouped child rows`)) === 1,
+      `${label} grouped update did not replace historical children`,
+    );
+    const unchangedRecipe = await selectOne(userA.client, "meals", "name", "row_id", updatedGroupedMeal.meal_row_id, `${label} recipe after historical edit`);
+    assert(unchangedRecipe.name === groupedMealPayload.meal.name, `${label} historical edit mutated the reusable recipe`);
+
+    const crossUserGroupedDelete = await rawRpc(
+      userB.client,
+      "delete_logged_meal",
+      { loggedMealId: groupedMealId, expectedVersions: { recordRevision: 2 }, idempotencyKey: id("cross-grouped-delete") },
+      calls,
+    );
+    assertError(crossUserGroupedDelete, `${label} cross-user grouped delete`, "P0001");
+    await rpc(
+      userA.client,
+      "delete_logged_meal",
+      { loggedMealId: groupedMealId, expectedVersions: { recordRevision: 2 }, idempotencyKey: id("guided-delete") },
+      `${label} delete grouped meal`,
+      calls,
+    );
+    assert((await countRows(userA.client, "logged_meals", "app_id", groupedMealId, `${label} deleted grouped parent`)) === 0, `${label} grouped parent remained after delete`);
+    assert((await countRows(userA.client, "meals", "row_id", updatedGroupedMeal.meal_row_id, `${label} recipe retained after grouped delete`)) === 1, `${label} grouped delete removed the reusable recipe`);
 
     const overridePayload = {
       slotKey,

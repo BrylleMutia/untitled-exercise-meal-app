@@ -25,3 +25,11 @@ next-env.d.ts
 
 # testing
 /coverage
+
+# Playwright
+/playwright/.auth/
+/playwright/test-results/
+/playwright/blob-report/
+/playwright/playwright-report/
+/test-results/
+/playwright-report/
