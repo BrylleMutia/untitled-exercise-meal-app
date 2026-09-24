@@ -139,6 +139,12 @@ max_namespaces = 5
 max_tables = 10
 max_catalogs = 2
 
+[functions.nutrition-search]
+verify_jwt = true
+
+[functions.nutrition-text-parse]
+verify_jwt = true
+
 # Analytics Buckets is available to Supabase Pro plan.
 # [storage.analytics.buckets.my-warehouse]
 
