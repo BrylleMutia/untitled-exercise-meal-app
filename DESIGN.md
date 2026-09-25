@@ -399,6 +399,11 @@ types in `src/types/`, and pure logic in `src/utility/`.
 - **Auth pages/actions:** sign-in, sign-up, check-email, forgot-password,
   update-password, configuration, and sign-out are implemented under
   `src/app/auth/` and `src/app/auth/actions.ts`.
+- **Signup validation:** account creation keeps the email and password fields
+  in component state after validation errors. Password mismatch is shown in the
+  form alert and beside both password fields, with accessible invalid-state
+  attributes and coral styling; editing either password clears both inline
+  mismatch messages. Field values are not persisted locally.
 - **Configuration behavior:** when the env keys are absent, product routes
   redirect to `/auth/configuration`; the app does not expose dummy product data.
 - See [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) for the dashboard, auth URL,

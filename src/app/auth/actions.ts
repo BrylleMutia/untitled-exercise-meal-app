@@ -4,8 +4,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+export type AuthFieldErrors = Partial<Record<"email" | "password" | "confirmPassword", string>>;
+
 export type AuthActionState = {
   error?: string;
+  fieldErrors?: AuthFieldErrors;
   success?: string;
 };
 
@@ -63,9 +66,21 @@ export async function signUpAction(
   const password = value(formData, "password");
   const confirmPassword = value(formData, "confirmPassword");
   if (!email || password.length < 8) {
-    return { error: "Use a valid email and a password with at least 8 characters." };
+    return {
+      error: "Use a valid email and a password with at least 8 characters.",
+      fieldErrors: {
+        ...(!email ? { email: "Enter a valid email address." } : {}),
+        ...(password.length < 8 ? { password: "Use at least 8 characters." } : {}),
+      },
+    };
   }
-  if (password !== confirmPassword) return { error: "Passwords do not match." };
+  if (password !== confirmPassword) {
+    const mismatch = "Passwords do not match.";
+    return {
+      error: mismatch,
+      fieldErrors: { password: mismatch, confirmPassword: mismatch },
+    };
+  }
 
   let supabase;
   let signedIn = false;
