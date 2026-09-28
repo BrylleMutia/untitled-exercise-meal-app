@@ -206,7 +206,7 @@ export default function GroceryPage() {
                         checked={item.checked}
                         onChange={() => actions.toggleGrocery(item.id)}
                         aria-label={`Mark ${item.name} as done`}
-                        className="h-5 w-5 accent-lav-500"
+                        className="h-5 w-5 shrink-0 accent-lav-500"
                       />
                       <div className="min-w-0 flex-1">
                         <p className={`truncate text-sm font-bold ${item.checked ? "line-through opacity-60" : ""}`}>
@@ -220,33 +220,33 @@ export default function GroceryPage() {
                           {adjusted ? " · adjusted by you" : ""}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
                           onClick={() => actions.setGroceryQuantity(item.id, Math.max(0, item.quantity - 1))}
                           aria-label={`Decrease ${item.name}`}
-                          className="grid h-11 w-11 place-items-center rounded-full bg-white"
+                          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white"
                         >
                           <Minus className="h-3 w-3" aria-hidden />
                         </button>
-                        <span className="w-10 text-center text-sm font-extrabold tabular-nums">
+                        <span className="w-10 shrink-0 text-center text-sm font-extrabold tabular-nums">
                           {item.quantity}
                         </span>
                         <button
                           type="button"
                           onClick={() => actions.setGroceryQuantity(item.id, item.quantity + 1)}
                           aria-label={`Increase ${item.name}`}
-                          className="grid h-11 w-11 place-items-center rounded-full bg-white"
+                          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white"
                         >
                           <Plus className="h-3 w-3" aria-hidden />
                         </button>
                       </div>
-                      <span className="w-8 text-xs font-bold text-muted">{item.unit}</span>
+                      <span className="w-8 shrink-0 text-xs font-bold text-muted">{item.unit}</span>
                       <button
                         type="button"
                         onClick={() => actions.removeGroceryItem(item.id)}
                         aria-label={`Remove ${item.name}`}
-                        className="grid h-11 w-11 place-items-center rounded-full bg-white"
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
                       </button>
