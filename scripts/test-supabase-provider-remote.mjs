@@ -1,15 +1,28 @@
+import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { readRemoteTestEnv } from "./remote-test-env.mjs";
 
-process.loadEnvFile?.(".env.local");
+const PROJECT_REF = "ifunkhvbvkdxolhpxjvk";
+const EXPECTED_URL = `https://${PROJECT_REF}.supabase.co`;
+const remoteEnv = readRemoteTestEnv();
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const url = remoteEnv.NEXT_PUBLIC_SUPABASE_URL;
+const publishableKey = remoteEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const accountAlias = process.env.SUPABASE_PROVIDER_SMOKE_USER === "B" ? "B" : "A";
-const email = process.env[`SUPABASE_RPC_REMOTE_USER_${accountAlias}_EMAIL`];
-const password = process.env[`SUPABASE_RPC_REMOTE_USER_${accountAlias}_PASSWORD`];
+const smokeRunId = randomUUID();
+const email = remoteEnv[`SUPABASE_RPC_REMOTE_USER_${accountAlias}_EMAIL`] ?? remoteEnv[`USER_${accountAlias}_EMAIL`];
+const password = remoteEnv[`SUPABASE_RPC_REMOTE_USER_${accountAlias}_PASSWORD`] ?? remoteEnv[`USER_${accountAlias}_PASSWORD`];
 
 if (!url || !publishableKey || !email || !password) {
-  throw new Error("provider smoke requires the existing Supabase URL, publishable key, and confirmed retained User A/B variables");
+  throw new Error("provider smoke requires the ignored local project settings and confirmed disposable User A/B variables");
+}
+if (process.env.SUPABASE_RPC_REMOTE_CONFIRM !== PROJECT_REF) {
+  throw new Error(`Refusing provider smoke tests: set SUPABASE_RPC_REMOTE_CONFIRM=${PROJECT_REF} for this exact project.`);
+}
+if (url !== EXPECTED_URL) throw new Error(`Refusing provider smoke tests outside ${EXPECTED_URL}.`);
+const normalizedKey = publishableKey.toLowerCase();
+if (normalizedKey.includes("service_role") || normalizedKey.startsWith("sb_secret_")) {
+  throw new Error("Refusing provider smoke tests with a service or secret key.");
 }
 
 const client = createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -75,10 +88,10 @@ const reviewedCandidate = [matchedCandidate, searchCandidate].find((candidate) =
 const saveReviewedFood = reviewedCandidate
   ? await client.rpc("save_food", {
     p_payload: {
-      idempotencyKey: `release-usda-food-${reviewedCandidate.fdcId}`,
+      idempotencyKey: `release-usda-food-${reviewedCandidate.fdcId}-${smokeRunId}`,
       food: {
         ...reviewedCandidate,
-        id: `release-usda-${reviewedCandidate.fdcId}`,
+        id: `release-usda-${reviewedCandidate.fdcId}-${smokeRunId}`,
         category: "Other",
         valueSource: "trusted_catalog",
       },
@@ -90,7 +103,7 @@ const estimate = await invoke("nutrition-macro-estimate", {
 });
 
 const exportResponse = await client.rpc("export_account_data", {
-  p_payload: { idempotencyKey: `release-provider-export-${Date.now()}` },
+  p_payload: { idempotencyKey: `release-provider-export-${smokeRunId}` },
 });
 const exported = exportResponse.error ? undefined : exportResponse.data?.data;
 const exportedFoods = Array.isArray(exported?.foods) ? exported.foods : [];

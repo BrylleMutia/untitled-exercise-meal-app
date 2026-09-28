@@ -18,11 +18,8 @@ function localAnonKey() {
     process.env.SUPABASE_LOCAL_ANON_KEY;
   if (configuredKey) return configuredKey;
 
-  const command = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "npx";
-  const commandArgs =
-    process.platform === "win32"
-      ? ["/d", "/s", "/c", "npx --yes supabase@latest status"]
-      : ["--yes", "supabase@latest", "status"];
+  const command = process.execPath;
+  const commandArgs = ["node_modules/supabase/dist/supabase.js", "status", "--output", "json"];
   let output;
   try {
     output = execFileSync(

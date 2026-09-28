@@ -1,96 +1,76 @@
-import { test as setup } from "@playwright/test";
-import { createBrowserClient } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { test as setup, expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
-
-try {
-  process.loadEnvFile(".env.local");
-} catch {
-  // CI can provide the same values through the process environment.
-}
+import {
+  assertLocalSupabaseConfigured,
+  createAuthenticatedContext,
+  createLocalAccount,
+  deleteLocalAccount,
+  writeStorageState,
+  type LocalAccount,
+} from "./local-account";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const authDirectory = path.resolve("playwright/.auth");
+const accountsFile = path.join(authDirectory, "test-accounts.json");
+const states = ["user-a.json", "user-b.json"];
 
-type Account = {
-  name: "a" | "b";
-  email: string | undefined;
-  password: string | undefined;
-};
-
-const accounts: Account[] = [
-  {
-    name: "a",
-    email: process.env.SUPABASE_RPC_REMOTE_USER_A_EMAIL,
-    password: process.env.SUPABASE_RPC_REMOTE_USER_A_PASSWORD,
-  },
-  {
-    name: "b",
-    email: process.env.SUPABASE_RPC_REMOTE_USER_B_EMAIL,
-    password: process.env.SUPABASE_RPC_REMOTE_USER_B_PASSWORD,
-  },
-];
-
-async function createStorageState(account: Account, outputPath: string) {
-  if (!account.email || !account.password) return false;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !publishableKey) throw new Error("Supabase test environment is not configured.");
-
-  const authClient = createSupabaseClient(url, publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await authClient.auth.signInWithPassword({
-    email: account.email,
-    password: account.password,
-  });
-  if (error || !data.session) {
-    throw new Error(`Could not prepare Playwright account ${account.name}: ${error?.message ?? "no session"}`);
-  }
-
-  const cookieJar = new Map<string, string>();
-  const browserClient = createBrowserClient(url, publishableKey, {
-    isSingleton: false,
-    cookies: {
-      getAll: () => [...cookieJar.entries()].map(([name, value]) => ({ name, value })),
-      setAll: (items) => {
-        for (const item of items) {
-          if (item.options?.maxAge === 0) cookieJar.delete(item.name);
-          else cookieJar.set(item.name, item.value);
-        }
-      },
-    },
-    auth: { persistSession: true, autoRefreshToken: false },
-  });
-  const { error: cookieError } = await browserClient.auth.setSession(data.session);
-  if (cookieError) throw new Error(`Could not prepare session cookies for account ${account.name}.`);
-
-  const { chromium } = await import("@playwright/test");
-  const browser = await chromium.launch();
-  const context = await browser.newContext();
-  await context.addCookies([...cookieJar.entries()].map(([name, value]) => ({
-    name,
-    value,
-    url: baseURL,
-  })));
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await context.storageState({ path: outputPath });
-  await context.close();
-  await browser.close();
-  return true;
+async function completeOnboarding(page: import("@playwright/test").Page, displayName: string) {
+  await page.goto("/onboarding");
+  await expect(page.getByText(/Onboarding · step 1 of/i)).toBeVisible();
+  await page.getByLabel("What should we call you?").fill(displayName);
+  await page.getByLabel("Age").fill("30");
+  await page.getByText("None of the situations below apply to me", { exact: true }).click();
+  await page.getByLabel("Height (cm)").fill("168");
+  await page.getByLabel("Weight (kg)").fill("68");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByText("Maintain weight", { exact: true }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await expect(page.getByRole("button", { name: "Create my plan" })).toBeVisible();
+  await page.getByRole("button", { name: "Create my plan" }).click();
+  await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
+  await expect(page.getByRole("heading", { name: "Today's meals", exact: true })).toBeVisible();
 }
 
-setup("prepare authenticated storage states", async () => {
-  const available = accounts.filter((account) => account.email && account.password);
-  if (available.length === 0) {
-    setup.skip(true, "Set the two confirmed disposable account variables to run authenticated release tests.");
-    return;
-  }
-
-  for (const account of accounts) {
-    await createStorageState(account, path.join(authDirectory, `user-${account.name}.json`));
+setup("prepare two fresh local authenticated fixtures", async ({ browser }) => {
+  assertLocalSupabaseConfigured();
+  await fs.mkdir(authDirectory, { recursive: true });
+  const accounts: LocalAccount[] = [];
+  try {
+    for (const [index, displayName] of ["Fixture User A", "Fixture User B"].entries()) {
+      const account = await createLocalAccount(`playwright-${index === 0 ? "a" : "b"}`);
+      accounts.push(account);
+      await fs.writeFile(accountsFile, JSON.stringify(accounts, null, 2), { encoding: "utf8", flag: "w" });
+      const context = await createAuthenticatedContext(browser, baseURL, account);
+      try {
+        const page = await context.newPage();
+        await completeOnboarding(page, displayName);
+        if (index === 0) {
+          await page.goto("/grocery");
+          const fixtureName = "E2E Private Fixture A";
+          await page.getByRole("textbox", { name: "Custom item name" }).fill(fixtureName);
+          await page.getByRole("button", { name: "Add custom grocery item" }).click();
+          await expect(page.getByText(fixtureName)).toBeVisible();
+        }
+        await writeStorageState(context, path.join(authDirectory, states[index]));
+      } finally {
+        await context.close();
+      }
+    }
+    await fs.writeFile(accountsFile, JSON.stringify(accounts, null, 2), { encoding: "utf8", flag: "w" });
+  } catch (error) {
+    for (const state of states) await fs.rm(path.join(authDirectory, state), { force: true });
+    await fs.rm(accountsFile, { force: true });
+    const cleanupErrors: unknown[] = [];
+    for (const account of accounts.reverse()) {
+      try {
+        await deleteLocalAccount(account);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (cleanupErrors.length) throw new AggregateError([error, ...cleanupErrors], "Fixture setup failed and local account cleanup was incomplete.");
+    throw error;
   }
 });

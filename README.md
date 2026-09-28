@@ -37,20 +37,24 @@ browser checks, for example `npm run dev -- --port 8082`.
 - `npm run supabase:test`
 - `npm run supabase:test:rpc`
 - `npm run supabase:test:concurrency`
+- `npm run test:repository` (requires the running disposable local Supabase
+  stack; creates and deletes fresh local accounts)
 - `npm run test:e2e:public`
-- `npm run test:e2e:release` (requires the ignored Playwright auth states)
-- `node scripts/test-supabase-provider-remote.mjs` (requires confirmed
-  retained-account variables and remote provider secrets)
+- `npm run test:e2e:release` (requires the running disposable local Supabase
+  stack; creates two fixture accounts, runs 390×844 and 1440×900 scenarios,
+  and deletes the accounts through the local account-deletion RPC)
+- `npm run supabase:test:providers:remote` (requires a process-scoped exact-
+  project confirmation, client-safe project settings in ignored
+  `.env.rc3.local`, and confirmed disposable `USER_A_*` / `USER_B_*` values in
+  ignored `.env.local`; run the RPC smoke afterward to verify cleanup)
 
-The final MVP-1 release gate also requires authenticated staging/remote smoke
-tests, Edge Function provider fixtures, mobile/desktop/keyboard/reduced-motion
-browser checks, and an offline/failure retry pass. The release browser suite
-uses 390×844 mobile and 1440×900 desktop projects, runs serialized against the
-retained test account, and keeps auth state/downloads out of Git. Brevo SMTP is
-configured remotely, but live confirmation/recovery delivery and the exact
-production Auth URL still need to be verified. The initial Vercel deployment,
-Free-tier leaked-password limitation, and any custom domain remain separate
-launch gates; they are not implied by the candidate tag.
+The authenticated release browser suite uses fresh local accounts and serialized
+390×844 mobile / 1440×900 desktop projects; CI mocks provider responses and
+uses only local Supabase credentials. The linked-project smoke remains a
+separately guarded manual gate. Live confirmation/recovery delivery and the
+exact production Auth URL still need verification. Public deployment,
+Free-tier leaked-password protection, and any custom domain remain separate
+launch gates; they are not implied by a release-candidate tag.
 
 Product scope and acceptance criteria live in [`FEATURES.md`](./FEATURES.md);
 technical ownership and security rules live in [`ARCHITECTURE.md`](./ARCHITECTURE.md);
