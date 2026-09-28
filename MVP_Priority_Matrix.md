@@ -18,7 +18,7 @@ as an audit trail; it is not evidence for RC3.
 
 | Gate | Current result |
 |---|---|
-| Candidate base | Implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b` is on `codex/mvp-2-rc3`, based on `main` at `a1db26463e87dab1d3da6dc01293423a9be5ae62`; it includes the release gates plus mobile grocery touch-target/grid fixes. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1) is open at evidence commit `101c9198b72d59418ba1a926d3af3db70feba912`; hosted CI run 9 passed on that evidence commit. The existing annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`; no RC3 tag exists. |
+| Candidate base | Implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b` is on `codex/mvp-2-rc3`, based on `main` at `a1db26463e87dab1d3da6dc01293423a9be5ae62`; it includes the release gates plus mobile grocery touch-target/grid fixes. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1) is open. Evidence commit `101c919` passed CI run 9; follow-up status commit `7e5f726` passed CI run 10. The existing annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`; no RC3 tag exists. |
 | Environment | Windows checkout with disposable Docker-backed local Supabase at `127.0.0.1:56321`, pinned CLI `2.118.0`, and Chromium. Browser provider responses are mocked. Remote settings are in ignored local config; account values are never logged or committed. |
 | Local migrations | Disposable local DB reset passed. All 39 repository migrations apply, including `20260918033000`; database-only `20260918113514` is absent. |
 | Database verification | Local DB lint passed; 10 pgTAP suites / 436 assertions passed; 31-wrapper RPC smoke and concurrency checks passed. |
@@ -27,8 +27,8 @@ as an audit trail; it is not evidence for RC3.
 | Browser tests | Full authenticated suite passed 24/24, including 11 scenarios at each of 1440×900 and 390×844 plus setup/teardown; public suite passed 4/4. Coverage includes fresh onboarding-to-progress, keyboard tab order, enlarged text, reduced motion, offline retry, provider failure, stale edit, exports, and account isolation. Setup and cleanup passed with no skipped required scenarios. |
 | Linked project | Read-only history comparison matches all 39 repository migration versions. The normalized schema fingerprint matches across columns, constraints, indexes, RLS policies, relations, routines/bodies, grants, schemas, and triggers. Four provider functions are JWT-protected at versions 7, 7, 2, and 1; all eight deployed source files match the repository. The planned-exercise correction has 93 rows, zero duplicate sort groups, zero invalid orders, and zero orphaned history links. No remote schema/function rollout occurred. |
 | Remote smoke | All 31 public RPC wrappers passed with two supplied disposable accounts; cleanup succeeded and a follow-up query confirmed both accounts absent. All four anonymous provider probes returned 401; USDA search, DeepSeek extraction, meal matching, and one low-confidence estimate passed. The reviewed USDA save failed with `P0001` because the deterministic smoke food ID already belongs to another account. The runner now uses unique per-run IDs; a fresh confirmed account pair is required to rerun provider persistence because the supplied pair was deleted. |
-| CI | Hosted run 8 passed both `web` and Docker-backed `integration` on implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`; hosted run 9 passed both jobs on evidence commit `101c9198b72d59418ba1a926d3af3db70feba912`. Runs 6 and 7 exposed a mobile grocery control overlap; explicit fixed grid columns resolved it. |
-| Release packaging | PR #1 is open with evidence commit `101c919` at its head. Final remote evidence supplement, merge/main CI, and annotated `mvp-1.0.0-rc.3` tag remain pending. Hold the tag until corrected provider persistence passes with a fresh disposable pair. |
+| CI | Hosted run 8 passed both `web` and Docker-backed `integration` on implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`; run 9 passed on evidence commit `101c919`, and run 10 passed on status commit `7e5f726`. Runs 6 and 7 exposed a mobile grocery control overlap; explicit fixed grid columns resolved it. |
+| Release packaging | PR #1 remains open. The final remote evidence supplement, merge/main CI, and annotated `mvp-1.0.0-rc.3` tag remain pending. Hold the tag until corrected provider persistence passes with a fresh disposable pair. |
 | Separate launch gates | Production Site URL/redirects, live SMTP, leaked-password protection, and public deployment remain outside this candidate. |
 
 Local checks, the linked schema/source comparison, the primary remote RPC
@@ -61,6 +61,8 @@ commit, and create the annotated candidate tag on that exact SHA.
 - **Evidence commit CI:** [CI run 9](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36401136466)
   passed both hosted jobs on evidence commit
   `101c9198b72d59418ba1a926d3af3db70feba912`.
+- **Follow-up CI:** [CI run 10](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36401918387)
+  passed both jobs on the subsequent status commit `7e5f726f1ccc8699d2f1c737b24f90857ae4c622`.
 - **Database and deployed functions:** local reset applies all 39 repository
   migrations; linked history has the same versions. Read-only normalized schema
   fingerprints match for columns, constraints, indexes, RLS policies,
