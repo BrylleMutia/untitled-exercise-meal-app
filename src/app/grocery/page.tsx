@@ -197,7 +197,7 @@ export default function GroceryPage() {
                   return (
                     <li
                       key={item.id}
-                      className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${
+                      className={`grid grid-cols-[1.25rem_minmax(0,1fr)_8.5rem_2rem_2.75rem] items-center gap-2 rounded-xl px-2 py-1.5 ${
                         item.checked ? "bg-mint-50" : "bg-cream"
                       }`}
                     >
