@@ -32,8 +32,9 @@ revoked.
   `codex/mvp-2-rc3`, based on `main` at
   `a1db26463e87dab1d3da6dc01293423a9be5ae62`. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1)
   is open; it includes the release-gate implementation and the mobile grocery
-  touch-target/grid fixes. The existing annotated `mvp-1.0.0-rc.2` tag points
-  to `53f1fd9`.
+  touch-target/grid fixes. Evidence commit `101c9198b72d59418ba1a926d3af3db70feba912`
+  is at the PR head and both hosted jobs passed on it in CI run 9. The existing
+  annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`.
 - Linked migration history matches all 39 repository versions. The read-only
   fingerprint from `scripts/release-schema-fingerprint.sql` matches for
   columns, constraints, indexes, RLS policies, relations, routines/bodies,
@@ -55,15 +56,15 @@ revoked.
 - Hosted GitHub Actions run 8 passed both `web` and Docker-backed `integration`
   on candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`. Earlier runs 6 and
   7 caught a mobile grocery control overlap; explicit fixed grid columns
-  corrected it, and the focused mobile journey passed locally. Production Site
-  URL/redirects,
+  corrected it. Run 9 also passed both jobs on evidence commit `101c919`. The
+  focused mobile journey passed locally. Production Site URL/redirects,
   live SMTP confirmation/recovery, leaked-password protection, and public
   deployment remain separate launch work.
 
-The first hosted PR gates are green. A successful rerun of remote USDA
-persistence with a fresh account pair, final evidence commit, merge,
-main-branch CI, and the RC3 tag remain pending. Do not tag RC3 until each gate
-is recorded.
+Hosted CI is green through evidence commit `101c919`. A successful rerun of
+remote USDA persistence with a fresh account pair, final remote evidence
+supplement, merge, main-branch CI, and the RC3 tag remain pending. Do not tag
+RC3 until each gate is recorded.
 
 ## 1. Status at a glance
 
