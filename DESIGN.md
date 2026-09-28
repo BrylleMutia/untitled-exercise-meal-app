@@ -423,44 +423,44 @@ From [`package.json`](./package.json), the Next.js scripts are:
 | `test:local` | `vitest run` | Local utility/repository/service tests |
 
 Supabase CLI scripts (`supabase:start`, `supabase:reset`, `supabase:test`,
-`supabase:lint`, `supabase:types`, `supabase:push:dry`) are prospective until
-the backend and local database workflow are added. The `copy-exercise-assets`
-pre-step makes exercise illustrations render offline from
-`public/exercises`.
+`supabase:lint`, `supabase:types`, `supabase:push:dry`) operate on the current
+backend workflow; the CLI is pinned in the lockfile. Repository integration
+and authenticated browser gates require the disposable local Supabase stack.
+The `copy-exercise-assets` pre-step makes exercise illustrations render
+offline from `public/exercises`.
 
 ## Implemented vs. Planned
 
-### Implemented (auth-first scaffold)
+### Implemented (authenticated MVP application)
 
 - Responsive Next.js App Router app with the pastel design system, tokens,
   typography, motion, and accessibility conventions documented above.
 - Auth-first route protection, Supabase SSR clients, Proxy claim refresh, PKCE
   confirmation, sign-in/sign-up/recovery/update-password pages, and sign-out.
-- Empty authenticated app state plus onboarding (profile/goal/target), weekly workout plan, workout session
-  logger (planned vs. actual, RPE, skip/modify), nutrition logging (search,
-  custom, text→review), saved meals, grocery list with merge policy, and
-  progress/history/weight.
+- Authenticated onboarding and profile/goal/target setup; versioned editable
+  workout and meal plans; a workout logger that keeps planned and actual values
+  separate; nutrition logging and review; saved meals; reconciled groceries;
+  and progress/history/weight.
+- Supabase-backed durable profile, plan, workout, nutrition, grocery, history,
+  export, and account-deletion flows through the repository and authorized RPCs.
+- Protected on-demand USDA search and server-side AI meal extraction/estimate
+  flows, with confirmation before saving and visible source/uncertainty.
+- Automated local database, repository, and authenticated mobile/desktop
+  browser gates; public sign-in and configuration states.
 - Exercise catalog and bundled illustrations from `@bryllim/workout-guide`
   with CC BY-SA 4.0 attribution.
 - PWA manifest and SVG app icon.
 - Supabase SSR boundary: browser/server clients, session-refresh proxy,
   `src/proxy.ts` matcher, and the PKCE confirm/auth-code-error routes.
 
-### Planned (not yet shipped)
+### Planned (post-MVP or release operations)
 
-- Supabase schema under `supabase/migrations/` with tables, constraints,
-  indexes, RLS policies, grants/revokes, and authorized RPCs or Edge
-  Functions for every durable mutation.
-- Generated `src/types/database.generated.ts` after schema changes.
-- Supabase-backed profile, plan, log, grocery, and progress repository (Context
-  actions and routes should remain the UI boundary).
-- Server-side AI text-meal extraction on a protected Edge Function (the
-  current `parseMealText` is a temporary client parser), with schema-validated JSON and
-  confirmation-before-save.
 - PWA service worker (Serwist) and raster 192/512 icons; installability and
-  offline caching are progressive enhancements.
-- A production trusted, versioned nutrition database (the current starter
-  catalog remains an estimate until replaced).
+  offline synchronization remain progressive enhancements.
+- Production Auth Site URL/redirects, live SMTP confirmation/recovery,
+  leaked-password protection, and public deployment are separate launch gates.
+- The starter food catalog remains estimated reference data; the app does not
+  claim a bulk-imported trusted catalog. USDA lookup is on demand.
 
 ## Documentation Map Note and Resolved Contradictions
 
@@ -473,6 +473,8 @@ guidance (transform/opacity-only motion, 44px targets, tabular numerals, and
 the reduced-motion override).
 
 No contradictions were found between `FEATURES.md`, `ARCHITECTURE.md`,
-`AGENTS.md`, `SUPABASE_SETUP.md`, and the source code during this audit. The
-auth-first boundary is consistently labeled in source and setup documentation;
-durable Supabase domain persistence remains explicitly pending.
+`AGENTS.md`, `SUPABASE_SETUP.md`, and the source code during the 2026-09-28
+status update. The auth-first boundary is consistently labeled in source and
+setup documentation; durable Supabase domain persistence is implemented. See
+the current RC3 verification record in `MVP_Priority_Matrix.md` for gates that
+remain unverified.
