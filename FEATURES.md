@@ -98,6 +98,15 @@ assumptions. It must not silently change formulas or clamp invalid inputs.
 - Do not generate automated calorie, macro, or personalized progression targets for minors, pregnancy or postpartum situations, eating-disorder recovery, or conditions requiring individualized professional care.
 - BMI is informational only, is optional where appropriate, and must not be the sole basis for a goal or target.
 - Display calorie and macro results as estimates or ranges with their assumptions, source, effective date, and disclaimer.
+- If shown on Home, workout energy is a rough estimate for supported adult
+  profiles only. Estimate completed sessions from recorded elapsed time and
+  current profile weight, using moderate calisthenics at 3.8 MET from the
+  [2024 Adult Compendium](https://pacompendium.com/conditioning-exercise/);
+  its standard MET convention is roughly 1 kcal/kg/hour and is not a precise
+  individual measurement. Cap elapsed time at planned or typical session
+  duration. Label the result approximate, note that elapsed time may include
+  rests or pauses and personal effort varies, and never use it as a meal
+  allowance or target.
 - Warn when a requested rate or target is unusually aggressive, require explicit confirmation, and never present it as recommended care.
 - Preserve the calculation and target version that was used for historical plans and summaries.
 - The current policy identifier is `calicoach-health-v1`. Raw estimates below
@@ -463,7 +472,8 @@ Keep these out of the MVP:
 
 Use a small navigation surface for the first release:
 
-- Home: today's workout, meals, targets, and progress snapshot
+- Home: today's workout, meals with compact target bars, and weekly workout
+  completion with an optional rough workout-energy estimate
 - Workouts: weekly plan, workout details, and session logging
 - Nutrition: daily log, meal suggestions, and saved recipes
 - Grocery: current weekly grocery list

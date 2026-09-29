@@ -18,6 +18,7 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { dayStatus, entriesForDate, totalsForDate } from "@/utility/nutrition";
 import { suggestProgression } from "@/utility/progression";
+import { estimateWorkoutEnergyKcal } from "@/utility/workoutEnergy";
 import { formatLong, startOfWeek, todayKey } from "@/utility/dates";
 
 const quickLinks = [
@@ -59,6 +60,12 @@ export default function HomePage() {
   const entries = entriesForDate(snapshot.nutritionLogs, today);
   const loggedSlots = Object.values(entries).filter((list) => list.length > 0).length;
   const status = dayStatus(snapshot.nutritionLogs, today);
+  const nutritionTargets = [
+    { label: "Calories", value: status === "unlogged" ? null : totals.calories, target: target?.calories ?? 0, unit: " kcal", barClassName: "bg-blush-300" },
+    { label: "Protein", value: status === "unlogged" ? null : totals.proteinG, target: target?.proteinG ?? 0, unit: " g", barClassName: "bg-lav-300" },
+    { label: "Carbs", value: status === "unlogged" ? null : totals.carbsG, target: target?.carbsG ?? 0, unit: " g", barClassName: "bg-peach-200" },
+    { label: "Fat", value: status === "unlogged" ? null : totals.fatG, target: target?.fatG ?? 0, unit: " g", barClassName: "bg-mint-200" },
+  ];
 
   const todayDow = new Date().getDay();
   const todaysWorkout = snapshot.plan?.workouts.find((w) => w.dayOfWeek === todayDow);
@@ -76,6 +83,20 @@ export default function HomePage() {
   const completedThisWeek = completedWorkoutIds.size;
   const scheduledThisWeek = snapshot.plan?.workouts.length ?? 0;
   const weekPct = scheduledThisWeek > 0 ? completedThisWeek / scheduledThisWeek : 0;
+  const plannedWorkoutMinutes = Object.fromEntries(
+    (snapshot.plan?.workouts ?? []).map((workout) => [workout.id, workout.estimatedMinutes]),
+  );
+  const workoutEnergyEstimateKcal =
+    snapshot.profile?.targetEligibility === "eligible"
+      ? estimateWorkoutEnergyKcal({
+          sessions: snapshot.sessions,
+          fromDate: weekOf,
+          toDate: today,
+          weightKg: snapshot.profile.weightKg,
+          plannedWorkoutMinutes,
+          fallbackWorkoutMinutes: snapshot.profile.sessionMinutes,
+        })
+      : null;
 
   const suggestion =
     snapshot.profile?.targetEligibility !== "unsupported" &&
@@ -115,54 +136,40 @@ export default function HomePage() {
             <div>
               <h2 className="font-extrabold">Today&apos;s meals</h2>
               <p className="text-xs font-bold text-ink-soft">
-                {Math.round(totals.calories)} of {target?.calories ?? 0} kcal
-                {status !== "complete" ? " · still logging" : ""}
+                {status === "unlogged"
+                  ? "No meals logged yet"
+                  : `${loggedSlots} of 4 meals logged${status === "partial" ? " · still logging" : ""}`}
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Link href="/nutrition" aria-label="Add food">
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-white/70 text-ink shadow-chip">
-                <Plus className="h-4 w-4" aria-hidden />
-              </span>
-            </Link>
-            <Link href="/progress" aria-label="See progress">
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-white/70 text-ink shadow-chip">
-                <TrendingUp className="h-4 w-4" aria-hidden />
-              </span>
-            </Link>
-          </div>
+          <Link href="/nutrition" aria-label="Add food">
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-white/70 text-ink shadow-chip">
+              <Plus className="h-4 w-4" aria-hidden />
+            </span>
+          </Link>
         </div>
 
-        <div className="mt-5 grid grid-cols-4 gap-2 text-center">
-          {[
-            { label: "Protein", value: totals.proteinG, unit: "g" },
-            { label: "Carbs", value: totals.carbsG, unit: "g" },
-            { label: "Fat", value: totals.fatG, unit: "g" },
-            { label: "Meals", value: loggedSlots, unit: "/4" },
-          ].map((stat) => (
-            <div key={stat.label}>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-ink-soft">
-                {stat.label}
-              </p>
-              <p className="text-xl font-extrabold tabular-nums">
-                {Math.round(stat.value)}
-                <span className="text-xs font-bold text-ink-soft">{stat.unit}</span>
-              </p>
+        {target ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3" role="group" aria-label="Today's nutrition targets">
+              {nutritionTargets.map((metric) => (
+                <ProgressBar key={metric.label} {...metric} compact />
+              ))}
             </div>
-          ))}
-        </div>
+            <p className="mt-2 text-[11px] font-semibold text-ink-soft">
+              Targets are estimates from your profile.
+            </p>
+          </>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-white/60 p-3 text-xs font-semibold text-ink-soft">
+            Daily targets aren&apos;t set yet. You can still log meals.
+          </p>
+        )}
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4">
           <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-bold">
             {formatLong(today)}
           </span>
-          <Link
-            href="/nutrition"
-            className="text-xs font-extrabold underline decoration-2 underline-offset-4"
-          >
-            Log a meal
-          </Link>
         </div>
       </Card>
 
@@ -181,15 +188,40 @@ export default function HomePage() {
           <p className="mt-1 text-xs font-bold text-ink-soft">
             {completedThisWeek} of {scheduledThisWeek} workouts this week
           </p>
+          <p className="mt-2 max-w-sm text-[11px] font-semibold text-ink-soft">
+            {snapshot.profile?.targetEligibility !== "eligible"
+              ? "Workout energy estimates are unavailable for this profile."
+              : workoutEnergyEstimateKcal === null
+                ? "Complete a workout to see a rough energy estimate."
+                : (
+                    <>
+                      Rough 3.8 MET moderate-calisthenics estimate from elapsed time and profile
+                      weight; pauses and effort vary.{" "}
+                      <a
+                        href="https://pacompendium.com/conditioning-exercise/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2"
+                      >
+                        Source
+                      </a>
+                    </>
+                  )}
+          </p>
         </div>
         <ProgressRing
-          value={target ? totals.calories / target.calories : 0}
+          value={weekPct}
           size={110}
-          label="Calories logged today"
-          centerLabel={String(Math.round(totals.calories))}
-          centerSub="kcal"
+          label="Workouts completed this week"
+          centerLabel={workoutEnergyEstimateKcal === null ? "—" : `≈${workoutEnergyEstimateKcal}`}
+          centerSub="kcal est."
           barClassName="text-ink"
         />
+        <p className="sr-only">
+          Estimated workout energy this week: {workoutEnergyEstimateKcal === null
+            ? "not available"
+            : `approximately ${workoutEnergyEstimateKcal} kilocalories`}.
+        </p>
       </Card>
 
       {/* Quick links grid */}
@@ -213,7 +245,7 @@ export default function HomePage() {
       </div>
 
       {/* Today's workout */}
-      <Card className="lg:col-span-1">
+      <Card className="lg:col-span-2">
         <div className="flex items-center justify-between">
           <h2 className="font-extrabold">Today&apos;s workout</h2>
           <span className="grid h-9 w-9 place-items-center rounded-full bg-peach-100">
@@ -240,7 +272,7 @@ export default function HomePage() {
                 {suggestion.reason}
               </p>
             ) : null}
-            <Link href={`/workouts/session/${todaysWorkout.id}`} className="mt-4 block">
+            <Link href={`/workouts/session/${todaysWorkout.id}`} className="mt-4 block lg:ml-auto lg:max-w-xs">
               <Button className="w-full">
                 <Play className="h-4 w-4" aria-hidden /> Start workout
               </Button>
@@ -252,7 +284,7 @@ export default function HomePage() {
               Rest day — no workout scheduled. Rest days are part of the plan,
               not a failure.
             </p>
-            <Link href="/workouts" className="mt-4 block">
+            <Link href="/workouts" className="mt-4 block lg:ml-auto lg:max-w-xs">
               <Button variant="soft" className="w-full">
                 View this week
               </Button>
@@ -261,43 +293,6 @@ export default function HomePage() {
         )}
       </Card>
 
-      {/* Targets */}
-      <Card className="lg:col-span-1">
-        <h2 className="font-extrabold">Daily targets</h2>
-        <p className="mt-1 text-xs font-semibold text-muted">
-          Estimates from your profile — recalculated when you edit it.
-        </p>
-        <div className="mt-4 grid gap-3">
-          <ProgressBar
-            label="Calories"
-            value={totals.calories}
-            target={target?.calories ?? 0}
-            unit=" kcal"
-            barClassName="bg-blush-300"
-          />
-          <ProgressBar
-            label="Protein"
-            value={totals.proteinG}
-            target={target?.proteinG ?? 0}
-            unit=" g"
-            barClassName="bg-lav-300"
-          />
-          <ProgressBar
-            label="Carbs"
-            value={totals.carbsG}
-            target={target?.carbsG ?? 0}
-            unit=" g"
-            barClassName="bg-peach-200"
-          />
-          <ProgressBar
-            label="Fat"
-            value={totals.fatG}
-            target={target?.fatG ?? 0}
-            unit=" g"
-            barClassName="bg-mint-200"
-          />
-        </div>
-      </Card>
     </div>
   );
 }

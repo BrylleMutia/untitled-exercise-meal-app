@@ -84,8 +84,13 @@ tints and rounded corners; screens are stat-focused and mobile-first.
 - **Reference influence:** `assets/ui_reference_01.jpg` shows pastel hero
   cards with a greeting, stat grids, and quick-link cards. The Home screen
   follows this shape: a blush "Today's meals" hero, a lavender "Your progress"
-  card, a four-tile quick-links grid, a "Today's workout" card, and a
-  "Daily targets" card.
+  card, a four-tile quick-links grid, and a full-width "Today's workout" card.
+  The meals hero uses a compact two-column view of calorie and macro target
+  bars with an estimate note; unlogged days say "Not logged" instead of showing
+  zero intake. It keeps one Add food action, without duplicate meal or progress
+  shortcuts. Target details remain available in Nutrition and Settings. The
+  weekly progress ring tracks workout completion and centers a rough energy
+  estimate from completed sessions when supported profile inputs are available.
 - **Tone:** warm greetings ("Hello, {name}!" / "Welcome back"), encouraging,
   non-guilt-based feedback ("Rest days are part of the plan, not a failure",
   "Unlogged day — no entries, that is fine"), and explicit estimate/disclaimer
@@ -244,7 +249,7 @@ components in `src/components/`.
 | `Button` | `ui/Button.tsx` | Variants `primary` (`bg-ink text-white`), `soft` (`bg-white/70`), `ghost`, `danger` (`bg-coral-200`). `min-h-12` (3rem = 44px+) target, `rounded-2xl px-5 text-sm font-bold`, disabled = `opacity-50` + `cursor-not-allowed`. |
 | `Chip` | `ui/Chip.tsx` | Round frosted icon chip, `h-11 w-11` (44px target), `bg-white/70 shadow-chip`, required `label` → `aria-label` + `title`. |
 | `ProgressRing` | `ui/ProgressRing.tsx` | Accessible circular progress; `role="img"` + `aria-label` percentage; `tabular-nums` center value. |
-| `ProgressBar` | `ui/ProgressBar.tsx` | `role="progressbar"` with `aria-valuenow/min/max`; `tabular-nums` value/target; bar color overridable. |
+| `ProgressBar` | `ui/ProgressBar.tsx` | `role="progressbar"` with `aria-valuenow/min/max` for logged values and text for unlogged values; `tabular-nums` value/target; compact styling and bar color overridable. |
 | `StatTile` | `ui/StatTile.tsx` | `Card`-based, `p-4`, `tabular-nums` value, optional sub-line. |
 | `ToastHost` | `ui/Toast.tsx` | `aria-live="polite"` host; `animate-pop` ink toasts; tone icon per `ok/info/warn`. |
 | `DayStrip` | `components/DayStrip.tsx` | Horizontal week selector (`role="group"`, `aria-pressed` per day); 44px minimum day controls with compact gaps, today highlighted with a lavender badge. |
