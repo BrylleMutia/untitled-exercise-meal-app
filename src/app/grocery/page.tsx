@@ -201,19 +201,21 @@ export default function GroceryPage() {
                   return (
                     <li
                       key={item.id}
-                      className={`grid grid-cols-[1.25rem_minmax(0,1fr)_8.5rem_2rem_2.75rem] items-center gap-2 rounded-xl px-2 py-1.5 ${
+                      className={`grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-x-2 gap-y-1 rounded-xl px-2 py-1.5 sm:grid-cols-[2.75rem_minmax(0,1fr)_8.5rem_2rem_2.75rem] ${
                         item.checked ? "bg-mint-50" : "bg-cream"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={() => actions.toggleGrocery(item.id)}
-                        aria-label={`Mark ${item.name} as done`}
-                        className="h-5 w-5 shrink-0 accent-lav-500"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className={`truncate text-sm font-bold ${item.checked ? "line-through opacity-60" : ""}`}>
+                      <label className="grid h-11 w-11 place-items-center">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={() => actions.toggleGrocery(item.id)}
+                          aria-label={`Mark ${item.name} as done`}
+                          className="h-5 w-5 accent-lav-500"
+                        />
+                      </label>
+                      <div className="col-start-2 row-start-1 min-w-0 sm:col-auto sm:row-auto">
+                        <p className={`break-words text-sm font-bold sm:truncate ${item.checked ? "line-through opacity-60" : ""}`}>
                           {item.name}
                           {item.custom ? (
                             <span className="ml-1 rounded-full bg-lav-100 px-1.5 text-[9px] uppercase">custom</span>
@@ -224,7 +226,7 @@ export default function GroceryPage() {
                           {adjusted ? " · adjusted by you" : ""}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="col-start-2 row-start-2 flex shrink-0 items-center gap-1 sm:col-auto sm:row-auto">
                         <button
                           type="button"
                           onClick={() => actions.setGroceryQuantity(item.id, Math.max(0, item.quantity - 1))}
@@ -245,12 +247,12 @@ export default function GroceryPage() {
                           <Plus className="h-3 w-3" aria-hidden />
                         </button>
                       </div>
-                      <span className="w-8 shrink-0 text-xs font-bold text-muted">{item.unit}</span>
+                      <span className="col-start-3 row-start-2 w-8 shrink-0 text-xs font-bold text-muted sm:col-auto sm:row-auto">{item.unit}</span>
                       <button
                         type="button"
                         onClick={() => actions.removeGroceryItem(item.id)}
                         aria-label={`Remove ${item.name}`}
-                        className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white"
+                        className="col-start-3 row-start-1 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white sm:col-auto sm:row-auto"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
                       </button>

@@ -245,7 +245,9 @@ narrow screens, the item-name input takes a full row so entered text stays
 readable; quantity, unit, and Add sit below it. At wider widths, the controls
 share one row with fixed widths for quantity and unit. The item name has a
 descriptive accessible label, and an in-progress item remains a recoverable
-draft until it is saved.
+draft until it is saved. In the list below, narrow item rows keep the name and
+remove action above the quantity controls; names can wrap, and the checkbox
+has a 44px touch target.
 
 ## Shared UI Component Inventory
 
