@@ -238,6 +238,15 @@ The active tab uses `bg-lav-100 text-ink`; inactive uses `text-muted`. All
 tabs set `aria-current="page"` when active. Settings is reachable from the
 header and the avatar, not from the bottom nav.
 
+### Grocery custom-item form
+
+The weekly list explains that the form adds items outside the meal plan. On
+narrow screens, the item-name input takes a full row so entered text stays
+readable; quantity, unit, and Add sit below it. At wider widths, the controls
+share one row with fixed widths for quantity and unit. The item name has a
+descriptive accessible label, and an in-progress item remains a recoverable
+draft until it is saved.
+
 ## Shared UI Component Inventory
 
 All shared primitives live in `src/components/ui/` plus the cross-route

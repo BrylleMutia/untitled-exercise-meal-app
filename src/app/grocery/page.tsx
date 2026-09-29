@@ -88,16 +88,20 @@ export default function GroceryPage() {
         </p>
       ) : null}
 
-      <div className="mt-4 flex gap-2">
+      <p className="mt-3 text-xs font-semibold text-ink-soft">
+        Add an item not included in your meal plan, like dish soap or an extra ingredient.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2 sm:flex-nowrap">
         <input
           value={name}
           onChange={(e) => {
             suppressDraftWriteRef.current = false;
             setName(e.target.value);
           }}
-          placeholder="Custom item (e.g. dish soap)"
-          className="input flex-1"
-          aria-label="Custom item name"
+          placeholder="Item name"
+          className="input min-w-0 basis-full sm:basis-0 sm:flex-1"
+          aria-label="Extra grocery item name"
         />
         <input
           value={quantity}
@@ -105,7 +109,7 @@ export default function GroceryPage() {
             suppressDraftWriteRef.current = false;
             setQuantity(e.target.value);
           }}
-          className="input w-16"
+          className="input !w-16 shrink-0"
           inputMode="numeric"
           aria-label="Quantity"
         />
@@ -115,7 +119,7 @@ export default function GroceryPage() {
             suppressDraftWriteRef.current = false;
             setUnit(e.target.value);
           }}
-          className="input w-20"
+          className="input !w-20 shrink-0"
           aria-label="Unit"
         >
           <option value="pcs">pcs</option>
@@ -155,7 +159,7 @@ export default function GroceryPage() {
           message="A meal plan creates one automatically. Generate a plan first, then tweak here — your checks and edits stay put on regenerations."
         />
         <Card tone="mint">
-          <h2 className="font-extrabold">Custom grocery item</h2>
+          <h2 className="font-extrabold">Add an extra item</h2>
           <p className="mt-1 text-xs font-semibold text-ink-soft">Your recoverable draft stays available even while the latest grocery list is unavailable.</p>
           {customItemEditor}
         </Card>

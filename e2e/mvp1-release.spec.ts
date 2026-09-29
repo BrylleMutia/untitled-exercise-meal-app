@@ -180,8 +180,18 @@ async function freshAccountJourney(browser: Browser, testInfo: import("@playwrig
     await logEgg(journeyPage);
 
     await journeyPage.goto("/grocery");
+    if (testInfo.project.name === "mobile") {
+      await journeyPage.setViewportSize({ width: 342, height: 693 });
+    }
     const customItem = `Journey item ${testInfo.project.name}`;
-    await journeyPage.getByRole("textbox", { name: "Custom item name" }).fill(customItem);
+    const customItemField = journeyPage.getByRole("textbox", { name: "Extra grocery item name" });
+    await customItemField.fill(customItem);
+    await expect(customItemField).toHaveValue(customItem);
+    if (testInfo.project.name === "mobile") {
+      const fieldWidth = await customItemField.evaluate((element) => element.getBoundingClientRect().width);
+      expect(fieldWidth).toBeGreaterThan(180);
+      expect(await journeyPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    }
     await journeyPage.getByRole("button", { name: "Add custom grocery item" }).click();
     await expect(journeyPage.getByText(customItem)).toBeVisible();
     await journeyPage.getByRole("button", { name: `Increase ${customItem}` }).click();
@@ -411,7 +421,7 @@ test.describe("MVP-1 release browser gate", () => {
   test("keeps a custom grocery draft through an offline failure and retries after reconnect", async ({ page, context }) => {
     await page.goto("/grocery");
     const name = `MVP offline item ${Date.now()}`;
-    const nameField = page.getByRole("textbox", { name: "Custom item name" });
+    const nameField = page.getByRole("textbox", { name: "Extra grocery item name" });
     await nameField.fill(name);
     await context.setOffline(true);
     await page.getByRole("button", { name: "Add custom grocery item" }).click();

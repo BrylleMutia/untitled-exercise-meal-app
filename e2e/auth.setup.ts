@@ -49,7 +49,7 @@ setup("prepare two fresh local authenticated fixtures", async ({ browser }) => {
         if (index === 0) {
           await page.goto("/grocery");
           const fixtureName = "E2E Private Fixture A";
-          await page.getByRole("textbox", { name: "Custom item name" }).fill(fixtureName);
+          await page.getByRole("textbox", { name: "Extra grocery item name" }).fill(fixtureName);
           await page.getByRole("button", { name: "Add custom grocery item" }).click();
           await expect(page.getByText(fixtureName)).toBeVisible();
         }
