@@ -180,8 +180,18 @@ async function freshAccountJourney(browser: Browser, testInfo: import("@playwrig
     await logEgg(journeyPage);
 
     await journeyPage.goto("/grocery");
+    if (testInfo.project.name === "mobile") {
+      await journeyPage.setViewportSize({ width: 342, height: 693 });
+    }
     const customItem = `Journey item ${testInfo.project.name}`;
-    await journeyPage.getByRole("textbox", { name: "Custom item name" }).fill(customItem);
+    const customItemField = journeyPage.getByRole("textbox", { name: "Extra grocery item name" });
+    await customItemField.fill(customItem);
+    await expect(customItemField).toHaveValue(customItem);
+    if (testInfo.project.name === "mobile") {
+      const fieldWidth = await customItemField.evaluate((element) => element.getBoundingClientRect().width);
+      expect(fieldWidth).toBeGreaterThan(180);
+      expect(await journeyPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    }
     await journeyPage.getByRole("button", { name: "Add custom grocery item" }).click();
     await expect(journeyPage.getByText(customItem)).toBeVisible();
     await journeyPage.getByRole("button", { name: `Increase ${customItem}` }).click();
@@ -190,6 +200,25 @@ async function freshAccountJourney(browser: Browser, testInfo: import("@playwrig
     await journeyPage.goto("/progress");
     await expect(journeyPage.getByRole("heading", { name: "Recent history" })).toBeVisible();
     await expect(journeyPage.getByText(/completed/i).first()).toBeVisible();
+    const historyList = journeyPage.getByRole("list", { name: "Recent history entries" });
+    await expect(historyList).toContainText(/Egg · \d+ kcal/);
+    await expect(historyList).not.toContainText(/review-food-[a-f0-9]{32}/i);
+    if (testInfo.project.name === "mobile") {
+      const historyRows = historyList.getByRole("listitem");
+      const firstHistoryRow = historyRows.first();
+      await expect(firstHistoryRow).toBeVisible();
+      const rowLayout = await firstHistoryRow.evaluate((element) => ({
+        itemWidth: element.getBoundingClientRect().width,
+        listWidth: element.parentElement!.getBoundingClientRect().width,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        overflowX: getComputedStyle(element).overflowX,
+      }));
+      expect(rowLayout.itemWidth).toBeLessThanOrEqual(rowLayout.listWidth + 1);
+      expect(rowLayout.overflowX).toBe("auto");
+      expect(rowLayout.scrollWidth).toBeGreaterThan(rowLayout.clientWidth);
+      expect(await journeyPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    }
   } catch (error) {
     if (journeyPage) {
       const diagnostic = `${journeyPage.url()}\n${await journeyPage.locator("body").innerText().catch(() => "Page text unavailable.")}`;
@@ -218,6 +247,61 @@ test.describe("MVP-1 release browser gate", () => {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
       expect(overflow, `${route} overflows its viewport`).toBe(false);
     }
+  });
+
+  test("keeps mobile bottom navigation anchored on Progress", async ({ page }, testInfo) => {
+    const bottomNav = page.locator('nav[aria-label="Primary"]').last();
+    if (testInfo.project.name !== "mobile") {
+      await page.goto("/progress");
+      await expect(page.getByRole("heading", { name: "Recent history" })).toBeVisible();
+      await expect(bottomNav).toBeHidden();
+      return;
+    }
+
+    await page.setViewportSize({ width: 342, height: 693 });
+    await page.goto("/workouts");
+    await expect(page.getByRole("heading", { name: "Workouts" })).toBeVisible();
+    await expect(bottomNav).toBeVisible();
+    const position = () => bottomNav.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const progressLink = element.querySelector('a[href="/progress"]')!.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        progressLeft: progressLink.left,
+        progressRight: progressLink.right,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
+    });
+
+    const beforeNavigation = await position();
+    expect(Math.abs((beforeNavigation.left + beforeNavigation.right) / 2 - beforeNavigation.viewportWidth / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(beforeNavigation.viewportHeight - beforeNavigation.bottom - 12)).toBeLessThanOrEqual(1);
+
+    await bottomNav.getByRole("link", { name: "Progress" }).click();
+    await expect(page).toHaveURL(/\/progress$/);
+    await expect(page.getByRole("heading", { name: "Recent history" })).toBeVisible();
+    const atTop = await position();
+    expect(Math.abs(atTop.top - beforeNavigation.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs((atTop.left + atTop.right) / 2 - atTop.viewportWidth / 2)).toBeLessThanOrEqual(1);
+    expect(atTop.left).toBeGreaterThanOrEqual(12);
+    expect(atTop.right).toBeLessThanOrEqual(atTop.viewportWidth - 12);
+    expect(atTop.progressLeft).toBeGreaterThanOrEqual(atTop.left);
+    expect(atTop.progressRight).toBeLessThanOrEqual(atTop.viewportWidth - 12);
+    expect(Math.abs(atTop.viewportHeight - atTop.bottom - 12)).toBeLessThanOrEqual(1);
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    const afterScroll = await position();
+    expect(Math.abs(afterScroll.top - atTop.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs((afterScroll.left + afterScroll.right) / 2 - afterScroll.viewportWidth / 2)).toBeLessThanOrEqual(1);
+    expect(afterScroll.left).toBeGreaterThanOrEqual(12);
+    expect(afterScroll.right).toBeLessThanOrEqual(afterScroll.viewportWidth - 12);
+    expect(afterScroll.progressRight).toBeLessThanOrEqual(afterScroll.viewportWidth - 12);
+    expect(Math.abs(afterScroll.viewportHeight - afterScroll.bottom - 12)).toBeLessThanOrEqual(1);
   });
 
   test("requires quantity review and preserves input focus for a simple food", async ({ page }) => {
@@ -337,7 +421,7 @@ test.describe("MVP-1 release browser gate", () => {
   test("keeps a custom grocery draft through an offline failure and retries after reconnect", async ({ page, context }) => {
     await page.goto("/grocery");
     const name = `MVP offline item ${Date.now()}`;
-    const nameField = page.getByRole("textbox", { name: "Custom item name" });
+    const nameField = page.getByRole("textbox", { name: "Extra grocery item name" });
     await nameField.fill(name);
     await context.setOffline(true);
     await page.getByRole("button", { name: "Add custom grocery item" }).click();
