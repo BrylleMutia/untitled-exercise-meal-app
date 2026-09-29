@@ -250,7 +250,7 @@ components in `src/components/`.
 | `DayStrip` | `components/DayStrip.tsx` | Horizontal week selector (`role="group"`, `aria-pressed` per day); 44px minimum day controls with compact gaps, today highlighted with a lavender badge. |
 | `EmptyState` | `components/EmptyState.tsx` | Dashed lavender-bordered centered panel with optional action node. |
 | `ExerciseIllustration` | `components/ExerciseIllustration.tsx` | Renders `/exercises/<slug>.png` via `next/image`; `illustrationAlt` alt text plus an `sr-only` CC BY-SA 4.0 credit. |
-| `Sparkline` / `HistoryList` | `components/progress/progressShared.tsx` | Weight sparkline (`role="img"`, `aria-label`) and accessible calendar history summary list. |
+| `Sparkline` / `HistoryList` | `components/progress/progressShared.tsx` | Weight sparkline (`role="img"`, `aria-label`) and accessible calendar history summary list. Nutrition entries show human-readable food labels instead of internal IDs. Each history row stays within the card width and exposes horizontal scrolling for long details on narrow screens. |
 
 ## Accessibility and Interaction
 

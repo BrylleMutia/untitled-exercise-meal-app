@@ -190,6 +190,25 @@ async function freshAccountJourney(browser: Browser, testInfo: import("@playwrig
     await journeyPage.goto("/progress");
     await expect(journeyPage.getByRole("heading", { name: "Recent history" })).toBeVisible();
     await expect(journeyPage.getByText(/completed/i).first()).toBeVisible();
+    const historyList = journeyPage.getByRole("list", { name: "Recent history entries" });
+    await expect(historyList).toContainText(/Egg · \d+ kcal/);
+    await expect(historyList).not.toContainText(/review-food-[a-f0-9]{32}/i);
+    if (testInfo.project.name === "mobile") {
+      const historyRows = historyList.getByRole("listitem");
+      const firstHistoryRow = historyRows.first();
+      await expect(firstHistoryRow).toBeVisible();
+      const rowLayout = await firstHistoryRow.evaluate((element) => ({
+        itemWidth: element.getBoundingClientRect().width,
+        listWidth: element.parentElement!.getBoundingClientRect().width,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        overflowX: getComputedStyle(element).overflowX,
+      }));
+      expect(rowLayout.itemWidth).toBeLessThanOrEqual(rowLayout.listWidth + 1);
+      expect(rowLayout.overflowX).toBe("auto");
+      expect(rowLayout.scrollWidth).toBeGreaterThan(rowLayout.clientWidth);
+      expect(await journeyPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    }
   } catch (error) {
     if (journeyPage) {
       const diagnostic = `${journeyPage.url()}\n${await journeyPage.locator("body").innerText().catch(() => "Page text unavailable.")}`;

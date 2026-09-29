@@ -2,9 +2,20 @@
 
 import { Check, Dumbbell, Scale, UtensilsCrossed } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
+import { FOODS } from "@/constants/foods";
 import type { HistoryReadModel } from "@/types/backend";
 
 export type Tone = "lav" | "mint" | "peach";
+
+const FOOD_NAMES_BY_ID = new Map(FOODS.map((food) => [food.id, food.name]));
+
+function getNutritionHistoryLabel(foodId?: string, customName?: string) {
+  const trimmedCustomName = customName?.trim();
+  if (trimmedCustomName) return trimmedCustomName;
+  if (foodId && FOOD_NAMES_BY_ID.has(foodId)) return FOOD_NAMES_BY_ID.get(foodId)!;
+  if (foodId?.startsWith("review-food-")) return "Reviewed food";
+  return "Food entry";
+}
 
 interface SparklineProps {
   points: number[];
@@ -71,7 +82,7 @@ export function HistoryList({ history }: { history?: HistoryReadModel | null }) 
       date: n.date,
       icon: <UtensilsCrossed className="h-4 w-4" aria-hidden />,
       label: `Nutrition — ${n.slot}`,
-      detail: `${n.foodId ?? n.customName ?? "entry"} · ${Math.round(n.calories)} kcal`,
+      detail: `${getNutritionHistoryLabel(n.foodId, n.customName)} · ${Math.round(n.calories)} kcal`,
     })),
     ...(history?.weights ?? app.snapshot.weights).map((w) => ({
       date: w.date,
@@ -93,20 +104,29 @@ export function HistoryList({ history }: { history?: HistoryReadModel | null }) 
   }
 
   return (
-    <ul className="mt-3 grid gap-1.5">
+    <ul
+      aria-label="Recent history entries"
+      className="mt-3 grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5"
+    >
       {rows.map((row, i) => (
-        <li key={`${row.date}-${i}`} className="flex items-center gap-3 rounded-2xl bg-cream px-3 py-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white">
-            {row.icon}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold">
-              {row.label}
-              <span className="font-semibold text-muted"> · {row.date}</span>
-            </p>
-            <p className="truncate text-[11px] font-semibold text-muted">{row.detail}</p>
+        <li
+          key={`${row.date}-${i}`}
+          tabIndex={0}
+          className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-2xl bg-cream"
+        >
+          <div className="flex w-max min-w-full items-center gap-3 px-3 py-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white">
+              {row.icon}
+            </span>
+            <div className="shrink-0">
+              <p className="whitespace-nowrap text-sm font-bold">
+                {row.label}
+                <span className="font-semibold text-muted"> · {row.date}</span>
+              </p>
+              <p className="whitespace-nowrap text-[11px] font-semibold text-muted">{row.detail}</p>
+            </div>
+            <Check className="h-4 w-4 shrink-0 text-mint-200" aria-hidden />
           </div>
-          <Check className="h-4 w-4 shrink-0 text-mint-200" aria-hidden />
         </li>
       ))}
     </ul>
