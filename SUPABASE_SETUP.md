@@ -12,7 +12,7 @@ second source of truth. Durable mutations use deliberate authenticated RPC
 wrappers backed by private implementations; direct client table writes remain
 revoked.
 
-## RC3 verification checkpoint — 2026-09-28
+## RC3 verification checkpoint — 2026-09-29
 
 - The disposable local Supabase database reset successfully. All 39 repository
   migrations applied in order, including `20260918033000`; applied history has
@@ -28,13 +28,13 @@ revoked.
   required tests had no skips, and local accounts/storage states were removed.
 - Supabase CLI is pinned to `2.118.0` and is used by the local verification
   scripts and the new CI integration job.
-- Candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b` is on branch
+- Candidate source `8414374d45ec33b890860ed2e646bfa68c2ef1f3` is on branch
   `codex/mvp-2-rc3`, based on `main` at
   `a1db26463e87dab1d3da6dc01293423a9be5ae62`. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1)
-  is open; it includes the release-gate implementation and the mobile grocery
-  touch-target/grid fixes. Evidence commit `101c919` passed hosted CI run 9;
-  follow-up status commit `7e5f726` passed both hosted jobs in run 10. The
-  existing annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`.
+  is open; it includes the release-gate implementation and mobile grocery
+  touch-target/grid fixes; remote verification ran against this source commit.
+  The existing
+  annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`.
 - Linked migration history matches all 39 repository versions. The read-only
   fingerprint from `scripts/release-schema-fingerprint.sql` matches for
   columns, constraints, indexes, RLS policies, relations, routines/bodies,
@@ -44,27 +44,34 @@ revoked.
   and 1; all eight deployed source files match the repository. Remote
   `planned_exercises` contains 93 rows, no duplicate sort groups, no invalid
   order values, and no orphaned exercise-history references.
-- The guarded remote RPC smoke passed all 31 public wrappers; both supplied
-  disposable accounts were deleted and a follow-up query confirmed neither
-  remains. All four anonymous provider probes returned 401; USDA search,
-  DeepSeek extraction, meal matching, and one low-confidence estimate passed.
-  The USDA persistence check returned `P0001`: its deterministic test food ID
-  already belonged to another account. The runner now generates unique IDs per
-  run. A fresh confirmed disposable account pair is needed to rerun persistence
-  because the supplied pair was deleted. No schema or Edge Function deployment
-  occurred.
+- On 2026-09-29, from source commit
+  `8414374d45ec33b890860ed2e646bfa68c2ef1f3`, the corrected guarded provider smoke passed with a newly
+  confirmed disposable account: all four anonymous probes returned 401; USDA
+  search, DeepSeek extraction, two-ingredient meal matching, one low-confidence
+  estimate, a unique reviewed USDA food save, and authenticated account export
+  passed. The export contained one persisted provider food and no nutrition
+  logs. The record was FDC `2708951` (`Survey (FNDDS)`), release
+  `FoodData Central API verified 2026-09-22`, revision
+  `Survey (FNDDS):2708951`, preparation `prepared`, serving 100 g.
+- `npm run supabase:test:providers:remote` then
+  `npm run supabase:test:rpc:remote`, each with process-scoped exact-project
+  confirmation, passed. The RPC smoke exercised all 31 public wrappers with the two
+  confirmed disposable accounts. The account deletion flow completed and a
+  read-only query found zero matching Auth users. No schema or Edge Function
+  deployment occurred.
 - Hosted GitHub Actions run 8 passed both `web` and Docker-backed `integration`
   on candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`. Earlier runs 6 and
   7 caught a mobile grocery control overlap; explicit fixed grid columns
   corrected it. Runs 9 and 10 also passed both jobs on their recorded evidence
-  commits. The focused mobile journey passed locally. Production Site URL/redirects,
-  live SMTP confirmation/recovery, leaked-password protection, and public
-  deployment remain separate launch work.
+  commits. Run 11 passed both jobs on current source commit
+  `8414374d45ec33b890860ed2e646bfa68c2ef1f3`. The focused mobile journey
+  passed locally. Production Site URL/redirects, live SMTP confirmation/recovery,
+  leaked-password protection, and public deployment remain separate launch work.
 
-Hosted CI is green through evidence commit `101c919`. A successful rerun of
-remote USDA persistence with a fresh account pair, final remote evidence
-supplement, merge, main-branch CI, and the RC3 tag remain pending. Do not tag
-RC3 until each gate is recorded.
+Candidate verification is complete on the open PR head. The closeout evidence
+commit, PR merge, CI on the resulting `main` commit, and annotated RC3 tag remain
+pending. Do not tag RC3 until those gates are recorded against the exact release
+commit.
 
 ## 1. Status at a glance
 
@@ -73,8 +80,9 @@ RC3 until each gate is recorded.
 - [x] Client-safe environment variable names are documented.
 - [x] Remote client settings are kept in ignored `.env.rc3.local`; disposable
   credentials are read from ignored `.env.local`. Both files remain
-  uncommitted. The supplied account pair has been deleted; replace it with a
-  newly confirmed disposable pair before rerunning provider persistence.
+  uncommitted. The confirmed pair used for 2026-09-29 remote verification has
+  been deleted and verified absent; use a new disposable pair for any future
+  remote smoke.
 - [x] The browser Supabase client uses `@supabase/ssr` and the publishable
   key.
 - [x] The request-scoped server Supabase client uses cookie-backed SSR
@@ -721,10 +729,10 @@ The guarded remote smoke uses only newly confirmed disposable identities. The
 ignored `.env.rc3.local` contains the exact project URL and publishable key;
 ignored `.env.local` contains `USER_A_EMAIL`, `USER_A_PASSWORD`,
 `USER_B_EMAIL`, and `USER_B_PASSWORD` entries (the parser accepts `:` or
-`=` separators). The pair used in the 2026-09-28 RPC smoke was deleted and
-verified absent; replace those four entries with a fresh confirmed disposable
-pair before retrying remote provider persistence. Never commit or print their
-values:
+`=` separators). The pair used on 2026-09-28 and the newly confirmed pair used
+on 2026-09-29 were both deleted; a read-only query confirmed the latest pair is
+absent. Use a new confirmed disposable pair before any future remote smoke.
+Never commit or print credential values:
 
 ```powershell
 $env:SUPABASE_RPC_REMOTE_CONFIRM = "ifunkhvbvkdxolhpxjvk"
@@ -827,22 +835,20 @@ reorder a migration that may already be applied; use a new forward migration.
 The MVP-2 RC3 implementation work has added the local repository integration
 suite, isolated authenticated browser fixtures with cleanup, the fresh-account
 primary journey, and a Docker-backed CI integration job. Local migration,
-database, repository, and focused browser journey checks are recorded in the
-RC3 checkpoint at the top of this document.
+database, repository, browser, linked schema/source comparison, remote provider
+persistence, and two-account RPC checks are recorded in the RC3 checkpoint at
+the top of this document.
 
-Still required before calling the RC3 candidate verified:
+The RC3 candidate gates are verified on PR #1's current head. Remaining
+closeout steps before declaring the tagged release complete:
 
-1. Commit the candidate on `codex/mvp-2-rc3`, open a PR, and record passing
-   hosted CI for both jobs.
-2. Add two new confirmed disposable accounts to the ignored local config and
-   rerun provider persistence followed by the two-account RPC smoke. The
-   previous pair is already deleted. The linked history/schema/source
-   comparison is complete and matched; stop if it changes or any mismatch
-   appears. Do not push remote changes without separate authorization.
-3. Record the exact verified commit, migration/function versions, environment,
-   commands, browser results, remote results, and limitations. Merge only after
-   gates pass; require CI on the resulting `main` SHA and tag that exact
-   commit as `mvp-1.0.0-rc.3`.
+1. Commit the final remote verification evidence on `codex/mvp-2-rc3` and
+   require both hosted CI jobs to pass on that exact PR head.
+2. Merge PR #1 only after the evidence commit is green. Require CI on the
+   resulting `main` SHA.
+3. Create the annotated `mvp-1.0.0-rc.3` tag on that exact verified `main` SHA;
+   record the final SHA and evidence links in the annotation. No remote schema
+   or function rollout is part of closeout.
 
 Production Site URL/redirects, live SMTP delivery, leaked-password protection,
 and public deployment remain post-RC launch gates.

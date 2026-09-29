@@ -1,6 +1,6 @@
 # MVP Priority Matrix
 
-Audit date: 2026-09-28
+Audit date: 2026-09-29
 Implementation specification revision: 2026-09-28
 
 This document summarizes the current implementation and the work required to
@@ -10,7 +10,7 @@ interaction guidance in [`DESIGN.md`](./DESIGN.md), and the operational backend
 status in [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md). Source code, migrations,
 generated types, and tests are treated as the implementation truth.
 
-## Current phase status — MVP-2 / RC3 — 2026-09-28
+## Current phase status — MVP-2 / RC3 — 2026-09-29
 
 This is the current status entry and supersedes stale “pending” or “complete”
 claims in earlier phase checklists. Historical release evidence below is kept
@@ -18,7 +18,7 @@ as an audit trail; it is not evidence for RC3.
 
 | Gate | Current result |
 |---|---|
-| Candidate base | Implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b` is on `codex/mvp-2-rc3`, based on `main` at `a1db26463e87dab1d3da6dc01293423a9be5ae62`; it includes the release gates plus mobile grocery touch-target/grid fixes. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1) is open. Evidence commit `101c919` passed CI run 9; follow-up status commit `7e5f726` passed CI run 10. The existing annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`; no RC3 tag exists. |
+| Candidate base | Verified implementation and remote-smoke source commit `8414374d45ec33b890860ed2e646bfa68c2ef1f3` is on `codex/mvp-2-rc3`, based on `main` at `a1db26463e87dab1d3da6dc01293423a9be5ae62`; it includes the release gates plus mobile grocery touch-target/grid fixes. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1) is open for the final evidence update. CI run 11 passed both jobs on this source commit. The existing annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`; RC3 awaits merge, `main` CI, and tag creation. |
 | Environment | Windows checkout with disposable Docker-backed local Supabase at `127.0.0.1:56321`, pinned CLI `2.118.0`, and Chromium. Browser provider responses are mocked. Remote settings are in ignored local config; account values are never logged or committed. |
 | Local migrations | Disposable local DB reset passed. All 39 repository migrations apply, including `20260918033000`; database-only `20260918113514` is absent. |
 | Database verification | Local DB lint passed; 10 pgTAP suites / 436 assertions passed; 31-wrapper RPC smoke and concurrency checks passed. |
@@ -26,23 +26,23 @@ as an audit trail; it is not evidence for RC3.
 | Static checks | Typecheck, lint, and production build passed after the release smoke runner correction on the current branch worktree. |
 | Browser tests | Full authenticated suite passed 24/24, including 11 scenarios at each of 1440×900 and 390×844 plus setup/teardown; public suite passed 4/4. Coverage includes fresh onboarding-to-progress, keyboard tab order, enlarged text, reduced motion, offline retry, provider failure, stale edit, exports, and account isolation. Setup and cleanup passed with no skipped required scenarios. |
 | Linked project | Read-only history comparison matches all 39 repository migration versions. The normalized schema fingerprint matches across columns, constraints, indexes, RLS policies, relations, routines/bodies, grants, schemas, and triggers. Four provider functions are JWT-protected at versions 7, 7, 2, and 1; all eight deployed source files match the repository. The planned-exercise correction has 93 rows, zero duplicate sort groups, zero invalid orders, and zero orphaned history links. No remote schema/function rollout occurred. |
-| Remote smoke | All 31 public RPC wrappers passed with two supplied disposable accounts; cleanup succeeded and a follow-up query confirmed both accounts absent. All four anonymous provider probes returned 401; USDA search, DeepSeek extraction, meal matching, and one low-confidence estimate passed. The reviewed USDA save failed with `P0001` because the deterministic smoke food ID already belongs to another account. The runner now uses unique per-run IDs; a fresh confirmed account pair is required to rerun provider persistence because the supplied pair was deleted. |
-| CI | Hosted run 8 passed both `web` and Docker-backed `integration` on implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`; run 9 passed on evidence commit `101c919`, and run 10 passed on status commit `7e5f726`. Runs 6 and 7 exposed a mobile grocery control overlap; explicit fixed grid columns resolved it. |
-| Release packaging | PR #1 remains open. The final remote evidence supplement, merge/main CI, and annotated `mvp-1.0.0-rc.3` tag remain pending. Hold the tag until corrected provider persistence passes with a fresh disposable pair. |
+| Remote smoke | On 2026-09-29 all four anonymous provider probes returned 401; authenticated USDA search, DeepSeek extraction, two-ingredient matching, one low-confidence estimate, reviewed USDA persistence, and account export passed. Export contained one provider food and zero nutrition logs: FDC `2708951`, `Survey (FNDDS)`, revision `Survey (FNDDS):2708951`, 100 g prepared serving. The 31-wrapper remote RPC smoke passed with two disposable accounts; account cleanup succeeded and a read-only Auth query confirmed zero matching users. No remote schema/function deployment occurred. |
+| CI | Hosted run 8 passed both `web` and Docker-backed `integration` on implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`; runs 9 and 10 passed on their evidence commits; run 11 passed both jobs on verified source commit `8414374d45ec33b890860ed2e646bfa68c2ef1f3`. Runs 6 and 7 exposed a mobile grocery control overlap; explicit fixed grid columns resolved it. |
+| Release packaging | Candidate verification and final remote smoke are complete; PR #1 remains open for final evidence. Merge, CI on the resulting `main` SHA, and annotated `mvp-1.0.0-rc.3` tag remain pending. |
 | Separate launch gates | Production Site URL/redirects, live SMTP, leaked-password protection, and public deployment remain outside this candidate. |
 
-Local checks, the linked schema/source comparison, the primary remote RPC
-smoke, and the hosted PR CI gates are complete. RC3 remains unverified until
-the corrected USDA persistence smoke is rerun with newly confirmed disposable
-accounts. Then record final evidence, merge, require CI on the resulting main
+Local checks, linked schema/source comparison, provider persistence, account
+cleanup, the primary remote RPC smoke, and hosted PR CI are complete on the
+current candidate. Remaining work is release closeout only: commit this final
+evidence, merge PR #1 after its CI passes, require CI on the resulting `main`
 commit, and create the annotated candidate tag on that exact SHA.
 
 ### RC3 verification evidence — working closeout record
 
-- **Date and environment:** 2026-09-28; Windows development checkout, disposable
+- **Date and environment:** 2026-09-29 closeout verification; Windows development checkout, disposable
   Docker-backed local Supabase (`127.0.0.1:56321`), Supabase CLI `2.118.0`,
   Chromium, and mocked provider responses for CI/browser tests.
-- **Source:** candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b` on
+- **Source:** verified closeout source `8414374d45ec33b890860ed2e646bfa68c2ef1f3` on
   `codex/mvp-2-rc3`, based on `main` at
   `a1db26463e87dab1d3da6dc01293423a9be5ae62`; [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1).
 - **Local commands:** `npm run typecheck`, `npm run lint`, `npm run test:local`,
@@ -62,7 +62,10 @@ commit, and create the annotated candidate tag on that exact SHA.
   passed both hosted jobs on evidence commit
   `101c9198b72d59418ba1a926d3af3db70feba912`.
 - **Follow-up CI:** [CI run 10](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36401918387)
-  passed both jobs on the subsequent status commit `7e5f726f1ccc8699d2f1c737b24f90857ae4c622`.
+  passed both jobs on status commit `7e5f726f1ccc8699d2f1c737b24f90857ae4c622`.
+  [CI run 11](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36402667956)
+  passed both jobs on verified source commit
+  `8414374d45ec33b890860ed2e646bfa68c2ef1f3`.
 - **Database and deployed functions:** local reset applies all 39 repository
   migrations; linked history has the same versions. Read-only normalized schema
   fingerprints match for columns, constraints, indexes, RLS policies,
@@ -73,14 +76,18 @@ commit, and create the annotated candidate tag on that exact SHA.
 - **Browser results:** public suite 4/4; authenticated suite 24/24 with 11
   desktop and 11 mobile cases plus fixture setup/teardown; no required skips.
   Fixture accounts and browser state were removed.
-- **Remote smoke and limitation:** 31 authenticated RPC wrappers passed; both
-  disposable accounts were removed and verified absent. Anonymous provider
-  probes returned 401; USDA search, DeepSeek extraction, batch matching, and a
-  low-confidence estimate passed. USDA persistence hit `P0001` because a
-  deterministic fixture ID was already owned by another account. Per-run IDs
-  fixed the collision, but persistence has not yet been rerun: the earlier
-  disposable pair is deleted, and a fresh confirmed pair is required. No remote
-  migration or function deployment occurred.
+- **Remote smoke:** `npm run supabase:test:providers:remote` followed by
+  `npm run supabase:test:rpc:remote` with process-scoped exact-project
+  confirmation. On 2026-09-29 the corrected provider runner passed all four
+  anonymous-denial checks (401), authenticated USDA search, DeepSeek extraction,
+  two-ingredient matching, one low-confidence estimate, unique reviewed food
+  persistence, and account export. Export returned one persisted provider food
+  and zero nutrition logs: FDC `2708951`, `Survey (FNDDS)`, source release
+  `FoodData Central API verified 2026-09-22`, provider revision
+  `Survey (FNDDS):2708951`, prepared, 100 g. The 31-wrapper remote RPC smoke
+  passed with two disposable users; deletion completed, and a read-only query
+  confirmed zero matching Auth users. No remote migration or function deploy
+  occurred.
 - **Separate launch limitations:** production Auth URLs/redirects, live SMTP,
   leaked-password protection, and public deployment remain post-RC work.
 
@@ -1358,7 +1365,7 @@ legacy arrays is a follow-up optimization, not an MVP correctness gap.
 
 ### M2.1 — Automated test completion
 
-**Status:** Local and hosted automated gates passed; linked provider persistence verification remains pending.
+**Status:** Local and hosted automated gates passed; the linked provider persistence and RPC checks passed on 2026-09-29.
 
 **Outcome**
 
@@ -1389,7 +1396,7 @@ automated evidence.
 
 ### M2.2 — Browser, accessibility, and end-to-end verification
 
-**Status:** Local and hosted browser matrices passed on mobile and desktop; linked schema/source checks passed, with the corrected provider persistence rerun and any broader manual accessibility review still open.
+**Status:** Local and hosted browser matrices passed on mobile and desktop; linked schema/source checks and guarded provider persistence verification passed.
 
 **Outcome**
 
@@ -1448,7 +1455,7 @@ placing secrets or unsafe write steps in the repository.
 
 ### M2.4 — Guarded rollout and release evidence
 
-**Status:** Linked read-only comparison and RPC/provider-boundary smoke are recorded; corrected USDA persistence, final evidence commit, merge/main CI, and tag remain pending.
+**Status:** Linked read-only comparison and guarded RPC/provider smoke are complete; final evidence commit, merge/main CI, and annotated tag remain pending.
 
 **Outcome**
 
