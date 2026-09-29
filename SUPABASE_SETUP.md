@@ -2,17 +2,9 @@
 
 This document is the operational checklist for the app's Supabase boundary.
 The repository contains the forward-only domain schema, authored catalog seed
-data, and the authenticated RPC/repository phase. The linked remote project is
-`untitled-exercise-meal-app` (`ifunkhvbvkdxolhpxjvk`) in `ap-northeast-1`.
-Remote history now contains 39 matching migrations through
-`20260924103000_mvp1_export_owned_foods.sql`; the linked dry run is up to date.
-The remote unified schema/function rollout is complete. On 2026-09-24 the
-retained User B passed authenticated USDA search, batch matching, DeepSeek
-extraction, and an explicit low-confidence estimate; the guarded smoke also
-persisted a weighted USDA record through `save_food`. A later rerun correctly
-returned `rate_limited` after the per-user provider quota was consumed. The
-two confirmed disposable accounts are intentionally retained for later testing
-and are not release evidence requiring deletion.
+data, and authenticated RPC/repository phase. The current RC3 local and
+read-only linked-project checks are recorded first; historical RC2 evidence
+below remains an audit trail.
 
 The MVP authority is Supabase Auth plus Postgres. Browser storage may cache
 read models or preserve recoverable drafts later, but it must not become a
@@ -20,13 +12,77 @@ second source of truth. Durable mutations use deliberate authenticated RPC
 wrappers backed by private implementations; direct client table writes remain
 revoked.
 
+## RC3 verification checkpoint — 2026-09-29
+
+- The disposable local Supabase database reset successfully. All 39 repository
+  migrations applied in order, including `20260918033000`; applied history has
+  39 entries and the database-only `20260918113514` entry is absent.
+- Local DB lint passed; all 10 pgTAP suites / 436 assertions passed; all 31 RPC
+  wrappers and concurrency checks passed. The repository integration suite
+  passed 4 tests for hydration, stale revisions, historical plan preservation,
+  idempotent nutrition, history pagination, grocery reconciliation, and account
+  isolation.
+- Typecheck, lint, all 55 existing unit tests, and the production build passed.
+  Authenticated Playwright passed 24/24 across 1440×900 and 390×844, including
+  setup/teardown and the fresh-account journey. Public browser tests passed 4/4;
+  required tests had no skips, and local accounts/storage states were removed.
+- Supabase CLI is pinned to `2.118.0` and is used by the local verification
+  scripts and the new CI integration job.
+- Candidate source `8414374d45ec33b890860ed2e646bfa68c2ef1f3` is on branch
+  `codex/mvp-2-rc3`, based on `main` at
+  `a1db26463e87dab1d3da6dc01293423a9be5ae62`. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1)
+  is open; it includes the release-gate implementation and mobile grocery
+  touch-target/grid fixes; remote verification ran against this source commit.
+  The existing
+  annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`.
+- Linked migration history matches all 39 repository versions. The read-only
+  fingerprint from `scripts/release-schema-fingerprint.sql` matches for
+  columns, constraints, indexes, RLS policies, relations, routines/bodies,
+  grants, schemas, and triggers after normalizing CRLF/LF. The deployed
+  `nutrition-search`, `nutrition-text-parse`, `nutrition-meal-match`, and
+  `nutrition-macro-estimate` functions are JWT-protected at versions 7, 7, 2,
+  and 1; all eight deployed source files match the repository. Remote
+  `planned_exercises` contains 93 rows, no duplicate sort groups, no invalid
+  order values, and no orphaned exercise-history references.
+- On 2026-09-29, from source commit
+  `8414374d45ec33b890860ed2e646bfa68c2ef1f3`, the corrected guarded provider smoke passed with a newly
+  confirmed disposable account: all four anonymous probes returned 401; USDA
+  search, DeepSeek extraction, two-ingredient meal matching, one low-confidence
+  estimate, a unique reviewed USDA food save, and authenticated account export
+  passed. The export contained one persisted provider food and no nutrition
+  logs. The record was FDC `2708951` (`Survey (FNDDS)`), release
+  `FoodData Central API verified 2026-09-22`, revision
+  `Survey (FNDDS):2708951`, preparation `prepared`, serving 100 g.
+- `npm run supabase:test:providers:remote` then
+  `npm run supabase:test:rpc:remote`, each with process-scoped exact-project
+  confirmation, passed. The RPC smoke exercised all 31 public wrappers with the two
+  confirmed disposable accounts. The account deletion flow completed and a
+  read-only query found zero matching Auth users. No schema or Edge Function
+  deployment occurred.
+- Hosted GitHub Actions run 8 passed both `web` and Docker-backed `integration`
+  on candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`. Earlier runs 6 and
+  7 caught a mobile grocery control overlap; explicit fixed grid columns
+  corrected it. Runs 9 and 10 also passed both jobs on their recorded evidence
+  commits. Run 11 passed both jobs on current source commit
+  `8414374d45ec33b890860ed2e646bfa68c2ef1f3`. The focused mobile journey
+  passed locally. Production Site URL/redirects, live SMTP confirmation/recovery,
+  leaked-password protection, and public deployment remain separate launch work.
+
+Candidate verification is complete on the open PR head. The closeout evidence
+commit, PR merge, CI on the resulting `main` commit, and annotated RC3 tag remain
+pending. Do not tag RC3 until those gates are recorded against the exact release
+commit.
+
 ## 1. Status at a glance
 
-### Completed
+### Implemented repository capabilities
 
 - [x] Client-safe environment variable names are documented.
-- [x] `.env.local` contains the current workspace's Supabase URL and
-  publishable key. The values are intentionally not documented or committed.
+- [x] Remote client settings are kept in ignored `.env.rc3.local`; disposable
+  credentials are read from ignored `.env.local`. Both files remain
+  uncommitted. The confirmed pair used for 2026-09-29 remote verification has
+  been deleted and verified absent; use a new disposable pair for any future
+  remote smoke.
 - [x] The browser Supabase client uses `@supabase/ssr` and the publishable
   key.
 - [x] The request-scoped server Supabase client uses cookie-backed SSR
@@ -47,9 +103,7 @@ revoked.
 - [x] The current onboarding, plan, workout, nutrition, grocery, progress,
   and settings UI scaffold exists.
 - [x] `supabase/config.toml` has been created with the Supabase CLI.
-- [x] The local Supabase stack uses the repository-specific `5632x` ports and
-  a clean 2026-09-24 reset applied all 39 forward-only migrations, including
-  notification, unified-meal, grocery-conflict, and export-food migrations.
+- [x] The local Supabase stack uses the repository-specific `5632x` ports.
 - [x] Forward-only migrations exist under
   `supabase/migrations/`, in dependency order: eleven schema/seed migrations,
   one foreign-key-index correction, authenticated RPC migrations, export-shape
@@ -61,6 +115,13 @@ revoked.
   explicit grants/revokes, and idempotency storage.
 - [x] The seed migration contains 21 exercises, 22 starter foods, and 4
   starter meals with the authored application IDs preserved.
+
+### Historical RC2 environment/deployment evidence (not RC3 sign-off)
+
+The checked items below record work completed at the time of the RC2 snapshot.
+They do not assert that this workspace currently has remote credentials or
+that the linked project has been re-verified for RC3.
+
 - [x] The clean local reset, migration listing, and database lint passed with no
   schema errors, including the current unified-meal migration.
 - [x] The remote project is linked to this repository with project ref
@@ -116,7 +177,7 @@ revoked.
   URLs and service/secret keys, and accepts confirmed disposable credentials
   only through the current process environment.
 
-### Not completed
+### Historical “Not completed” checklist — RC2 snapshot, 2026-09-24
 
 - [x] Complete the linked remote schema verification gate for the previously
   applied migrations. The local integrity and MVP-0 hardening migrations are
@@ -303,9 +364,11 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<existing project publishable key>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-The current workspace `.env.local` contains these three variables and points
-at the remote project. The publishable key is intentionally redacted here and
-must not be copied into documentation. `NEXT_PUBLIC_SITE_URL` controls the
+When configured for local development, place these variables in an ignored
+`.env.local`. The guarded RC3 remote smoke uses a separate ignored
+`.env.rc3.local` for its project URL and publishable key; neither file belongs
+in release evidence.
+`NEXT_PUBLIC_SITE_URL` controls the
 origin used by sign-up and password-reset redirects; keep it at
 `http://localhost:3000` while testing the local app. Never place
 a service-role key, secret key, database password, OAuth secret, or nutrition
@@ -584,20 +647,24 @@ projects using the default ports. The CLI commands below read those ports from
 Run these commands from the repository root after Docker is available:
 
 ```bash
-npx supabase@latest db reset --local
-npx supabase@latest migration list --local
-npx supabase@latest db lint --local
-npx supabase@latest test db --local
+npm run supabase:reset
+npm run supabase:migrations
+npm run supabase:lint
+npm run supabase:test
 npm run supabase:test:rpc
 npm run supabase:test:concurrency
+npm run test:repository
 npm run typecheck
 npm run lint
+npm run test:local
 npm run build
+npm run test:e2e:public
+npm run test:e2e:release
 ```
 
-The local reset must apply every migration from an empty database. The current
-workspace has completed this verification. Re-run it after every migration
-change and verify at
+The local reset must apply every migration from an empty database. The RC3
+checkpoint above records the latest local verification. Re-run it after every
+migration change and verify at
 minimum:
 
 - Seed counts are 21 exercises, 22 foods, 4 meals, and 14 meal ingredients.
@@ -628,9 +695,10 @@ minimum:
 If local Docker is unavailable, record that limitation rather than treating
 static SQL inspection as equivalent to database verification.
 
-## 7. Linked-project workflow
+## 7. Linked-project workflow and historical RC2 evidence
 
-The current linked-project rollout has completed the reviewed dry run and push:
+The following linked-project and provider results are historical RC2 evidence,
+not a fresh RC3 comparison or smoke run:
 
 - Project ref: `ifunkhvbvkdxolhpxjvk`
 - Remote region: `ap-northeast-1`
@@ -646,8 +714,10 @@ The current linked-project rollout has completed the reviewed dry run and push:
   `rate_limited` responses are retained as expected quota evidence, not an
   unhandled provider failure.
 
-For future changes, only after local verification and review of the migration
-list:
+For any future linked change, first complete a read-only comparison of linked
+migration history and schema against the repository. Only after local
+verification and review of that evidence should the following workflow be
+considered:
 
 ```bash
 npx supabase@latest login
@@ -655,39 +725,35 @@ npx supabase@latest link --project-ref <project-ref>
 npx supabase@latest db push --dry-run
 ```
 
-The older complete-RPC runner below deletes its two temporary users and is not
-the runner used for the retained accounts in the MVP-1 release candidate.
-Keep the two confirmed identities intact for later testing. Supply credentials
-only through the current process environment or the ignored local env file;
-never commit them or print their values:
+The guarded remote smoke uses only newly confirmed disposable identities. The
+ignored `.env.rc3.local` contains the exact project URL and publishable key;
+ignored `.env.local` contains `USER_A_EMAIL`, `USER_A_PASSWORD`,
+`USER_B_EMAIL`, and `USER_B_PASSWORD` entries (the parser accepts `:` or
+`=` separators). The pair used on 2026-09-28 and the newly confirmed pair used
+on 2026-09-29 were both deleted; a read-only query confirmed the latest pair is
+absent. Use a new confirmed disposable pair before any future remote smoke.
+Never commit or print credential values:
 
 ```powershell
 $env:SUPABASE_RPC_REMOTE_CONFIRM = "ifunkhvbvkdxolhpxjvk"
-# Inject the four SUPABASE_RPC_REMOTE_USER_* values through an approved
-# temporary secret mechanism; do not paste account passwords into history.
+npm run supabase:test:providers:remote
+# Run the RPC smoke even if provider persistence fails; it verifies and
+# deletes both disposable accounts through the authorized account RPC.
 npm run supabase:test:rpc:remote
+Remove-Item Env:SUPABASE_RPC_REMOTE_CONFIRM
 ```
 
-The destructive remote runner reads only `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the existing `.env.local`, refuses
-any project other than `ifunkhvbvkdxolhpxjvk`, and performs all writes through
-authenticated RPCs. It deletes both disposable accounts through
-`delete_account` at the end, so it must not be run against the retained
-release-candidate accounts.
+Both runners require the process-scoped confirmation value for
+`ifunkhvbvkdxolhpxjvk`, reject any other URL and reject service/secret keys.
+The provider smoke defaults to User A, invokes USDA search, DeepSeek extraction,
+batch matching, one explicit estimate, one reviewed USDA save, and account
+export. Food and idempotency IDs are unique per run to avoid collisions with
+other owners. It does not delete accounts. The following RPC smoke exercises
+all 31 wrappers and deletes both supplied accounts through `delete_account`;
+never use retained or real accounts. Neither runner prints credential values,
+meal text, provider payloads, or API keys.
 
-The retained-account provider evidence uses the sanitized runner below. It
-never logs credentials, meal text, provider payloads, or keys; `B` selects the
-second retained account and the same idempotency key safely replays the USDA
-save:
-
-```powershell
-$env:SUPABASE_PROVIDER_SMOKE_USER = "B"
-node scripts/test-supabase-provider-remote.mjs
-```
-
-The runner verifies USDA search, DeepSeek extraction, batch matching, explicit
-macro estimation, authorized USDA persistence, and account export. The
-provider quota is five estimates per ten minutes per user; a later
+The provider quota is five estimates per ten minutes per user; a later
 `rate_limited` response is expected and must be recorded rather than bypassed.
 
 The dry run must be reviewed against the linked migration history before any
@@ -764,30 +830,25 @@ columns, constraints, indexes, policies, grants, function bodies, and relevant
 data before repairing migration history. Never edit, rename, delete, or
 reorder a migration that may already be applied; use a new forward migration.
 
-## 8. Next backend phase
+## 8. Remaining release and launch gates
 
-The initial backend implementation has completed these steps:
+The MVP-2 RC3 implementation work has added the local repository integration
+suite, isolated authenticated browser fixtures with cleanup, the fresh-account
+primary journey, and a Docker-backed CI integration job. Local migration,
+database, repository, browser, linked schema/source comparison, remote provider
+persistence, and two-account RPC checks are recorded in the RC3 checkpoint at
+the top of this document.
 
-1. Generate `src/types/database.generated.ts` from the linked public schema.
-2. Add typed domain/database mappers that preserve application string IDs and
-   hide internal `row_id` values from the UI boundary.
-3. Implement authorized RPCs for profile setup, target
-   creation, plan generation/editing, session completion, nutrition saves,
-   meal/recipe changes, grocery regeneration, export, and account deletion.
-4. Replace the in-memory repository path with authenticated Supabase reads and
-   mutation outcomes that include refreshed read models and semantic events.
-5. Add the focused database/security tests, local concurrency runner, and
-   complete local 27-RPC smoke runner. These test assets are present and the
-   local RPC/database sweeps are passing; remote disposable-user exercise and
-   remaining product integration work are still separate release dependencies.
+The RC3 candidate gates are verified on PR #1's current head. Remaining
+closeout steps before declaring the tagged release complete:
 
-The next backend work should be test-first hardening and product integration:
+1. Commit the final remote verification evidence on `codex/mvp-2-rc3` and
+   require both hosted CI jobs to pass on that exact PR head.
+2. Merge PR #1 only after the evidence commit is green. Require CI on the
+   resulting `main` SHA.
+3. Create the annotated `mvp-1.0.0-rc.3` tag on that exact verified `main` SHA;
+   record the final SHA and evidence links in the annotation. No remote schema
+   or function rollout is part of closeout.
 
-1. Add repository tests against the local stack and keep input drafts intact
-   across transient failures.
-2. Wire the remaining UI actions to the repository and expose typed loading,
-   error, retry, and empty states.
-3. Regenerate database types after every schema/function migration and run
-   local reset, lint, tests, typecheck, lint, and build.
-4. Run remote manual Auth smoke tests with disposable accounts before treating
-   the project as production-ready.
+Production Site URL/redirects, live SMTP delivery, leaked-password protection,
+and public deployment remain post-RC launch gates.

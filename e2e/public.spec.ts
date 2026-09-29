@@ -53,7 +53,23 @@ test("preserves signup values and shows accessible password mismatch errors", as
   }
 });
 
-test("protects the nutrition route when no browser session exists", async ({ page }) => {
+test("keeps the sign-up fields and password visibility control in keyboard order", async ({ page }) => {
+  await page.goto("/auth/sign-up");
+  const email = page.getByRole("textbox", { name: "Email address" });
+  const password = page.getByLabel("Password", { exact: true });
+  const showPassword = page.getByRole("button", { name: "Show password" });
+  const confirmPassword = page.getByLabel("Confirm password", { exact: true });
+
+  await email.focus();
+  await page.keyboard.press("Tab");
+  await expect(password).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(showPassword).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(confirmPassword).toBeFocused();
+});
+
+test("protects the nutrition route when signed out or Supabase is not configured", async ({ page }) => {
   await page.goto("/nutrition");
 
   if (isUnconfiguredCi) {
@@ -61,5 +77,6 @@ test("protects the nutrition route when no browser session exists", async ({ pag
     return;
   }
 
-  await expect(page).toHaveURL(/\/auth\/sign-in\?next=%2Fnutrition$/);
+  await expect(page).toHaveURL(/\/auth\/(?:sign-in\?next=%2Fnutrition|configuration)$/);
+  await expect(page.getByRole("heading", { name: /Sign in to your coach|Connect Supabase first/ })).toBeVisible();
 });

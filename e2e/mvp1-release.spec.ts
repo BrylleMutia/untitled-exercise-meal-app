@@ -1,12 +1,22 @@
-import { test, expect, type BrowserContext, type Page } from "@playwright/test";
+import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import fs from "node:fs";
-import path from "node:path";
 import { strFromU8, unzipSync } from "fflate";
+import {
+  createAuthenticatedContext,
+  createLocalAccount,
+  deleteLocalAccount,
+  type LocalAccount,
+} from "./local-account";
 
-const userAState = path.resolve("playwright/.auth/user-a.json");
-const userBState = path.resolve("playwright/.auth/user-b.json");
-const authenticated = fs.existsSync(userAState);
-const secondAccountAvailable = fs.existsSync(userBState);
+const userAState = "playwright/.auth/user-a.json";
+const userBState = "playwright/.auth/user-b.json";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+
+function nextRpcResponse(page: Page, rpc: string) {
+  return page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url().includes(`/rest/v1/rpc/${rpc}`),
+  { timeout: 30_000 });
+}
 
 async function clearBrowserDrafts(page: Page) {
   await page.evaluate(async () => {
@@ -97,9 +107,103 @@ async function mockMealProvider(page: Page, options: { includeEstimate?: boolean
   }
 }
 
+async function completeOnboarding(page: Page, name: string) {
+  await page.goto("/onboarding");
+  await expect(page.getByText(/Onboarding · step 1 of/i)).toBeVisible();
+  await page.getByLabel("What should we call you?").fill(name);
+  await page.getByLabel("Age").fill("30");
+  await page.getByText("None of the situations below apply to me", { exact: true }).click();
+  await page.getByLabel("Height (cm)").fill("168");
+  await page.getByLabel("Weight (kg)").fill("68");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByText("Maintain weight", { exact: true }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: "Create my plan" }).click();
+  await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
+}
+
+async function completeWorkout(page: Page) {
+  await page.goto("/workouts");
+  await page.getByRole("button", { name: /^Edit / }).first().click();
+  await page.getByRole("textbox", { name: "Sets" }).first().fill("4");
+  const overrideSaved = nextRpcResponse(page, "apply_workout_override");
+  await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  expect((await overrideSaved).ok()).toBe(true);
+  await expect(page.getByRole("button", { name: "Remove edit" }).first()).toBeVisible({ timeout: 30_000 });
+  const sessionLink = page.locator('a[href^="/workouts/session/"]').first();
+  const sessionHref = await sessionLink.getAttribute("href");
+  expect(sessionHref).toMatch(/^\/workouts\/session\//);
+  const sessionStarted = nextRpcResponse(page, "start_workout_session");
+  await sessionLink.click({ force: true });
+  expect((await sessionStarted).ok()).toBe(true);
+  await expect(page).toHaveURL(new RegExp(`${sessionHref!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), { timeout: 30_000 });
+  await expect(page.getByText(/Saving start workout session/)).toBeHidden({ timeout: 30_000 });
+
+  for (let step = 0; step < 24; step += 1) {
+    await expect(page.getByRole("group", { name: "Rate of perceived exertion" })).toBeVisible();
+    const savedExercise = nextRpcResponse(page, "save_workout_session");
+    await page.getByRole("group", { name: "Rate of perceived exertion" }).getByRole("button", { name: "5", exact: true }).click();
+    expect((await savedExercise).ok()).toBe(true);
+    await expect(page.getByText(/Saving save workout session/)).toBeHidden({ timeout: 30_000 });
+    const finishButton = page.getByRole("button", { name: /Finish/ });
+    if (await finishButton.isVisible()) {
+      const workoutFinished = nextRpcResponse(page, "finish_workout_session");
+      await page.getByRole("button", { name: /Finish/ }).click();
+      expect((await workoutFinished).ok()).toBe(true);
+      await expect(page).toHaveURL(/\/workouts$/, { timeout: 30_000 });
+      return;
+    }
+    await page.getByRole("button", { name: "Next exercise" }).click();
+  }
+  throw new Error("Workout did not finish within the expected exercise bound.");
+}
+
+async function logEgg(page: Page) {
+  await openNutritionSlot(page);
+  await page.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
+  await page.getByRole("button", { name: /^Egg/ }).first().click();
+  await expect(page.getByRole("group", { name: "Review food quantity" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm food" }).click();
+  await expect(page.locator("li").filter({ hasText: /Egg/ }).first()).toBeVisible();
+}
+
+async function freshAccountJourney(browser: Browser, testInfo: import("@playwright/test").TestInfo) {
+  const account: LocalAccount = await createLocalAccount(`journey-${testInfo.project.name}`);
+  let context: BrowserContext | undefined;
+  let journeyPage: Page | undefined;
+  try {
+    context = await createAuthenticatedContext(browser, baseURL, account);
+    journeyPage = await context.newPage();
+    await completeOnboarding(journeyPage, "Fresh Journey");
+    await completeWorkout(journeyPage);
+    await logEgg(journeyPage);
+
+    await journeyPage.goto("/grocery");
+    const customItem = `Journey item ${testInfo.project.name}`;
+    await journeyPage.getByRole("textbox", { name: "Custom item name" }).fill(customItem);
+    await journeyPage.getByRole("button", { name: "Add custom grocery item" }).click();
+    await expect(journeyPage.getByText(customItem)).toBeVisible();
+    await journeyPage.getByRole("button", { name: `Increase ${customItem}` }).click();
+    await expect(journeyPage.getByText("adjusted by you")).toBeVisible();
+
+    await journeyPage.goto("/progress");
+    await expect(journeyPage.getByRole("heading", { name: "Recent history" })).toBeVisible();
+    await expect(journeyPage.getByText(/completed/i).first()).toBeVisible();
+  } catch (error) {
+    if (journeyPage) {
+      const diagnostic = `${journeyPage.url()}\n${await journeyPage.locator("body").innerText().catch(() => "Page text unavailable.")}`;
+      await testInfo.attach("fresh-account-journey-state", { body: diagnostic, contentType: "text/plain" });
+    }
+    throw error;
+  } finally {
+    await context?.close();
+    await deleteLocalAccount(account);
+  }
+}
+
 test.describe("MVP-1 release browser gate", () => {
   test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(!authenticated, "Authenticated storage state was not prepared from the confirmed test account variables.");
     // Playwright starts each test on an opaque about:blank document. Navigate
     // to the app before touching browser storage so draft cleanup is reliable.
     await page.goto("/");
@@ -194,6 +298,7 @@ test.describe("MVP-1 release browser gate", () => {
   });
 
   test("verifies JSON and ZIP export contents through browser downloads", async ({ page }) => {
+    await logEgg(page);
     await page.goto("/settings");
     const jsonPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export JSON" }).click();
@@ -256,9 +361,10 @@ test.describe("MVP-1 release browser gate", () => {
       await secondPage.goto("/grocery");
       const increase = page.getByRole("button", { name: /^Increase / }).first();
       const competingIncrease = secondPage.getByRole("button", { name: /^Increase / }).first();
-      test.skip(await increase.count() === 0 || await competingIncrease.count() === 0, "The retained test account has no grocery item for a stale-edit scenario.");
+      const firstEdit = nextRpcResponse(page, "set_grocery_quantity");
       await increase.click();
       await expect(page.getByText(/adjusted by you/i).first()).toBeVisible();
+      expect((await firstEdit).ok()).toBe(true);
 
       await secondPage.route("**/rest/v1/**", (route) => {
         if (route.request().method() === "GET") return route.abort("failed");
@@ -275,16 +381,15 @@ test.describe("MVP-1 release browser gate", () => {
   });
 
   test("keeps account data isolated between the two retained accounts", async ({ browser, page }) => {
-    test.skip(!secondAccountAvailable, "User B storage state is not available.");
-    await page.goto("/nutrition");
-    await expect(page.getByText("Fried Rice with 2 Eggs")).toBeVisible();
+    await page.goto("/grocery");
+    await expect(page.getByText("E2E Private Fixture A")).toBeVisible();
 
     const userBContext: BrowserContext = await browser.newContext({ storageState: userBState, serviceWorkers: "block" });
     const userBPage = await userBContext.newPage();
     try {
-      await userBPage.goto("/nutrition");
-      await expect(userBPage.getByText("Fried Rice with 2 Eggs")).not.toBeVisible();
-      await expect(userBPage.getByRole("heading", { name: "Nutrition" })).toBeVisible();
+      await userBPage.goto("/grocery");
+      await expect(userBPage.getByText("E2E Private Fixture A")).not.toBeVisible();
+      await expect(userBPage.getByRole("heading", { name: "Grocery" })).toBeVisible();
     } finally {
       await userBContext.close();
     }
@@ -306,5 +411,9 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(page.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflow).toBe(false);
+  });
+
+  test("completes onboarding, plan edit, workout, nutrition, groceries, and progress for a fresh account", async ({ browser }, testInfo) => {
+    await freshAccountJourney(browser, testInfo);
   });
 });

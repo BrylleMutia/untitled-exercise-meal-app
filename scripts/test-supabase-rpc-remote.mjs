@@ -1,27 +1,10 @@
-import { readFileSync } from "node:fs";
 import { createSignedInSession, runRpcSmoke } from "./supabase-rpc-smoke-runner.mjs";
+import { readRemoteTestEnv, remoteAccountCredentials } from "./remote-test-env.mjs";
 
 const PROJECT_REF = "ifunkhvbvkdxolhpxjvk";
 const EXPECTED_URL = `https://${PROJECT_REF}.supabase.co`;
 
-function readClientEnv() {
-  const path = ".env.local";
-  let source;
-  try {
-    source = readFileSync(path, "utf8");
-  } catch {
-    throw new Error("Remote RPC smoke requires the existing .env.local client configuration.");
-  }
-
-  const values = {};
-  for (const line of source.split(/\r?\n/u)) {
-    const match = line.match(/^\s*(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)\s*=\s*(.*?)\s*$/u);
-    if (match) values[match[1]] = match[2].replace(/^['"]|['"]$/gu, "");
-  }
-  return values;
-}
-
-const clientEnv = readClientEnv();
+const clientEnv = readRemoteTestEnv();
 const remoteUrl = clientEnv.NEXT_PUBLIC_SUPABASE_URL;
 const publishableKey = clientEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
@@ -45,14 +28,7 @@ if (normalizedKey.includes("service_role") || normalizedKey.startsWith("sb_secre
 }
 
 const credentials = {
-  a: {
-    email: process.env.SUPABASE_RPC_REMOTE_USER_A_EMAIL,
-    password: process.env.SUPABASE_RPC_REMOTE_USER_A_PASSWORD,
-  },
-  b: {
-    email: process.env.SUPABASE_RPC_REMOTE_USER_B_EMAIL,
-    password: process.env.SUPABASE_RPC_REMOTE_USER_B_PASSWORD,
-  },
+  ...remoteAccountCredentials(clientEnv),
 };
 
 for (const [label, value] of Object.entries(credentials)) {

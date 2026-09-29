@@ -24,3 +24,23 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:public
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run supabase:start
+      - run: npm run supabase:reset
+      - run: npm run supabase:migrations
+      - run: npm run supabase:lint
+      - run: npm run supabase:test
+      - run: npm run supabase:test:rpc
+      - run: npm run supabase:test:concurrency
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:repository
+      - run: npm run test:e2e:release

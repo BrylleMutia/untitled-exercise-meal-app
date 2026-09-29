@@ -1,7 +1,7 @@
 # MVP Priority Matrix
 
-Audit date: 2026-09-24
-Implementation specification revision: 2026-09-24
+Audit date: 2026-09-29
+Implementation specification revision: 2026-09-28
 
 This document summarizes the current implementation and the work required to
 meet the MVP contract in [`FEATURES.md`](./FEATURES.md), the engineering and
@@ -9,6 +9,87 @@ security requirements in [`ARCHITECTURE.md`](./ARCHITECTURE.md), the visual and
 interaction guidance in [`DESIGN.md`](./DESIGN.md), and the operational backend
 status in [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md). Source code, migrations,
 generated types, and tests are treated as the implementation truth.
+
+## Current phase status — MVP-2 / RC3 — 2026-09-29
+
+This is the current status entry and supersedes stale “pending” or “complete”
+claims in earlier phase checklists. Historical release evidence below is kept
+as an audit trail; it is not evidence for RC3.
+
+| Gate | Current result |
+|---|---|
+| Candidate base | Verified implementation and remote-smoke source commit `8414374d45ec33b890860ed2e646bfa68c2ef1f3` is on `codex/mvp-2-rc3`, based on `main` at `a1db26463e87dab1d3da6dc01293423a9be5ae62`; it includes the release gates plus mobile grocery touch-target/grid fixes. [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1) is open for the final evidence update. CI run 11 passed both jobs on this source commit. The existing annotated `mvp-1.0.0-rc.2` tag points to `53f1fd9`; RC3 awaits merge, `main` CI, and tag creation. |
+| Environment | Windows checkout with disposable Docker-backed local Supabase at `127.0.0.1:56321`, pinned CLI `2.118.0`, and Chromium. Browser provider responses are mocked. Remote settings are in ignored local config; account values are never logged or committed. |
+| Local migrations | Disposable local DB reset passed. All 39 repository migrations apply, including `20260918033000`; database-only `20260918113514` is absent. |
+| Database verification | Local DB lint passed; 10 pgTAP suites / 436 assertions passed; 31-wrapper RPC smoke and concurrency checks passed. |
+| Application tests | Existing unit suite: 13 files / 55 tests passed. New local repository suite: 4 tests passed for hydration, stale-version rejection, historical plan version preservation, idempotent nutrition, history pagination, grocery reconciliation, and account isolation. |
+| Static checks | Typecheck, lint, and production build passed after the release smoke runner correction on the current branch worktree. |
+| Browser tests | Full authenticated suite passed 24/24, including 11 scenarios at each of 1440×900 and 390×844 plus setup/teardown; public suite passed 4/4. Coverage includes fresh onboarding-to-progress, keyboard tab order, enlarged text, reduced motion, offline retry, provider failure, stale edit, exports, and account isolation. Setup and cleanup passed with no skipped required scenarios. |
+| Linked project | Read-only history comparison matches all 39 repository migration versions. The normalized schema fingerprint matches across columns, constraints, indexes, RLS policies, relations, routines/bodies, grants, schemas, and triggers. Four provider functions are JWT-protected at versions 7, 7, 2, and 1; all eight deployed source files match the repository. The planned-exercise correction has 93 rows, zero duplicate sort groups, zero invalid orders, and zero orphaned history links. No remote schema/function rollout occurred. |
+| Remote smoke | On 2026-09-29 all four anonymous provider probes returned 401; authenticated USDA search, DeepSeek extraction, two-ingredient matching, one low-confidence estimate, reviewed USDA persistence, and account export passed. Export contained one provider food and zero nutrition logs: FDC `2708951`, `Survey (FNDDS)`, revision `Survey (FNDDS):2708951`, 100 g prepared serving. The 31-wrapper remote RPC smoke passed with two disposable accounts; account cleanup succeeded and a read-only Auth query confirmed zero matching users. No remote schema/function deployment occurred. |
+| CI | Hosted run 8 passed both `web` and Docker-backed `integration` on implementation candidate `2191e52c6bf082b26576cc76b8da53658eb9f85b`; runs 9 and 10 passed on their evidence commits; run 11 passed both jobs on verified source commit `8414374d45ec33b890860ed2e646bfa68c2ef1f3`. Runs 6 and 7 exposed a mobile grocery control overlap; explicit fixed grid columns resolved it. |
+| Release packaging | Candidate verification and final remote smoke are complete; PR #1 remains open for final evidence. Merge, CI on the resulting `main` SHA, and annotated `mvp-1.0.0-rc.3` tag remain pending. |
+| Separate launch gates | Production Site URL/redirects, live SMTP, leaked-password protection, and public deployment remain outside this candidate. |
+
+Local checks, linked schema/source comparison, provider persistence, account
+cleanup, the primary remote RPC smoke, and hosted PR CI are complete on the
+current candidate. Remaining work is release closeout only: commit this final
+evidence, merge PR #1 after its CI passes, require CI on the resulting `main`
+commit, and create the annotated candidate tag on that exact SHA.
+
+### RC3 verification evidence — working closeout record
+
+- **Date and environment:** 2026-09-29 closeout verification; Windows development checkout, disposable
+  Docker-backed local Supabase (`127.0.0.1:56321`), Supabase CLI `2.118.0`,
+  Chromium, and mocked provider responses for CI/browser tests.
+- **Source:** verified closeout source `8414374d45ec33b890860ed2e646bfa68c2ef1f3` on
+  `codex/mvp-2-rc3`, based on `main` at
+  `a1db26463e87dab1d3da6dc01293423a9be5ae62`; [PR #1](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/1).
+- **Local commands:** `npm run typecheck`, `npm run lint`, `npm run test:local`,
+  `npm run build`, `npm run supabase:start`, `npm run supabase:reset`,
+  `npm run supabase:migrations`, `npm run supabase:lint`,
+  `npm run supabase:test`, `npm run supabase:test:rpc`,
+  `npm run supabase:test:concurrency`, `npm run test:repository`,
+  `npm run test:e2e:public`, and `npm run test:e2e:release` all passed locally.
+- **Hosted workflow:** [CI run 8](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36400293064)
+  passed both `web` and `integration` on the candidate commit. The web job
+  covered typecheck, lint, unit tests, build, and public browser tests; the
+  integration job reset local Supabase, verified migration history, ran lint,
+  10 pgTAP suites / 436 assertions, RPC/concurrency/repository tests, and the
+  authenticated browser suite. Earlier runs exposed a mobile grocery hit-target
+  overlap; the corrected grid implementation passed the final full run.
+- **Evidence commit CI:** [CI run 9](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36401136466)
+  passed both hosted jobs on evidence commit
+  `101c9198b72d59418ba1a926d3af3db70feba912`.
+- **Follow-up CI:** [CI run 10](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36401918387)
+  passed both jobs on status commit `7e5f726f1ccc8699d2f1c737b24f90857ae4c622`.
+  [CI run 11](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/36402667956)
+  passed both jobs on verified source commit
+  `8414374d45ec33b890860ed2e646bfa68c2ef1f3`.
+- **Database and deployed functions:** local reset applies all 39 repository
+  migrations; linked history has the same versions. Read-only normalized schema
+  fingerprints match for columns, constraints, indexes, RLS policies,
+  relations, routines/bodies, grants, schemas, and triggers. Deployed function
+  versions are `nutrition-search` 7, `nutrition-text-parse` 7,
+  `nutrition-meal-match` 2, and `nutrition-macro-estimate` 1; all eight source
+  files match the repository and all four functions require JWT verification.
+- **Browser results:** public suite 4/4; authenticated suite 24/24 with 11
+  desktop and 11 mobile cases plus fixture setup/teardown; no required skips.
+  Fixture accounts and browser state were removed.
+- **Remote smoke:** `npm run supabase:test:providers:remote` followed by
+  `npm run supabase:test:rpc:remote` with process-scoped exact-project
+  confirmation. On 2026-09-29 the corrected provider runner passed all four
+  anonymous-denial checks (401), authenticated USDA search, DeepSeek extraction,
+  two-ingredient matching, one low-confidence estimate, unique reviewed food
+  persistence, and account export. Export returned one persisted provider food
+  and zero nutrition logs: FDC `2708951`, `Survey (FNDDS)`, source release
+  `FoodData Central API verified 2026-09-22`, provider revision
+  `Survey (FNDDS):2708951`, prepared, 100 g. The 31-wrapper remote RPC smoke
+  passed with two disposable users; deletion completed, and a read-only query
+  confirmed zero matching Auth users. No remote migration or function deploy
+  occurred.
+- **Separate launch limitations:** production Auth URLs/redirects, live SMTP,
+  leaked-password protection, and public deployment remain post-RC work.
 
 ## Executive Status
 
@@ -18,17 +99,10 @@ database schema, RLS policies, authenticated RPC boundary, generated database
 types, repository hydration, core screens, and substantial database test suites
 exist. A user can exercise much of the intended loop in the current UI.
 
-The app is not yet tagged until the final evidence commit is created. The MVP-0
-implementation wave
-implemented the highest-risk foundation fixes: historical plan hydration,
-goal/profile persistence, planned-meal trust metadata, atomic saved-meal
-logging, persistent workout overrides, serialized session saves, recoverable
-browser drafts, server-backed export/deletion, pending/offline/error UI, and a
-forward hardening migrations. The current release gate has code-complete
-behavior, a repeatable mobile/desktop browser suite, and deployed protected
-provider boundaries. The final post-migration remote provider rerun and all
-application/database/browser gates are green; only reviewed commit/tag
-packaging remains.
+The older RC2 line describes a substantially implemented application with
+historical remote evidence. It does not assert that RC3's local/browser gates or
+remote disposable-account verification have passed; see the current phase table
+above.
 
 Status terms used below:
 
@@ -42,7 +116,7 @@ Status terms used below:
 - **Verification blocked:** the implementation may exist, but the required
   check could not be rerun in the current audit environment.
 
-## MVP-0 implementation status (2026-09-17)
+## Historical MVP-0 / MVP-1 implementation snapshot (2026-09-17 to RC2)
 
 The following highest-risk items now have implementation coverage:
 
@@ -67,7 +141,7 @@ The following highest-risk items now have implementation coverage:
   onboarding. They are applied and verified against the local Supabase stack;
   that status was recorded before the 2026-09-21 remote rollout attempt.
 
-The current MVP-1 wave adds the durable workout progression/override loop,
+The RC2 snapshot's MVP-1 wave added the durable workout progression/override loop,
 same-slot planned-meal ordering, bounded progress/history reads, canonical
 per-100-g nutrition provenance, custom-food/correction mutations, trusted USDA
 search, protected DeepSeek extraction and estimate fallback, unified guided meal
@@ -78,7 +152,7 @@ The serialized release browser suite and final remote provider rerun are green;
 the implementation is now organized into modular commits; final signoff remains
 pending on the documentation commit and candidate tag.
 
-## Current release-candidate audit (2026-09-24)
+## Historical RC2 release-candidate audit (2026-09-24)
 
 This section supersedes older “open” or “not run” statements below. Historical
 checkpoints remain as an audit trail and are not current status.
@@ -198,7 +272,11 @@ Viewport checks used 390×844 mobile and 1440×900 desktop layouts.
 | Settings/export | Partial | Notification toggle persisted across reload. CSV ZIP packaging tests pass and the browser displayed `CSV bundle download started: cali-exercise-meal-planner-export-2026-09-23.zip`; the in-app browser did not expose a Playwright download event, so OS-level file receipt remains to be confirmed manually. |
 | Keyboard/focus/accessibility | Partial pass | Accessible roles, labels, 44px controls, focus movement, one-character input retention, and no fresh-tab console errors were checked. Full screen-reader, large-text, reduced-motion, and narrow-overflow passes remain open. |
 
-## What Is Completed So Far
+## Historical implementation inventory — RC2 audit snapshot, 2026-09-24
+
+The inventory and counts in this section are retained as an RC2 audit trail.
+The current implementation and release status is the RC3 table at the top of
+this document; do not use the historical counts below as current evidence.
 
 ### Application and design foundation
 
@@ -257,9 +335,9 @@ Viewport checks used 390×844 mobile and 1440×900 desktop layouts.
 - Weight logging, calendar/history presentation, logged-day nutrition averages,
   and workout/nutrition summary cards exist.
 
-## MVP Feature Matrix
+## Historical MVP Feature Matrix — superseded by the RC3 status table above
 
-| MVP area | Current status | Evidence that exists | Required to call it complete |
+| MVP area | Status at RC2 | Evidence recorded at RC2 | Gaps recorded at RC2 |
 |---|---|---|---|
 | App shell, responsive design, accessibility baseline | Substantially complete | Shared shell/components, mobile and desktop navigation, 44px controls, focus styles, reduced motion, loading/error/empty/pending/offline surfaces | Run mobile, desktop, keyboard, screen-reader-oriented, large-text, reduced-motion, and narrow-overflow checks |
 | Supabase authentication | Substantially complete | SSR clients, protected routes, PKCE/token-hash callback, sign-up/sign-in/recovery/sign-out | Configure production URLs, SMTP, leaked-password protection; complete remote disposable-user Auth smoke flow |
@@ -1287,7 +1365,7 @@ legacy arrays is a follow-up optimization, not an MVP correctness gap.
 
 ### M2.1 — Automated test completion
 
-**Status:** In progress
+**Status:** Local and hosted automated gates passed; the linked provider persistence and RPC checks passed on 2026-09-29.
 
 **Outcome**
 
@@ -1318,7 +1396,7 @@ automated evidence.
 
 ### M2.2 — Browser, accessibility, and end-to-end verification
 
-**Status:** In progress — implementation is present; release evidence is still pending
+**Status:** Local and hosted browser matrices passed on mobile and desktop; linked schema/source checks and guarded provider persistence verification passed.
 
 **Outcome**
 
@@ -1346,7 +1424,7 @@ large text, reduced motion, failure recovery, and accessible feedback.
 
 ### M2.3 — CI, documentation, and production configuration
 
-**Status:** In progress — CI/documentation scaffolding is present; production configuration remains pending
+**Status:** CI and documentation are implemented and hosted gates pass; production Auth configuration remains post-release work.
 
 **Outcome**
 
@@ -1377,7 +1455,7 @@ placing secrets or unsafe write steps in the repository.
 
 ### M2.4 — Guarded rollout and release evidence
 
-**Status:** In progress — implementation is present; release evidence is still pending
+**Status:** Linked read-only comparison and guarded RPC/provider smoke are complete; final evidence commit, merge/main CI, and annotated tag remain pending.
 
 **Outcome**
 
@@ -1872,7 +1950,7 @@ large-text, reduced-motion, download-receipt, and narrow-overflow checks; the
 manual screen-reader pass remains supplemental evidence, and screen-reader
 verification should still be repeated before a public launch.
 
-## MVP 1.0 Release Evidence
+## MVP 1.0 Release Evidence — RC2 historical snapshot
 
 Complete this section during M2.4. Do not replace the audit record above; add
 new evidence for the exact candidate being released.
