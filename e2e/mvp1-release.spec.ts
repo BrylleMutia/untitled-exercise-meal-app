@@ -220,6 +220,61 @@ test.describe("MVP-1 release browser gate", () => {
     }
   });
 
+  test("keeps mobile bottom navigation anchored on Progress", async ({ page }, testInfo) => {
+    const bottomNav = page.locator('nav[aria-label="Primary"]').last();
+    if (testInfo.project.name !== "mobile") {
+      await page.goto("/progress");
+      await expect(page.getByRole("heading", { name: "Recent history" })).toBeVisible();
+      await expect(bottomNav).toBeHidden();
+      return;
+    }
+
+    await page.setViewportSize({ width: 342, height: 693 });
+    await page.goto("/workouts");
+    await expect(page.getByRole("heading", { name: "Workouts" })).toBeVisible();
+    await expect(bottomNav).toBeVisible();
+    const position = () => bottomNav.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const progressLink = element.querySelector('a[href="/progress"]')!.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        progressLeft: progressLink.left,
+        progressRight: progressLink.right,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
+    });
+
+    const beforeNavigation = await position();
+    expect(Math.abs((beforeNavigation.left + beforeNavigation.right) / 2 - beforeNavigation.viewportWidth / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(beforeNavigation.viewportHeight - beforeNavigation.bottom - 12)).toBeLessThanOrEqual(1);
+
+    await bottomNav.getByRole("link", { name: "Progress" }).click();
+    await expect(page).toHaveURL(/\/progress$/);
+    await expect(page.getByRole("heading", { name: "Recent history" })).toBeVisible();
+    const atTop = await position();
+    expect(Math.abs(atTop.top - beforeNavigation.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs((atTop.left + atTop.right) / 2 - atTop.viewportWidth / 2)).toBeLessThanOrEqual(1);
+    expect(atTop.left).toBeGreaterThanOrEqual(12);
+    expect(atTop.right).toBeLessThanOrEqual(atTop.viewportWidth - 12);
+    expect(atTop.progressLeft).toBeGreaterThanOrEqual(atTop.left);
+    expect(atTop.progressRight).toBeLessThanOrEqual(atTop.viewportWidth - 12);
+    expect(Math.abs(atTop.viewportHeight - atTop.bottom - 12)).toBeLessThanOrEqual(1);
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    const afterScroll = await position();
+    expect(Math.abs(afterScroll.top - atTop.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs((afterScroll.left + afterScroll.right) / 2 - afterScroll.viewportWidth / 2)).toBeLessThanOrEqual(1);
+    expect(afterScroll.left).toBeGreaterThanOrEqual(12);
+    expect(afterScroll.right).toBeLessThanOrEqual(afterScroll.viewportWidth - 12);
+    expect(afterScroll.progressRight).toBeLessThanOrEqual(afterScroll.viewportWidth - 12);
+    expect(Math.abs(afterScroll.viewportHeight - afterScroll.bottom - 12)).toBeLessThanOrEqual(1);
+  });
+
   test("requires quantity review and preserves input focus for a simple food", async ({ page }) => {
     await openNutritionSlot(page);
     const field = page.getByRole("textbox", { name: "Search for a food or describe a meal" });

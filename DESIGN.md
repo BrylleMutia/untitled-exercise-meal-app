@@ -217,8 +217,10 @@ step progress bar and navigation.
 
 ### Bottom navigation (`BottomNav.tsx`)
 
-Mobile-only (`md:hidden`) floating pill: `fixed inset-x-3 bottom-3 z-40
-mx-auto max-w-md rounded-full bg-white/90 p-2 shadow-card backdrop-blur`.
+Mobile-only (`md:hidden`) floating pill: `fixed bottom-3 left-1/2 z-40
+w-[calc(100vw_-_1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-white/90
+p-2 shadow-card backdrop-blur`. Its viewport-relative width keeps the five equal-width
+tabs centered with symmetric 12px side margins on narrow mobile viewports.
 Five tabs, each `h-12`, using `lucide-react` icons with `sr-only` labels:
 
 - Home (`Home`)
