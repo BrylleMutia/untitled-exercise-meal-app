@@ -10,6 +10,7 @@ export type AuthActionState = {
   error?: string;
   fieldErrors?: AuthFieldErrors;
   success?: string;
+  next?: string;
 };
 
 function value(formData: FormData, key: string): string {
@@ -17,7 +18,7 @@ function value(formData: FormData, key: string): string {
 }
 
 function safeNextPath(value: string): string {
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/";
+  return value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/";
 }
 
 async function siteOrigin(): Promise<string> {
@@ -55,7 +56,7 @@ export async function signInAction(
   if (error) {
     return { error: "That email and password combination could not be signed in." };
   }
-  redirect(next);
+  return { next };
 }
 
 export async function signUpAction(
@@ -100,7 +101,7 @@ export async function signUpAction(
     return { error: configurationError(error) };
   }
 
-  if (signedIn) redirect("/onboarding");
+  if (signedIn) return { next: "/onboarding" };
   redirect("/auth/check-email");
 }
 
@@ -167,7 +168,7 @@ export async function updatePasswordAction(
   }
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: "We could not update your password. Request a new link and try again." };
-  redirect("/onboarding");
+  return { next: "/" };
 }
 
 export async function signOutAction() {

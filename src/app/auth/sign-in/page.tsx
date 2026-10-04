@@ -5,6 +5,7 @@ import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AuthError, AuthShell } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/auth/PasswordInput";
+import { AuthCompletion } from "@/components/auth/AuthCompletion";
 import { SubmitButton } from "@/components/auth/SubmitButton";
 import { signInAction, type AuthActionState } from "@/app/auth/actions";
 
@@ -22,6 +23,8 @@ function SignInForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next")?.startsWith("/") ? searchParams.get("next")! : "/";
   const [state, formAction] = useActionState(signInAction, initialState);
+
+  if (state.next) return <AuthCompletion next={state.next} />;
 
   return (
     <AuthShell

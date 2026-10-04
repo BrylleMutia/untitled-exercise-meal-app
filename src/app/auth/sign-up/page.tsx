@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { AuthError, AuthShell } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/auth/PasswordInput";
+import { AuthCompletion } from "@/components/auth/AuthCompletion";
 import { SubmitButton } from "@/components/auth/SubmitButton";
 import { signUpAction, type AuthActionState, type AuthFieldErrors } from "@/app/auth/actions";
 
@@ -33,6 +34,8 @@ export default function SignUpPage() {
   function fieldError(field: keyof AuthFieldErrors) {
     return editedFields.has(field) ? undefined : state.fieldErrors?.[field];
   }
+
+  if (state.next) return <AuthCompletion next={state.next} />;
 
   return (
     <AuthShell

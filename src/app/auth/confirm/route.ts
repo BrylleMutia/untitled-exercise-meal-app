@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 function safeNextPath(value: string | null): string {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+  return value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/";
 }
 
 /** Exchanges Supabase PKCE email links for the server session cookie. */

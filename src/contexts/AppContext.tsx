@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { createSupabaseRepository } from "@/services/supabaseRepository";
 import type {
@@ -179,6 +179,8 @@ export function AppProvider({
   initialSnapshot?: AppSnapshot | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isAuthRoute = pathname.startsWith("/auth");
   const supabase = useMemo(() => {
     try {
       return createClient();
@@ -193,7 +195,7 @@ export function AppProvider({
     () => initialSnapshot ?? createEmptySnapshot(),
   );
   const [hydrated, setHydrated] = useState(
-    () => Boolean(initialSnapshot) || !repository,
+    () => Boolean(initialSnapshot) || !repository || isAuthRoute,
   );
   const [pendingMutation, setPendingMutation] = useState<string | null>(null);
   const [error, setError] = useState<RepositoryError | null>(null);
@@ -221,7 +223,7 @@ export function AppProvider({
   }, []);
 
   useEffect(() => {
-    if (initialSnapshot || !repository) {
+    if (isAuthRoute || !repository || initialSnapshot) {
       return;
     }
 
@@ -230,7 +232,12 @@ export function AppProvider({
       .load()
       .then((loaded) => {
         if (!active) return;
-        setSnapshot(loaded ?? createEmptySnapshot());
+        if (!loaded) {
+          throw new Error("Your account session could not be loaded. Please retry.");
+        }
+        snapshotRef.current = loaded;
+        setSnapshot(loaded);
+        setError(null);
       })
       .catch((reason: unknown) => {
         if (!active) return;
@@ -245,7 +252,7 @@ export function AppProvider({
     return () => {
       active = false;
     };
-  }, [initialSnapshot, notify, repository]);
+  }, [initialSnapshot, isAuthRoute, notify, repository]);
 
   useEffect(() => {
     if (toasts.length === 0) return;

@@ -12,6 +12,28 @@ const userAState = "playwright/.auth/user-a.json";
 const userBState = "playwright/.auth/user-b.json";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
+test("loads an existing account immediately after signing in from a fresh browser", async ({ browser }) => {
+  const accounts = JSON.parse(fs.readFileSync("playwright/.auth/test-accounts.json", "utf8")) as LocalAccount[];
+  const context = await browser.newContext({ serviceWorkers: "block", storageState: { cookies: [], origins: [] } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/auth/sign-in", { waitUntil: "domcontentloaded" });
+    await page.getByRole("textbox", { name: "Email address" }).fill(accounts[0].email);
+    await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
+    await expect(page.getByRole("heading", { name: "Hello, Fixture User A!" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Today's meals" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Start onboarding" })).toHaveCount(0);
+
+    await page.getByRole("link", { name: "Grocery", exact: true }).first().click();
+    await expect(page.getByText("E2E Private Fixture A")).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 function nextRpcResponse(page: Page, rpc: string) {
   return page.waitForResponse((response) =>
     response.request().method() === "POST" && response.url().includes(`/rest/v1/rpc/${rpc}`),
@@ -115,6 +137,7 @@ async function completeOnboarding(page: Page, name: string) {
   await page.getByText("None of the situations below apply to me", { exact: true }).click();
   await page.getByLabel("Height (cm)").fill("168");
   await page.getByLabel("Weight (kg)").fill("68");
+  await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByText("Maintain weight", { exact: true }).click();
