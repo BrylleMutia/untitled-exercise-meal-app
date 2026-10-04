@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
+import { CalorieBudgetRing } from "@/components/ui/CalorieBudgetRing";
 import { Button } from "@/components/ui/Button";
 import { DayStrip } from "@/components/DayStrip";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -11,6 +12,8 @@ import { FOODS } from "@/constants/foods";
 import { parseMealText, servingPlanForCandidate, type CandidateServingPlan, type ParsedCandidate } from "@/utility/textMeal";
 import { dayStatus, entriesForDate, totalsForDate, foodMacros, mealNutrition } from "@/utility/nutrition";
 import { todayKey } from "@/utility/dates";
+import { totalCarbLimit } from "@/utility/health";
+import { targetForDate } from "@/utility/targetHistory";
 import type { Confidence, Food, LoggedMeal, Meal, MealSlot, NutritionLog, PlannedMeal, RecipeIngredient } from "@/types/domain";
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 import { createClient } from "@/lib/supabase/client";
@@ -85,7 +88,8 @@ export default function NutritionPage() {
   const totals = totalsForDate(snapshot.nutritionLogs, selected);
   const entries = entriesForDate(snapshot.nutritionLogs, selected);
   const status = dayStatus(snapshot.nutritionLogs, selected);
-  const target = snapshot.target;
+  const target = targetForDate(snapshot.nutritionWeekTargets, selected);
+  const carbLimit = totalCarbLimit(snapshot.profile?.dietaryPattern ?? "");
   const foods = useMemo(
     () => snapshot.foods.length > 0
       ? snapshot.foods.map(withAuthoredServingOptions)
@@ -116,7 +120,7 @@ export default function NutritionPage() {
     <div className="grid min-w-0 gap-4 pb-4">
       <Card tone="blush">
         <DayStrip selected={selected} onSelect={setSelected} />
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="font-extrabold">
               {isToday ? "Today" : selected}
@@ -129,10 +133,9 @@ export default function NutritionPage() {
                   : "Unlogged day — no entries, that is fine"}
             </p>
           </div>
-          <span className="text-sm font-extrabold tabular-nums">
-            {totals.estimateRange ? "≈ " : ""}{Math.round(totals.calories)} / {target?.calories ?? 0} kcal
-          </span>
+          <CalorieBudgetRing target={target?.calories ?? null} logged={totals.calories} status={status} estimated={snapshot.nutritionLogs.some((entry) => entry.date === selected && entry.estimated)} size={96} />
         </div>
+        {status !== "unlogged" ? <p className="mt-2 text-xs font-bold text-ink-soft">Logged: {totals.estimateRange ? "≈ " : ""}{Math.round(totals.calories)} kcal · Target: {target?.calories ?? "not set"} kcal</p> : null}
         <div className="mt-3 grid gap-2.5">
           <ProgressBar label="Protein" value={totals.proteinG} target={target?.proteinG ?? 0} unit=" g" barClassName="bg-lav-300" />
           <ProgressBar label="Carbs" value={totals.carbsG} target={target?.carbsG ?? 0} unit=" g" barClassName="bg-peach-200" />
@@ -164,7 +167,7 @@ export default function NutritionPage() {
                 }`}
               >
                 <span className="min-w-20 font-bold text-ink-soft">{slotLabels[pm.slot]}</span>
-                <span className={pm.skipped ? "line-through" : ""}>{pm.label} ×{pm.servings}</span>
+                <span className={pm.skipped ? "line-through" : ""}>{pm.mealId || pm.foodId ? `${pm.label} ×${pm.servings}` : "Unresolved · choose a meal that fits your restrictions"}</span>
                 <div className="flex flex-wrap justify-end gap-1">
                   <button
                     type="button"
@@ -201,6 +204,7 @@ export default function NutritionPage() {
             />
           ) : null}
           <p className="mt-2 text-[11px] font-semibold text-muted">
+            {carbLimit !== null ? `${snapshot.profile?.dietaryPattern}: at most ${carbLimit} g total carbs per planned day. Unresolved slots mean the day is not fully planned. This is a planning label, not dietary care or a promise of ketosis. ` : ""}
             Skipping only changes the future plan snapshot — logged history is
             untouched.
           </p>

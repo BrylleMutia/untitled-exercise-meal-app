@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Dumbbell,
   Flame,
+  Footprints,
   Play,
   Plus,
   ShoppingBasket,
@@ -15,11 +16,13 @@ import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
+import { CalorieBudgetRing } from "@/components/ui/CalorieBudgetRing";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { dayStatus, entriesForDate, totalsForDate } from "@/utility/nutrition";
 import { suggestProgression } from "@/utility/progression";
 import { estimateWorkoutEnergyKcal } from "@/utility/workoutEnergy";
 import { formatLong, startOfWeek, todayKey } from "@/utility/dates";
+import { targetForDate } from "@/utility/targetHistory";
 
 const quickLinks = [
   {
@@ -55,7 +58,7 @@ const quickLinks = [
 export default function HomePage() {
   const { snapshot } = useApp();
   const today = todayKey();
-  const target = snapshot.target;
+  const target = targetForDate(snapshot.nutritionWeekTargets, today);
   const totals = totalsForDate(snapshot.nutritionLogs, today);
   const entries = entriesForDate(snapshot.nutritionLogs, today);
   const loggedSlots = Object.values(entries).filter((list) => list.length > 0).length;
@@ -99,6 +102,7 @@ export default function HomePage() {
       : null;
 
   const suggestion =
+    snapshot.plan?.trainingProgram !== "pilates" &&
     snapshot.profile?.targetEligibility !== "unsupported" &&
     todaysWorkout && snapshot.sessions.length > 0
       ? suggestProgression(todaysWorkout.exercises[0]?.exerciseId ?? "", snapshot.sessions)
@@ -126,6 +130,14 @@ export default function HomePage() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="lg:col-span-2">
+        <h2 className="font-extrabold">Quick actions</h2>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <Link href="/nutrition" className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blush-100 px-4 font-bold"><Plus className="h-4 w-4" aria-hidden /> Log food</Link>
+          <Link href="/activity" className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-mint-100 px-4 font-bold"><Footprints className="h-4 w-4" aria-hidden /> Log steps</Link>
+          <Link href="/workouts" className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-lav-100 px-4 font-bold"><Dumbbell className="h-4 w-4" aria-hidden /> Log activity</Link>
+        </div>
+      </Card>
       {/* Today's meals — blush hero card from the reference */}
       <Card tone="blush" className="animate-fade-up">
         <div className="flex items-start justify-between">
@@ -151,19 +163,23 @@ export default function HomePage() {
 
         {target ? (
           <>
-            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3" role="group" aria-label="Today's nutrition targets">
-              {nutritionTargets.map((metric) => (
+            <div className="mt-4 flex items-center gap-4">
+              <CalorieBudgetRing target={target.calories} logged={totals.calories} status={status} estimated={snapshot.nutritionLogs.some((entry) => entry.date === today && entry.estimated)} />
+              <div className="grid min-w-0 flex-1 gap-2" role="group" aria-label="Today's nutrition targets">
+                {nutritionTargets.filter((metric) => metric.label !== "Calories").map((metric) => (
                 <ProgressBar key={metric.label} {...metric} compact />
-              ))}
+                ))}
+              </div>
             </div>
             <p className="mt-2 text-[11px] font-semibold text-ink-soft">
               Targets are estimates from your profile.
             </p>
           </>
         ) : (
-          <p className="mt-4 rounded-2xl bg-white/60 p-3 text-xs font-semibold text-ink-soft">
-            Daily targets aren&apos;t set yet. You can still log meals.
-          </p>
+          <div className="mt-4 flex items-center gap-4">
+            <CalorieBudgetRing target={null} logged={totals.calories} status={status} />
+            <p className="rounded-2xl bg-white/60 p-3 text-xs font-semibold text-ink-soft">Daily targets aren&apos;t set yet. You can still log meals.</p>
+          </div>
         )}
 
         <div className="mt-4">
@@ -191,6 +207,8 @@ export default function HomePage() {
           <p className="mt-2 max-w-sm text-[11px] font-semibold text-ink-soft">
             {snapshot.profile?.targetEligibility !== "eligible"
               ? "Workout energy estimates are unavailable for this profile."
+              : snapshot.plan?.trainingProgram === "pilates"
+                ? "Pilates and custom workouts do not receive the calisthenics energy estimate."
               : workoutEnergyEstimateKcal === null
                 ? "Complete a workout to see a rough energy estimate."
                 : (
