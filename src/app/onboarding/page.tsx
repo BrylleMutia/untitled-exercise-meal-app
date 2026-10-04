@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronLeft, TriangleAlert } from "lucide-react";
+import { ArrowRight, ChevronLeft, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -27,10 +27,11 @@ import type {
   UnitSystem,
   UserProfile,
   TargetEligibility,
+  TrainingProgram,
 } from "@/types/domain";
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 
-const STEPS = ["You", "Training", "Goal", "Your numbers"] as const;
+const STEPS = ["About you", "Movement", "Food choices", "Your goal", "Review"] as const;
 
 const EQUIPMENT_OPTIONS: Array<{ id: EquipmentId; label: string }> = [
   { id: "none", label: "No equipment" },
@@ -56,6 +57,7 @@ interface Draft {
   height: string;
   weight: string;
   experience: ExperienceLevel;
+  trainingProgram: TrainingProgram;
   equipment: EquipmentId[];
   daysPerWeek: number;
   sessionMinutes: number;
@@ -79,6 +81,7 @@ const initialDraft: Draft = {
   height: "",
   weight: "",
   experience: "beginner",
+  trainingProgram: "calisthenics",
   equipment: ["none"],
   daysPerWeek: 3,
   sessionMinutes: 45,
@@ -105,6 +108,14 @@ export default function OnboardingPage() {
   const [draftWasRestored, setDraftWasRestored] = useState(false);
   const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
   const suppressDraftWriteRef = useRef(false);
+  const finalizingRef = useRef(false);
+  const lastAttemptDraftRef = useRef<string | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [step]);
 
   useEffect(() => {
     if (!draftUserId) return;
@@ -121,7 +132,7 @@ export default function OnboardingPage() {
   }, [draftUserId]);
 
   useEffect(() => {
-    if (!draftReady || !draftUserId) return;
+    if (!draftReady || !draftUserId || finalizing) return;
     if (suppressDraftWriteRef.current) {
       suppressDraftWriteRef.current = false;
       return;
@@ -140,7 +151,7 @@ export default function OnboardingPage() {
       },
       ttlMs: draftTtlMs("onboarding"),
     })).then((saved) => setDraftWriteUnavailable(!saved));
-  }, [app?.snapshot, draft, draftReady, draftUserId]);
+  }, [app?.snapshot, draft, draftReady, draftUserId, finalizing]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -178,21 +189,18 @@ export default function OnboardingPage() {
           sessionMinutes: draft.sessionMinutes,
         }),
         ...(draft.targetEligibility === "not_answered"
-          ? ["Choose an option for the health screening before previewing automated targets."]
+          ? ["Answer the health screening question to continue."]
           : []),
       ];
     }
-    if (step === 2 && draft.targetWeight) {
+    if (step === 3 && draft.targetWeight) {
       const targetKg = draft.units === "metric" ? Number(draft.targetWeight) : lbToKg(Number(draft.targetWeight));
       if (!Number.isFinite(targetKg) || targetKg <= 0) return ["Enter a valid target weight or leave it blank."];
       if (draft.targetWeeks && (!Number.isFinite(Number(draft.targetWeeks)) || Number(draft.targetWeeks) <= 0)) {
         return ["Enter a positive number of weeks or leave it blank."];
       }
     }
-    if (step === 1 && draft.mealBudget && (!Number.isFinite(Number(draft.mealBudget)) || Number(draft.mealBudget) < 0)) {
-      return ["Enter a non-negative daily budget unit value or leave it blank."];
-    }
-    if (step === 2 && draft.targetWeight && draft.targetWeeks) {
+    if (step === 3 && draft.targetWeight && draft.targetWeeks) {
       const targetKg =
         draft.units === "metric" ? Number(draft.targetWeight) : lbToKg(Number(draft.targetWeight));
       if (
@@ -213,7 +221,10 @@ export default function OnboardingPage() {
   };
 
   const finish = async () => {
-    if (!app) return;
+    if (!app || finalizingRef.current) return;
+    finalizingRef.current = true;
+    setFinalizing(true);
+    try {
     const profile: UserProfile = {
       id: app.snapshot.userId || "authenticated-user",
       name: draft.name.trim(),
@@ -223,6 +234,7 @@ export default function OnboardingPage() {
       weightKg: Math.round(weightKg * 10) / 10,
       units: draft.units,
       experience: draft.experience,
+      trainingProgram: draft.trainingProgram,
       equipment: draft.equipment,
       daysPerWeek: draft.daysPerWeek,
       sessionMinutes: draft.sessionMinutes,
@@ -257,18 +269,28 @@ export default function OnboardingPage() {
           : undefined,
       weeklyWorkoutTarget: draft.daysPerWeek,
     };
-    const saved = app.snapshot.profile
-      ? await app.actions.updateProfile(profile, goal)
-      : await app.actions.completeOnboarding(profile, goal);
+    const attemptDraft = JSON.stringify(draft);
+    const canRetry = app.error?.retryable && lastAttemptDraftRef.current === attemptDraft;
+    lastAttemptDraftRef.current = attemptDraft;
+    const saved = canRetry
+      ? await app.actions.retryLast()
+      : app.snapshot.profile
+        ? await app.actions.updateProfile(profile, goal)
+        : await app.actions.completeOnboarding(profile, goal);
     if (saved) {
+      setDraftReady(false);
       if (draftUserId) await clearDraft(draftUserId, "onboarding");
       router.push("/");
+    }
+    } finally {
+      finalizingRef.current = false;
+      setFinalizing(false);
     }
   };
 
   let preview: ReturnType<typeof buildDailyTarget> | null = null;
   let previewError = "";
-  if (step === 3) {
+  if (step === 4) {
     try {
       preview = buildDailyTarget(
           {
@@ -280,6 +302,7 @@ export default function OnboardingPage() {
             weightKg,
             units: draft.units,
             experience: draft.experience,
+            trainingProgram: draft.trainingProgram,
             equipment: draft.equipment,
             daysPerWeek: draft.daysPerWeek,
             sessionMinutes: draft.sessionMinutes,
@@ -307,7 +330,7 @@ export default function OnboardingPage() {
         <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
           Onboarding · step {step + 1} of {STEPS.length}
         </p>
-        <h1 className="mt-1 text-2xl font-extrabold">{STEPS[step]}</h1>
+        <h1 ref={headingRef} tabIndex={-1} className="mt-1 text-2xl font-extrabold">{STEPS[step]}</h1>
         <div className="mt-3 flex gap-1.5" aria-hidden>
           {STEPS.map((s, i) => (
             <span
@@ -323,6 +346,7 @@ export default function OnboardingPage() {
           <span>Onboarding draft restored from this device.</span>
           <button
             type="button"
+            disabled={finalizing}
             className="shrink-0 underline underline-offset-2"
             onClick={() => {
               suppressDraftWriteRef.current = true;
@@ -352,11 +376,12 @@ export default function OnboardingPage() {
             then explicitly reapply or discard this draft.
           </p>
           <div className="mt-3 flex gap-2">
-            <Button className="flex-1" onClick={() => void finish()}>
+            <Button className="flex-1" disabled={finalizing} onClick={() => void finish()}>
               Reapply draft
             </Button>
             <Button
               variant="soft"
+              disabled={finalizing}
               onClick={() => {
                 suppressDraftWriteRef.current = true;
                 if (draftUserId) void clearDraft(draftUserId, "onboarding");
@@ -369,6 +394,14 @@ export default function OnboardingPage() {
               Discard
             </Button>
           </div>
+        </Card>
+      ) : null}
+
+      {app?.error && app.error.code !== "stale_version" ? (
+        <Card tone="peach" role="alert">
+          <h2 className="font-extrabold">Your save was not confirmed</h2>
+          <p className="mt-1 text-sm font-semibold text-ink-soft">{app.error.message}</p>
+          <p className="mt-2 text-xs font-semibold text-muted">Your answers are still here. Check your connection, then try saving again.</p>
         </Card>
       ) : null}
 
@@ -405,7 +438,7 @@ export default function OnboardingPage() {
                 className="input"
               />
             </Field>
-            <Field label="Sex for BMR estimate">
+            <Field label="Sex used for calorie estimate">
               <select
                 value={draft.sex}
                 onChange={(e) => set("sex", e.target.value as SexForBmr)}
@@ -416,7 +449,7 @@ export default function OnboardingPage() {
               </select>
             </Field>
           </div>
-          <Field label="Health screening for automated targets">
+          <Field label="Can we estimate a food target for you?">
             <div className="grid gap-2">
               <button
                 type="button"
@@ -435,7 +468,7 @@ export default function OnboardingPage() {
                 I am pregnant/postpartum, under 18, recovering from an eating disorder, managing a condition needing individualized care, or unsure
               </button>
             </div>
-            <p className="text-xs font-semibold text-muted">We store only the outcome and screening version, not a reason or diagnosis.</p>
+            <p className="text-xs font-semibold text-muted">Some situations need individual advice. We save only your choice, without a reason or diagnosis.</p>
           </Field>
           <Field label="Units">
             <div className="grid grid-cols-2 gap-2">
@@ -483,6 +516,13 @@ export default function OnboardingPage() {
 
       {step === 1 ? (
         <Card className="grid gap-4">
+          <Field label="Workout program">
+            <select className="input" value={draft.trainingProgram} onChange={(event) => set("trainingProgram", event.target.value as TrainingProgram)}>
+              <option value="calisthenics">Calisthenics · bodyweight strength</option>
+              <option value="pilates">Pilates foundations · gentle mat practice</option>
+            </select>
+            <p className="text-xs font-semibold text-muted">Both plans stay editable. Pilates foundations use controlled beginner movements; no special equipment is needed.</p>
+          </Field>
           <Field label="Training experience">
             <div className="grid grid-cols-3 gap-2">
               {(["beginner", "intermediate", "advanced"] as const).map((level) => (
@@ -528,46 +568,6 @@ export default function OnboardingPage() {
             </div>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Dietary pattern">
-              <select
-                value={draft.dietaryPattern}
-                onChange={(e) => set("dietaryPattern", e.target.value)}
-                className="input"
-              >
-                <option>No restrictions</option>
-                <option>Vegetarian</option>
-                <option>Vegan</option>
-              </select>
-            </Field>
-            <Field label="Allergies / exclusions">
-              <input
-                value={draft.allergies}
-                onChange={(e) => set("allergies", e.target.value)}
-                placeholder="none known"
-                className="input"
-              />
-            </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Food preferences (optional)">
-              <input
-                value={draft.foodPreferences}
-                onChange={(e) => set("foodPreferences", e.target.value)}
-                placeholder="e.g. tofu, berries"
-                className="input"
-              />
-            </Field>
-            <Field label="Cooking time limit">
-              <select value={draft.cookingTimeMinutes} onChange={(e) => set("cookingTimeMinutes", Number(e.target.value))} className="input">
-                {[10, 20, 30, 45, 60, 90].map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
-              </select>
-            </Field>
-            <Field label="Daily meal budget (optional units)">
-              <input value={draft.mealBudget} onChange={(e) => set("mealBudget", e.target.value)} inputMode="decimal" placeholder="e.g. 7" className="input" />
-            </Field>
-          </div>
-          <p className="text-xs font-semibold text-muted">Budget uses transparent relative catalog units because the starter catalog does not claim a currency or live prices. Every generated slot remains editable.</p>
-          <div className="grid grid-cols-2 gap-3">
             <Field label="Days per week">
               <select
                 value={draft.daysPerWeek}
@@ -599,6 +599,53 @@ export default function OnboardingPage() {
       ) : null}
 
       {step === 2 ? (
+        <Card className="grid gap-4">
+          <p className="text-sm font-semibold text-ink-soft">Choose foods that work for you. You can change these later.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Eating style">
+              <select value={draft.dietaryPattern} onChange={(e) => set("dietaryPattern", e.target.value)} className="input">
+                <option>No restrictions</option>
+                <option>Vegetarian</option>
+                <option>Vegan</option>
+                <option>Low-carb</option>
+                <option>Keto-style</option>
+                <option>Vegetarian low-carb</option>
+                <option>Vegan low-carb</option>
+                <option>Vegetarian Keto-style</option>
+                <option>Vegan Keto-style</option>
+              </select>
+            </Field>
+            <Field label="Foods to avoid, including allergies">
+              <input value={draft.allergies} onChange={(e) => set("allergies", e.target.value)} placeholder="e.g. peanuts, or none known" className="input" />
+            </Field>
+            <Field label="Foods you like (optional)">
+              <input value={draft.foodPreferences} onChange={(e) => set("foodPreferences", e.target.value)} placeholder="e.g. tofu, berries" className="input" />
+            </Field>
+            <Field label="Time available to cook">
+              <select value={draft.cookingTimeMinutes} onChange={(e) => set("cookingTimeMinutes", Number(e.target.value))} className="input">
+                {[10, 20, 30, 45, 60, 90].map((minutes) => <option key={minutes} value={minutes}>{minutes} min</option>)}
+              </select>
+            </Field>
+          </div>
+          <p className="text-xs font-semibold text-muted">Choices use measured portions. Allergies still apply. When no meal fits, the slot stays open for your choice.</p>
+          {draft.dietaryPattern.toLowerCase().includes("low-carb") || draft.dietaryPattern.includes("Keto-style") ? (
+            <p className="rounded-2xl bg-peach-100 p-3 text-xs font-semibold text-ink-soft">
+              {draft.dietaryPattern.toLowerCase().includes("low-carb") ? "Low-carb plans allow at most 130 g total carbs each day." : "Keto-style plans allow at most 50 g total carbs each day. This does not guarantee ketosis."} These are planning preferences, not dietary care. Unresolved slots mean the day has not been fully planned.
+            </p>
+          ) : null}
+          <Field label="Meal cost preference">
+            <select value={draft.mealBudget} onChange={(e) => set("mealBudget", e.target.value)} className="input">
+              <option value="4">Budget-friendly</option>
+              <option value="7">Balanced</option>
+              <option value="">Flexible</option>
+              {draft.mealBudget && draft.mealBudget !== "4" && draft.mealBudget !== "7" ? <option value={draft.mealBudget}>Your saved custom preference</option> : null}
+            </select>
+          </Field>
+          <p className="text-xs font-semibold text-muted">These choices compare meals in our starter catalog. They are not prices or a money budget.</p>
+        </Card>
+      ) : null}
+
+      {step === 3 ? (
         <Card className="grid gap-4">
           <Field label="Primary goal">
             <div className="grid gap-2">
@@ -658,14 +705,13 @@ export default function OnboardingPage() {
         </Card>
       ) : null}
 
-      {step === 3 && preview ? (
+      {step === 4 && preview ? (
         <div className="grid gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <StatTile tone="lavender" label="BMR (est.)" value={`${preview.bmr} kcal`} sub="Mifflin-St Jeor" />
-            <StatTile tone="peach" label="BMI (info only)" value={String(preview.bmi)} sub="Not a diagnosis" />
-            <StatTile tone="mint" label="TDEE (est.)" value={`${preview.tdee} kcal`} sub={`Factor ${preview.activityFactor}`} />
-            <StatTile tone="blush" label="Daily target" value={`${preview.calories} kcal`} sub={`From ${todayKey()}`} />
-          </div>
+          <Card tone="blush">
+            <h2 className="font-extrabold">Your estimated daily food target</h2>
+            <p className="mt-2 text-3xl font-extrabold tabular-nums">≈{preview.calories} kcal</p>
+            <p className="mt-2 text-xs font-semibold text-ink-soft">A starting point based on your answers. You can adjust your goal later.</p>
+          </Card>
           <Card tone="white">
             <h2 className="font-extrabold">Macro targets (estimates)</h2>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -685,10 +731,18 @@ export default function OnboardingPage() {
               your training days · effective {todayKey()}. Historical plans keep
               the version they were created with.
             </p>
+            <details className="mt-3 text-xs font-semibold">
+              <summary className="min-h-11 cursor-pointer py-3 font-bold">How we estimated this</summary>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <StatTile tone="lavender" label="Energy at rest" value={`${preview.bmr} kcal`} sub="BMR estimate" />
+                <StatTile tone="mint" label="Daily energy use" value={`${preview.tdee} kcal`} sub={`TDEE estimate · activity factor ${preview.activityFactor}`} />
+                <StatTile tone="peach" label="BMI" value={String(preview.bmi)} sub="Information only · not a diagnosis" />
+              </div>
+            </details>
           </Card>
         </div>
       ) : null}
-      {step === 3 && !preview && previewError ? (
+      {step === 4 && !preview && previewError ? (
         <Card tone="peach" role="alert">
           <p className="font-extrabold">Automated target preview unavailable</p>
           <p className="mt-1 text-sm font-semibold text-muted">{previewError}</p>
@@ -696,9 +750,31 @@ export default function OnboardingPage() {
         </Card>
       ) : null}
 
+      {step === 4 ? (
+        <Card>
+          <h2 className="font-extrabold">Review your choices</h2>
+          <div className="mt-3 grid gap-3">
+            {[
+              { label: "About you", value: `${draft.name} · ${draft.age} years · ${draft.height} ${draft.units === "metric" ? "cm" : "in"} · ${draft.weight} ${draft.units === "metric" ? "kg" : "lb"}`, editStep: 0 },
+              { label: "Movement", value: `${draft.trainingProgram === "pilates" ? "Pilates foundations" : "Calisthenics"} · ${draft.experience} · ${draft.daysPerWeek} days/week · ${draft.sessionMinutes} min`, editStep: 1 },
+              { label: "Food choices", value: `${draft.dietaryPattern} · ${draft.mealBudget === "4" ? "Budget-friendly" : draft.mealBudget === "7" ? "Balanced" : draft.mealBudget ? "Saved custom cost preference" : "Flexible"} · ${draft.cookingTimeMinutes} min to cook`, editStep: 2 },
+              { label: "Your goal", value: GOALS.find((goal) => goal.id === draft.goal)?.label ?? draft.goal, editStep: 3 },
+            ].map((choice) => (
+              <div key={choice.label} className="flex items-start justify-between gap-3 rounded-2xl bg-cream p-3">
+                <div className="min-w-0">
+                  <h3 className="text-xs font-extrabold">{choice.label}</h3>
+                  <p className="mt-1 break-words text-sm font-semibold text-ink-soft">{choice.value}</p>
+                </div>
+                <Button variant="ghost" disabled={finalizing} onClick={() => setStep(choice.editStep)} aria-label={`Edit ${choice.label.toLowerCase()}`}>Edit</Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       <div className="flex gap-3">
         {step > 0 ? (
-          <Button variant="soft" onClick={() => setStep((s) => s - 1)}>
+          <Button variant="soft" disabled={finalizing} onClick={() => setStep((s) => s - 1)}>
             <ChevronLeft className="h-4 w-4" aria-hidden /> Back
           </Button>
         ) : null}
@@ -710,13 +786,15 @@ export default function OnboardingPage() {
           <Button
             className="flex-1"
             onClick={finish}
-            disabled={!preview && draft.targetEligibility !== "unsupported"}
+            disabled={finalizing || (!preview && draft.targetEligibility !== "unsupported")}
+            aria-busy={finalizing}
           >
-            {draft.targetEligibility === "unsupported" ? "Continue without automated targets" : "Create my plan"}
-            <ArrowRight className="h-4 w-4" aria-hidden />
+            {finalizing ? "Saving your plan…" : app?.error?.retryable ? "Retry saving" : draft.targetEligibility === "unsupported" ? "Continue without automated targets" : "Create my plan"}
+            {finalizing ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <ArrowRight className="h-4 w-4" aria-hidden />}
           </Button>
         )}
       </div>
+      {finalizing ? <p role="status" className="text-center text-sm font-semibold text-muted">Finalizing your account and saving your plan…</p> : null}
 
     </div>
   );
@@ -744,6 +822,7 @@ function profileToDraft(profile: UserProfile | null | undefined, goal?: { target
     height: String(Math.round(displayHeight * 10) / 10),
     weight: String(Math.round(displayWeight * 10) / 10),
     experience: profile.experience,
+    trainingProgram: profile.trainingProgram ?? "calisthenics",
     equipment: profile.equipment,
     daysPerWeek: profile.daysPerWeek,
     sessionMinutes: profile.sessionMinutes,
