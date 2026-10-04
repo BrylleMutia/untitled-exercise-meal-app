@@ -35,9 +35,23 @@ import type {
   HistoryQuery,
   HistoryReadModel,
   WeightInput,
+  SaveDailyStepsInput,
+  DeleteDailyStepsInput,
+  CelebrationsPreferenceInput,
+  SelectTrainingProgramInput,
+  SaveCustomWorkoutInput,
+  StartCustomWorkoutInput,
+  SaveCustomSessionInput,
 } from "@/types/backend";
 
 export interface SnapshotRepository {
+  saveCustomWorkout(input: SaveCustomWorkoutInput): Promise<MutationOutcome>;
+  startCustomWorkout(input: StartCustomWorkoutInput): Promise<MutationOutcome>;
+  saveCustomSession(input: SaveCustomSessionInput): Promise<MutationOutcome>;
+  selectTrainingProgram(input: SelectTrainingProgramInput): Promise<MutationOutcome>;
+  saveDailySteps(input: SaveDailyStepsInput): Promise<MutationOutcome>;
+  deleteDailySteps(input: DeleteDailyStepsInput): Promise<MutationOutcome>;
+  setCelebrations(input: CelebrationsPreferenceInput): Promise<MutationOutcome>;
   load(): Promise<AppSnapshot | null>;
   loadHistory(query?: HistoryQuery): Promise<HistoryReadModel>;
   completeOnboarding(input: OnboardingInput): Promise<MutationOutcome>;

@@ -5,6 +5,8 @@ import { generateGroceryList, mergeGroceryLists } from "@/utility/grocery";
 import { buildDailyTarget } from "@/utility/health";
 import { generateMealPlan } from "@/utility/mealPlan";
 import { generateWorkoutPlan } from "@/utility/plan";
+import { validateDailySteps } from "@/utility/dailySteps";
+import { validateCustomWorkout } from "@/utility/customWorkouts";
 import { startOfWeek, todayKey } from "@/utility/dates";
 import type {
   AppSnapshot,
@@ -53,11 +55,24 @@ import type {
   ProgressionDecisionInput,
   HistoryQuery,
   HistoryReadModel,
+  SaveDailyStepsInput,
+  DeleteDailyStepsInput,
+  CelebrationsPreferenceInput,
+  SelectTrainingProgramInput,
+  SaveCustomWorkoutInput,
+  StartCustomWorkoutInput,
+  SaveCustomSessionInput,
 } from "@/types/backend";
 import { loadAppSnapshot, loadHistoryReadModel } from "@/services/supabaseSnapshot";
 import type { SnapshotRepository } from "@/services/repository";
 
 type RpcName =
+  | "save_custom_workout"
+  | "start_custom_workout"
+  | "save_custom_workout_session"
+  | "save_daily_steps"
+  | "delete_daily_steps"
+  | "set_celebrations"
   | "complete_onboarding"
   | "update_profile"
   | "update_units"
@@ -134,13 +149,20 @@ function asRefs(value: Json | undefined): Record<string, string> {
 }
 
 function toRepositoryError(message: string, status?: number, detailsText?: string): RepositoryError {
-  const code = ERROR_CODES.find((candidate) => message.includes(candidate))
+  let declaredCode: RepositoryError["code"] | undefined;
+  if (detailsText) {
+    try {
+      const parsed = JSON.parse(detailsText) as { code?: unknown };
+      declaredCode = ERROR_CODES.find((candidate) => candidate === parsed.code);
+    } catch { /* Older RPC errors may have plain-text details. */ }
+  }
+  const code = declaredCode ?? ERROR_CODES.find((candidate) => message.includes(candidate))
     // PostgREST can strip the SQLSTATE/message code from a raised RPC
     // exception and expose only the safe user-facing detail. Preserve the
     // conflict contract for the grouped-history and nutrition edit paths so
     // the shell can offer explicit reapply/refresh actions.
     ?? (message.includes("refresh before editing") ? "stale_version" : undefined)
-    ?? (status === 401 ? "not_authenticated" : status && status >= 500 ? "retryable" : "internal");
+    ?? (status === 401 ? "not_authenticated" : status === 0 || (status && status >= 500) ? "retryable" : "internal");
   let details: ConflictDetails | undefined;
   if (code === "stale_version" && detailsText) {
     try {
@@ -213,7 +235,7 @@ function profileBundle(
     target.id,
     startOfWeek(effectiveDate),
     profile,
-    { savedMeals, foods },
+    { savedMeals, foods, dailyCalories: target.calories },
   );
   const generatedGrocery = generateGroceryList(
     mealPlan,
@@ -247,6 +269,7 @@ function hasSamePlanInputs(current: UserProfile, next: UserProfile) {
     heightCm: profile.heightCm,
     weightKg: profile.weightKg,
     experience: profile.experience,
+    trainingProgram: profile.trainingProgram ?? "calisthenics",
     equipment: profile.equipment,
     daysPerWeek: profile.daysPerWeek,
     sessionMinutes: profile.sessionMinutes,
@@ -306,6 +329,41 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     this.client = client;
   }
 
+  async saveCustomWorkout(input: SaveCustomWorkoutInput): Promise<MutationOutcome> {
+    const invalid = validateCustomWorkout(input.definition, input.profile);
+    if (invalid) throw repositoryException(toRepositoryError(`validation_failed: ${invalid}`));
+    return this.mutate("save_custom_workout", { id: input.id, expectedVersion: input.expectedVersion, definition: input.definition, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "custom-workout-saved", workoutId: input.id }]);
+  }
+  async startCustomWorkout(input: StartCustomWorkoutInput): Promise<MutationOutcome> {
+    return this.mutate("start_custom_workout", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() });
+  }
+  async saveCustomSession(input: SaveCustomSessionInput): Promise<MutationOutcome> {
+    return this.mutate("save_custom_workout_session", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "custom-session-saved", sessionId: input.id }]);
+  }
+
+  async saveDailySteps(input: SaveDailyStepsInput): Promise<MutationOutcome> {
+    const invalid = validateDailySteps(input.date, input.steps, input.walkingMinutes);
+    if (invalid) throw repositoryException(toRepositoryError(`validation_failed: ${invalid}`));
+    return this.mutate("save_daily_steps", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "daily-steps-saved", date: input.date }]);
+  }
+
+  async deleteDailySteps(input: DeleteDailyStepsInput): Promise<MutationOutcome> {
+    const invalid = validateDailySteps(input.date, 0);
+    if (invalid) throw repositoryException(toRepositoryError(`validation_failed: ${invalid}`));
+    return this.mutate("delete_daily_steps", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "daily-steps-deleted", date: input.date }]);
+  }
+
+  async setCelebrations(input: CelebrationsPreferenceInput): Promise<MutationOutcome> {
+    return this.mutate("set_celebrations", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "profile-updated" }]);
+  }
+
+  async selectTrainingProgram(input: SelectTrainingProgramInput): Promise<MutationOutcome> {
+    const profile = input.currentSnapshot.profile;
+    if (!profile || !["calisthenics", "pilates"].includes(input.program)) throw repositoryException(toRepositoryError("validation_failed: choose an available program"));
+    const goal = input.currentSnapshot.goal;
+    return this.updateProfile({ ...input, profile: { ...profile, trainingProgram: input.program }, goal: goal ?? undefined });
+  }
+
   async load(): Promise<AppSnapshot | null> {
     const { data, error } = await this.client.auth.getClaims();
     if (error) {
@@ -332,11 +390,11 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     payload: Record<string, unknown>,
     events: MutationOutcome["events"] = [],
   ): Promise<MutationOutcome> {
-    const { data, error } = await this.client.rpc(name, {
+    const { data, error, status } = await this.client.rpc(name, {
       p_payload: payload as Json,
     });
     if (error) {
-      throw repositoryException(toRepositoryError(error.message, undefined, error.details));
+      throw repositoryException(toRepositoryError(error.message, status, error.details));
     }
 
     const result = isObject(data) ? data : {};
@@ -980,6 +1038,10 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         grocery: null,
         savedMeals: [],
         progressionDecisions: [],
+        dailySteps: [],
+        nutritionWeekTargets: [],
+        customWorkouts: [],
+        customSessions: [],
       },
       events: [{ type: "data-erased" }],
       resultRefs: asRefs(isObject(result.data) ? result.data.result_refs : undefined),

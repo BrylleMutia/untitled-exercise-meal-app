@@ -37,12 +37,23 @@ import type {
   UserProfile,
   WorkoutSession,
   LoggedMeal,
+  TrainingProgram,
+  CustomWorkoutDefinition,
+  CustomWorkoutSession,
 } from "@/types/domain";
 import type { SnapshotRepository } from "@/services/repository";
 import { clearDraft, clearUserDrafts, listDrafts, readDraft } from "@/services/draftStore";
 import { suggestProgression, type ProgressionSuggestion } from "@/utility/progression";
+import { todayKey } from "@/utility/dates";
 
 export interface AppActions {
+  saveCustomWorkout(id: string, expectedVersion: number, definition: CustomWorkoutDefinition): Promise<boolean>;
+  startCustomWorkout(workoutId: string, expectedVersion: number): Promise<boolean>;
+  saveCustomSession(session: CustomWorkoutSession): Promise<boolean>;
+  selectTrainingProgram(program: TrainingProgram): Promise<boolean>;
+  saveDailySteps(date: string, steps: number, walkingMinutes?: number, expectedRevision?: number): Promise<boolean>;
+  deleteDailySteps(date: string, expectedRevision: number): Promise<boolean>;
+  setCelebrations(enabled: boolean): Promise<boolean>;
   notify(message: string, tone?: Toast["tone"]): void;
   clearError(): void;
   refreshSnapshot(): Promise<boolean>;
@@ -135,6 +146,10 @@ function createEmptySnapshot(userId = ""): AppSnapshot {
     grocery: null,
     savedMeals: [],
     progressionDecisions: [],
+    dailySteps: [],
+    nutritionWeekTargets: [],
+    customWorkouts: [],
+    customSessions: [],
   };
 }
 
@@ -291,6 +306,9 @@ export function AppProvider({
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`
       );
       try {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          throw Object.assign(new Error("You are offline. Your draft is retained; reconnect and retry."), { repositoryError: { code: "retryable", message: "You are offline. Your draft is retained; reconnect and retry.", retryable: true } satisfies RepositoryError });
+        }
         const outcome = await operation(snapshotRef.current, mutationKey);
         retryRef.current = null;
         snapshotRef.current = outcome.snapshot;
@@ -416,7 +434,7 @@ export function AppProvider({
       },
       getProgressionRecommendations() {
         const current = snapshotRef.current;
-        if (!current.plan) return [];
+        if (!current.plan || current.plan.trainingProgram === "pilates") return [];
         return current.plan.workouts.flatMap((workout) => workout.exercises.flatMap((exercise, index) => {
           const suggestion = suggestProgression(exercise.exerciseId, current.sessions);
           if (!suggestion) return [];
@@ -444,6 +462,42 @@ export function AppProvider({
         const outcome = await execute("complete_onboarding", (current, idempotencyKey) =>
           repository!.completeOnboarding({ profile, goal, currentSnapshot: current, idempotencyKey }),
         );
+        return Boolean(outcome);
+      },
+
+      async saveDailySteps(date, steps, walkingMinutes, expectedRevision) {
+        const outcome = await execute("save_daily_steps", (current, idempotencyKey) => repository!.saveDailySteps({
+          date, steps, walkingMinutes,
+          expectedRevision: expectedRevision ?? current.dailySteps.find((entry) => entry.date === date)?.revision ?? 0,
+          idempotencyKey,
+        }));
+        return Boolean(outcome);
+      },
+      async deleteDailySteps(date, expectedRevision) {
+        const outcome = await execute("delete_daily_steps", (_current, idempotencyKey) => repository!.deleteDailySteps({ date, expectedRevision, idempotencyKey }));
+        return Boolean(outcome);
+      },
+      async setCelebrations(enabled) {
+        const outcome = await execute("set_celebrations", (current, idempotencyKey) => repository!.setCelebrations({ enabled, expectedRevision: current.profile?.revision ?? 1, idempotencyKey }));
+        return Boolean(outcome);
+      },
+      async selectTrainingProgram(program) {
+        const outcome = await execute("select_training_program", (current, idempotencyKey) => repository!.selectTrainingProgram({ program, currentSnapshot: current, idempotencyKey }));
+        return Boolean(outcome);
+      },
+      async saveCustomWorkout(id, expectedVersion, definition) {
+        const outcome = await execute("save_custom_workout", (current, idempotencyKey) => {
+          if (!current.profile) throw new Error("not_authenticated");
+          return repository!.saveCustomWorkout({ id, expectedVersion, definition, profile: current.profile, idempotencyKey });
+        });
+        return Boolean(outcome);
+      },
+      async startCustomWorkout(workoutId, expectedVersion) {
+        const outcome = await execute("start_custom_workout", (_current, idempotencyKey) => repository!.startCustomWorkout({ id: `custom-session-${idempotencyKey}`, workoutId, expectedVersion, date: todayKey(), idempotencyKey }));
+        return Boolean(outcome);
+      },
+      async saveCustomSession(session) {
+        const outcome = await execute("save_custom_workout_session", (_current, idempotencyKey) => repository!.saveCustomSession({ id: session.id, expectedRevision: session.revision, actual: session.actual, status: session.status, idempotencyKey }));
         return Boolean(outcome);
       },
 

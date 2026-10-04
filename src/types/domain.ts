@@ -440,6 +440,8 @@ export interface AppSnapshot {
   foods: Food[];
   goal: Goal | null;
   target: DailyTarget | null;
+  /** Bounded read model of effective targets for the current nutrition week. */
+  nutritionWeekTargets: DailyTarget[];
   plan: WorkoutPlan | null;
   workoutOverrides: WorkoutPlanOverride[];
   mealPlan: MealPlan | null;
@@ -450,9 +452,16 @@ export interface AppSnapshot {
   grocery: GroceryList | null;
   savedMeals: Meal[];
   progressionDecisions: ProgressionDecision[];
+  dailySteps: DailyStepEntry[];
+  customWorkouts: CustomWorkout[];
+  customSessions: CustomWorkoutSession[];
 }
 
 export type SemanticEvent =
+  | { type: "custom-workout-saved"; workoutId: string }
+  | { type: "custom-session-saved"; sessionId: string }
+  | { type: "daily-steps-saved"; date: string }
+  | { type: "daily-steps-deleted"; date: string }
   | { type: "profile-updated" }
   | { type: "notification-preference-updated" }
   | { type: "goal-updated"; goalId: string }
