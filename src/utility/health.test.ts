@@ -14,10 +14,22 @@ import {
   kgToLb,
   lbToKg,
   macroTargets,
+  totalCarbLimit,
   validateProfileInput,
 } from "./health";
 
 describe("health utilities", () => {
+  it("uses total-carbohydrate product limits without changing the calorie target", () => {
+    expect(totalCarbLimit("Vegetarian low-carb")).toBe(130);
+    expect(totalCarbLimit("Keto-style")).toBe(50);
+    expect(totalCarbLimit("Vegan")).toBeNull();
+    for (const [pattern, cap] of [["Low-carb", 130], ["Keto-style", 50]] as const) {
+      const macros = macroTargets(2000, 70, "maintain", pattern);
+      expect(macros.carbsG).toBe(cap);
+      expect(macros.proteinG).toBe(112);
+      expect(Math.abs(macros.proteinG * 4 + macros.carbsG * 4 + macros.fatG * 9 - 2000)).toBeLessThanOrEqual(5);
+    }
+  });
   it("calculates Mifflin-St Jeor BMR for both sexes", () => {
     // 10*76 + 6.25*178 - 5*29 = 1727.5, then +5 / -161
     expect(calculateBmr({ sex: "male", age: 29, weightKg: 76, heightCm: 178 })).toBe(1733);
