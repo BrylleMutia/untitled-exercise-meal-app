@@ -1,7 +1,9 @@
 import type { Meal } from "@/types/domain";
+import { MVP3_MEALS } from "./mvp3Catalog";
 
 /** Reusable saved meals; ingredient quantities are in food-catalog servings. */
 export const SAVED_MEALS: Meal[] = [
+  ...MVP3_MEALS,
   {
     id: "meal-yogurt-bowl",
     name: "Greek Yogurt Berry Bowl",

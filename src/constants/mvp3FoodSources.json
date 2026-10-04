@@ -1,0 +1,84 @@
+{
+  "retrievedOn": "2026-10-01",
+  "source": "USDA FoodData Central",
+  "foods": [
+    {
+      "fdcId": "173424",
+      "description": "Egg, whole, cooked, hard-boiled",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "calories": 155,
+        "proteinG": 12.58,
+        "carbsG": 1.12,
+        "fatG": 10.61,
+        "fiberG": 0
+      }
+    },
+    {
+      "fdcId": "171477",
+      "description": "Chicken, broilers or fryers, breast, meat only, cooked, roasted",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "calories": 165,
+        "proteinG": 31.02,
+        "carbsG": 0,
+        "fatG": 3.57,
+        "fiberG": 0
+      }
+    },
+    {
+      "fdcId": "169967",
+      "description": "Broccoli, cooked, boiled, drained, without salt",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "calories": 35,
+        "proteinG": 2.38,
+        "carbsG": 7.18,
+        "fatG": 0.41,
+        "fiberG": 3.3
+      }
+    },
+    {
+      "fdcId": "174290",
+      "description": "Tofu, extra firm, prepared with nigari",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "calories": 83,
+        "proteinG": 9.98,
+        "carbsG": 1.18,
+        "fatG": 5.26,
+        "fiberG": 1
+      }
+    },
+    {
+      "fdcId": "171413",
+      "description": "Oil, olive, salad or cooking",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "calories": 884,
+        "proteinG": 0,
+        "carbsG": 0,
+        "fatG": 100,
+        "fiberG": 0
+      }
+    },
+    {
+      "fdcId": "170567",
+      "description": "Nuts, almonds",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "calories": 579,
+        "proteinG": 21.15,
+        "carbsG": 21.55,
+        "fatG": 49.93,
+        "fiberG": 12.5
+      }
+    }
+  ]
+}
