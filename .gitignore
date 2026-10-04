@@ -33,3 +33,6 @@ next-env.d.ts
 /playwright/playwright-report/
 /test-results/
 /playwright-report/
+
+# Generated product demo deliverables
+/demo-video/
