@@ -1,0 +1,2 @@
+create index custom_workout_sessions_version_owner_idx
+on public.custom_workout_sessions(workout_version_row_id,user_id);
