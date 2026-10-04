@@ -1,0 +1,134 @@
+import { test, expect } from "@playwright/test";
+import { createAuthenticatedContext, createLocalAccount, deleteLocalAccount } from "./local-account";
+
+test.use({ navigationTimeout: 60_000 });
+test.setTimeout(180_000);
+const savedExpect = expect.configure({ timeout: 30_000 });
+
+test("onboarding retains choices after a failed save and confirms Pilates and diet plans before navigation", async ({ browser }) => {
+  const account = await createLocalAccount(`mvp3-onboarding-${test.info().project.name}`);
+  const context = await createAuthenticatedContext(browser, process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000", account);
+  let releaseSave: (() => void) | undefined;
+  try {
+    const page = await context.newPage();
+    await page.goto("/onboarding");
+    await page.getByLabel("What should we call you?").fill("Everyday Test");
+    await page.getByLabel("Age", { exact: true }).fill("30");
+    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await page.getByLabel("Height (cm)").fill("168");
+    await page.getByLabel("Weight (kg)").fill("68");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByLabel("Workout program").selectOption("pilates");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByLabel("Eating style").selectOption("Keto-style");
+    await page.getByLabel("Meal cost preference").selectOption("7");
+    await expect(page.getByText(/They are not prices/)).toBeVisible();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByText("Maintain weight", { exact: true }).click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    let attempts = 0;
+    const pendingSave = new Promise<void>((resolve) => { releaseSave = resolve; });
+    await page.route("**/rest/v1/rpc/complete_onboarding", async (route) => {
+      attempts += 1;
+      if (attempts === 1) await route.abort("failed");
+      else { await pendingSave; await route.continue(); }
+    });
+    await page.getByRole("button", { name: "Create my plan", exact: true }).click();
+    await savedExpect(page.getByRole("button", { name: "Retry saving", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page.getByText(/Keto-style · Balanced/)).toBeVisible();
+    await page.getByRole("button", { name: "Retry saving", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Saving your plan…", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Back", exact: true })).toBeDisabled();
+    await expect(page).toHaveURL(/\/onboarding$/);
+    releaseSave?.();
+    await savedExpect(page).toHaveURL(/:\d+\/$/);
+    expect(attempts).toBe(2);
+    await expect(page.getByRole("img", { name: "No meals logged; intake is unknown" })).toBeVisible();
+    await page.goto("/workouts");
+    await expect(page.getByLabel("Workout program")).toHaveValue("pilates");
+    await expect(page.getByRole("heading", { name: /Pilates foundations/ }).first()).toBeVisible();
+    await page.goto("/nutrition");
+    await expect(page.getByText(/50 g total carbs per planned day/)).toBeVisible();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addStyleTag({ content: "html { font-size: 24px !important; }" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.goto("/activity");
+    await page.getByLabel("Steps", { exact: true }).fill("0");
+    await page.getByRole("button", { name: "Save steps", exact: true }).click();
+    await savedExpect(page.getByRole("heading", { name: "0 steps saved" })).toBeVisible();
+    await page.goto("/settings");
+    const milestones = page.getByRole("switch", { name: /Milestones/ });
+    await expect(milestones).toHaveAttribute("aria-checked", "false");
+    await milestones.click();
+    await savedExpect(milestones).toHaveAttribute("aria-checked", "true");
+    await page.goto("/");
+    await expect(page.getByText("First step entry saved", { exact: true })).toBeVisible();
+  } finally {
+    releaseSave?.();
+    await context.close();
+    await deleteLocalAccount(account);
+  }
+});
+
+test("daily steps preserve drafts on network failure and save edits and deletion", async ({ page, context }) => {
+  await page.goto("/activity");
+  await expect(page.getByRole("heading", { name: "Daily steps", exact: true })).toBeVisible();
+  await page.getByLabel("Steps", { exact: true }).fill("6500");
+  await page.getByLabel("Walking minutes (optional)").fill("35");
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await expect(page.getByLabel("Steps", { exact: true })).toHaveValue("6500");
+  await expect(page.getByText("6,500 steps saved", { exact: true })).toHaveCount(0);
+  await context.setOffline(false);
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await savedExpect(page.getByRole("heading", { name: "6,500 steps saved" })).toBeVisible();
+  await expect(page.getByText(/Walking energy: roughly/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Steps", { exact: true })).toHaveValue("6500");
+  await page.getByLabel("Steps", { exact: true }).fill("7000");
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await savedExpect(page.getByRole("heading", { name: "7,000 steps saved" })).toBeVisible();
+  await page.getByRole("button", { name: "Remove entry" }).click();
+  await savedExpect(page.getByRole("heading", { name: "No steps logged for this date" })).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addStyleTag({ content: "html { font-size: 24px !important; }" });
+  await page.getByLabel("Steps", { exact: true }).focus();
+  await expect(page.getByLabel("Steps", { exact: true })).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `test-results/mvp3-steps-${test.info().project.name}.png`, fullPage: true });
+});
+
+test("custom routine versions preserve planned and actual history", async ({ page }) => {
+  await page.goto("/workouts/custom");
+  await page.getByRole("button", { name: "Create a routine" }).click();
+  await page.getByLabel("Routine name").fill(`Mobility ${test.info().project.name}`);
+  await page.getByLabel("Movement name", { exact: true }).fill("Comfortable reach");
+  await page.getByRole("button", { name: "Add movement", exact: true }).click();
+  await page.getByRole("button", { name: "Save routine", exact: true }).click();
+  const routine = page.getByRole("heading", { name: `Mobility ${test.info().project.name}`, exact: true }).locator("..");
+  await savedExpect(routine.getByText(/Version 1/)).toBeVisible();
+  await routine.getByRole("button", { name: "Start routine" }).click();
+  await savedExpect(page.getByRole("heading", { name: /· In progress/ })).toBeVisible();
+  await page.getByRole("button", { name: "Mark complete", exact: true }).click();
+  await page.getByLabel("Note (optional)").fill("Comfortable practice");
+  await page.getByRole("button", { name: "Save progress & pause" }).click();
+  await savedExpect(page.getByRole("heading", { name: /· Paused/ })).toBeVisible();
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await savedExpect(page.getByRole("heading", { name: /· In progress/ })).toBeVisible();
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  const history = page.getByRole("region", { name: "Custom workout history" });
+  const recorded = history.getByRole("heading", { name: new RegExp(`Mobility ${test.info().project.name} ·`) }).locator("..");
+  await savedExpect(recorded.getByText(/completed · routine version 1/)).toBeVisible();
+  await routine.getByRole("button", { name: "Edit routine" }).click();
+  await page.getByLabel("Reps", { exact: true }).fill("8");
+  await page.getByRole("button", { name: "Save routine", exact: true }).click();
+  await savedExpect(routine.getByText(/Version 2/)).toBeVisible();
+  await recorded.getByText("Planned and recorded work").click();
+  await expect(recorded.getByText("Planned: 2 × 6 reps", { exact: true })).toBeVisible();
+  await expect(recorded.getByText("Comfortable practice", { exact: true })).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addStyleTag({ content: "html { font-size: 24px !important; }" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `test-results/mvp3-custom-${test.info().project.name}.png`, fullPage: true });
+});
