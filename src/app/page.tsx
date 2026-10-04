@@ -22,6 +22,7 @@ import { dayStatus, entriesForDate, totalsForDate } from "@/utility/nutrition";
 import { suggestProgression } from "@/utility/progression";
 import { estimateWorkoutEnergyKcal } from "@/utility/workoutEnergy";
 import { formatLong, startOfWeek, todayKey } from "@/utility/dates";
+import { participationMilestones } from "@/utility/milestones";
 import { targetForDate } from "@/utility/targetHistory";
 
 const quickLinks = [
@@ -63,6 +64,7 @@ export default function HomePage() {
   const entries = entriesForDate(snapshot.nutritionLogs, today);
   const loggedSlots = Object.values(entries).filter((list) => list.length > 0).length;
   const status = dayStatus(snapshot.nutritionLogs, today);
+  const milestones = snapshot.profile?.celebrationsEnabled ? participationMilestones(snapshot, today) : [];
   const nutritionTargets = [
     { label: "Calories", value: status === "unlogged" ? null : totals.calories, target: target?.calories ?? 0, unit: " kcal", barClassName: "bg-blush-300" },
     { label: "Protein", value: status === "unlogged" ? null : totals.proteinG, target: target?.proteinG ?? 0, unit: " g", barClassName: "bg-lav-300" },
@@ -138,6 +140,11 @@ export default function HomePage() {
           <Link href="/workouts" className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-lav-100 px-4 font-bold"><Dumbbell className="h-4 w-4" aria-hidden /> Log activity</Link>
         </div>
       </Card>
+      {milestones.length > 0 ? <Card tone="mint" className="animate-pop lg:col-span-2">
+        <h2 className="font-extrabold">Personal milestones</h2>
+        <ul className="mt-2 flex flex-wrap gap-2">{milestones.map((milestone) => <li key={milestone} className="rounded-full bg-white/70 px-3 py-2 text-xs font-bold">{milestone}</li>)}</ul>
+        <p className="mt-2 text-xs font-semibold text-ink-soft">Every check-in counts. Rest days are part of your plan.</p>
+      </Card> : null}
       {/* Today's meals — blush hero card from the reference */}
       <Card tone="blush" className="animate-fade-up">
         <div className="flex items-start justify-between">
