@@ -9,6 +9,20 @@
 > **Agent workflow:** [`AGENTS.md`](./AGENTS.md)
 > **Supabase setup:** [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)
 
+## MVP-3 design handover — 2026-10-04
+
+Implemented surfaces include five focused onboarding groups, relative meal-cost
+choices, a labeled final save, Home quick actions, remaining-calorie rings,
+daily activity, Pilates selection, custom routines and session controls,
+explicit unresolved diet slots, shared pressed/validation feedback, and optional
+personal milestones. The pastel tokens and existing exercise media are retained.
+
+Desktop 1440×900 and mobile 390×844 flows, keyboard order, large text, reduced
+motion, and narrow overflow were verified locally on 2026-10-01. Recheck these
+flows on the hosted candidate after deployment; no new hosted design acceptance
+is implied. See [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) for remaining release
+work and [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) for dated evidence.
+
 ## Table of Contents
 
 1. [Purpose and Scope](#purpose-and-scope)
@@ -220,6 +234,29 @@ and not medical, dietary, or exercise care.
 `max-w-xl` column that hides header, footer, and bottom nav) with its own
 step progress bar and navigation.
 
+MVP-3 uses five groups: About you, Movement, Food choices, Your goal, Review.
+Headings receive focus on step changes. Review emphasizes the daily estimate
+and choices; calculation details are expandable. Cost choices use familiar labels
+and explain that they are relative costs, not prices. The final button says
+“Saving your plan…” with a spinner/status announcement; navigation controls are
+disabled until the save resolves, and failures leave the draft visible.
+
+Home and Nutrition use a decreasing calories-remaining ring with accessible
+numeric text. An unlogged day shows a dash, partial logs say “Still logging,”
+over-target intake has a neutral numeric label, and missing targets are explicit.
+The ring follows the selected date's effective target version; a later target
+change does not alter the earlier day's display.
+Food intake and activity energy remain separate. Home quick actions use large
+touch targets. Steps and custom-routine forms retain drafts during failures.
+Custom sessions keep the planned dose visible above actual inputs and provide
+large complete/skip, pause/resume, and finish controls.
+
+Shared buttons use a brief pressed scale and disabled/loading feedback. Inputs
+use hover, focus, and invalid borders. Existing focus rings, keyboard behavior,
+pastel surfaces, and global reduced-motion overrides are preserved. Optional
+milestone cards use the existing short pop transition; no guilt or calorie reward
+is attached to the milestone labels.
+
 ### Bottom navigation (`BottomNav.tsx`)
 
 Mobile-only (`md:hidden`) floating pill: `fixed bottom-3 left-1/2 z-40
@@ -416,7 +453,11 @@ types in `src/types/`, and pure logic in `src/utility/`.
   shows the expired-link fallback.
 - **Auth pages/actions:** sign-in, sign-up, check-email, forgot-password,
   update-password, configuration, and sign-out are implemented under
-  `src/app/auth/` and `src/app/auth/actions.ts`.
+  `src/app/auth/` and `src/app/auth/actions.ts`. Successful sign-in and other
+  session-changing auth forms navigate with a new document request so the root
+  provider receives the authenticated account snapshot immediately. Existing
+  accounts open Home; new accounts continue onboarding. If the initial account
+  read fails, a retry screen appears instead of an empty onboarding state.
 - **Signup validation:** account creation keeps the email and password fields
   in component state after validation errors. Password mismatch is shown in the
   form alert and beside both password fields, with accessible invalid-state
@@ -451,6 +492,8 @@ offline from `public/exercises`.
 
 ### Implemented (authenticated MVP application)
 
+- MVP-3 onboarding, activity, calorie-budget, workout/diet choice, shared input
+  feedback, and opt-in milestones described above; release gates remain open.
 - Responsive Next.js App Router app with the pastel design system, tokens,
   typography, motion, and accessibility conventions documented above.
 - Auth-first route protection, Supabase SSR clients, Proxy claim refresh, PKCE

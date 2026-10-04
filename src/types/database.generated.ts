@@ -14,6 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
+      custom_workout_sessions: {
+        Row: {
+          actual: Json
+          app_id: string
+          finished_at: string | null
+          planned: Json
+          revision: number
+          row_id: number
+          session_date: string
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string
+          workout_version_row_id: number
+        }
+        Insert: {
+          actual?: Json
+          app_id: string
+          finished_at?: string | null
+          planned: Json
+          revision?: number
+          row_id?: never
+          session_date: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          workout_version_row_id: number
+        }
+        Update: {
+          actual?: Json
+          app_id?: string
+          finished_at?: string | null
+          planned?: Json
+          revision?: number
+          row_id?: never
+          session_date?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          workout_version_row_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_workout_sessions_workout_version_row_id_user_id_fkey"
+            columns: ["workout_version_row_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "current_custom_workouts"
+            referencedColumns: ["row_id", "user_id"]
+          },
+          {
+            foreignKeyName: "custom_workout_sessions_workout_version_row_id_user_id_fkey"
+            columns: ["workout_version_row_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "custom_workout_versions"
+            referencedColumns: ["row_id", "user_id"]
+          },
+        ]
+      }
+      custom_workout_versions: {
+        Row: {
+          app_id: string
+          created_at: string
+          definition: Json
+          row_id: number
+          user_id: string
+          version: number
+        }
+        Insert: {
+          app_id: string
+          created_at?: string
+          definition: Json
+          row_id?: never
+          user_id: string
+          version: number
+        }
+        Update: {
+          app_id?: string
+          created_at?: string
+          definition?: Json
+          row_id?: never
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      daily_step_entries: {
+        Row: {
+          entry_date: string
+          revision: number
+          source: string
+          steps: number
+          updated_at: string
+          user_id: string
+          walking_minutes: number | null
+        }
+        Insert: {
+          entry_date: string
+          revision?: number
+          source?: string
+          steps: number
+          updated_at?: string
+          user_id: string
+          walking_minutes?: number | null
+        }
+        Update: {
+          entry_date?: string
+          revision?: number
+          source?: string
+          steps?: number
+          updated_at?: string
+          user_id?: string
+          walking_minutes?: number | null
+        }
+        Relationships: []
+      }
       daily_targets: {
         Row: {
           activity_factor: number
@@ -656,31 +773,40 @@ export type Database = {
       }
       meal_plans: {
         Row: {
+          allergies: string[]
           app_id: string
           created_at: string
+          dietary_pattern: string
           row_id: number
           supersedes_plan_row_id: number | null
           target_row_id: number
+          total_carb_limit: number | null
           user_id: string
           version: number
           week_of: string
         }
         Insert: {
+          allergies?: string[]
           app_id: string
           created_at?: string
+          dietary_pattern?: string
           row_id?: never
           supersedes_plan_row_id?: number | null
           target_row_id: number
+          total_carb_limit?: number | null
           user_id: string
           version: number
           week_of: string
         }
         Update: {
+          allergies?: string[]
           app_id?: string
           created_at?: string
+          dietary_pattern?: string
           row_id?: never
           supersedes_plan_row_id?: number | null
           target_row_id?: number
+          total_carb_limit?: number | null
           user_id?: string
           version?: number
           week_of?: string
@@ -1168,6 +1294,7 @@ export type Database = {
         Row: {
           age: number
           allergies: string[]
+          celebrations_enabled: boolean
           cooking_time_minutes: number | null
           created_at: string
           days_per_week: number
@@ -1186,6 +1313,7 @@ export type Database = {
           revision: number
           session_minutes: number
           sex: string
+          training_program: string
           units: string
           updated_at: string
           weight_kg: number
@@ -1193,6 +1321,7 @@ export type Database = {
         Insert: {
           age: number
           allergies?: string[]
+          celebrations_enabled?: boolean
           cooking_time_minutes?: number | null
           created_at?: string
           days_per_week: number
@@ -1211,6 +1340,7 @@ export type Database = {
           revision?: number
           session_minutes: number
           sex: string
+          training_program?: string
           units: string
           updated_at?: string
           weight_kg: number
@@ -1218,6 +1348,7 @@ export type Database = {
         Update: {
           age?: number
           allergies?: string[]
+          celebrations_enabled?: boolean
           cooking_time_minutes?: number | null
           created_at?: string
           days_per_week?: number
@@ -1236,6 +1367,7 @@ export type Database = {
           revision?: number
           session_minutes?: number
           sex?: string
+          training_program?: string
           units?: string
           updated_at?: string
           weight_kg?: number
@@ -1399,6 +1531,7 @@ export type Database = {
           row_id: number
           supersedes_plan_row_id: number | null
           target_row_id: number
+          training_program: string
           user_id: string
           version: number
         }
@@ -1408,6 +1541,7 @@ export type Database = {
           row_id?: never
           supersedes_plan_row_id?: number | null
           target_row_id: number
+          training_program?: string
           user_id: string
           version: number
         }
@@ -1417,6 +1551,7 @@ export type Database = {
           row_id?: never
           supersedes_plan_row_id?: number | null
           target_row_id?: number
+          training_program?: string
           user_id?: string
           version?: number
         }
@@ -1450,6 +1585,7 @@ export type Database = {
           session_date: string
           started_at: string
           status: string
+          training_program: string
           updated_at: string
           user_id: string
         }
@@ -1465,6 +1601,7 @@ export type Database = {
           session_date: string
           started_at: string
           status?: string
+          training_program?: string
           updated_at?: string
           user_id: string
         }
@@ -1480,6 +1617,7 @@ export type Database = {
           session_date?: string
           started_at?: string
           status?: string
+          training_program?: string
           updated_at?: string
           user_id?: string
         }
@@ -1502,7 +1640,17 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      current_custom_workouts: {
+        Row: {
+          app_id: string | null
+          created_at: string | null
+          definition: Json | null
+          row_id: number | null
+          user_id: string | null
+          version: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       abandon_workout_session: { Args: { p_payload: Json }; Returns: Json }
@@ -1516,6 +1664,7 @@ export type Database = {
         Returns: Json
       }
       delete_account: { Args: { p_payload: Json }; Returns: Json }
+      delete_daily_steps: { Args: { p_payload: Json }; Returns: Json }
       delete_logged_meal: { Args: { p_payload: Json }; Returns: Json }
       delete_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       edit_meal_plan: { Args: { p_payload: Json }; Returns: Json }
@@ -1526,6 +1675,9 @@ export type Database = {
       remove_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       remove_workout_override: { Args: { p_payload: Json }; Returns: Json }
       reset_plan: { Args: { p_payload: Json }; Returns: Json }
+      save_custom_workout: { Args: { p_payload: Json }; Returns: Json }
+      save_custom_workout_session: { Args: { p_payload: Json }; Returns: Json }
+      save_daily_steps: { Args: { p_payload: Json }; Returns: Json }
       save_food: { Args: { p_payload: Json }; Returns: Json }
       save_nutrition_log: { Args: { p_payload: Json }; Returns: Json }
       save_recipe: { Args: { p_payload: Json }; Returns: Json }
@@ -1533,8 +1685,10 @@ export type Database = {
       save_saved_meal: { Args: { p_payload: Json }; Returns: Json }
       save_weight_entry: { Args: { p_payload: Json }; Returns: Json }
       save_workout_session: { Args: { p_payload: Json }; Returns: Json }
+      set_celebrations: { Args: { p_payload: Json }; Returns: Json }
       set_grocery_quantity: { Args: { p_payload: Json }; Returns: Json }
       skip_planned_meal: { Args: { p_payload: Json }; Returns: Json }
+      start_custom_workout: { Args: { p_payload: Json }; Returns: Json }
       start_workout_session: { Args: { p_payload: Json }; Returns: Json }
       toggle_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       update_logged_meal: { Args: { p_payload: Json }; Returns: Json }

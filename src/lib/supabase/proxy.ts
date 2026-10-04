@@ -52,7 +52,7 @@ export async function updateSession(request: NextRequest) {
     pathname === "/auth/forgot-password" ||
     pathname === "/auth/check-email";
   if (claims && guestOnlyAuthRoute) {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return response;

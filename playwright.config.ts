@@ -30,6 +30,11 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "confirmation",
+      testMatch: /confirmation\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], storageState: { cookies: [], origins: [] }, trace: "off", screenshot: "off", video: "off" },
+    },
+    {
       name: "auth-setup",
       testMatch: /auth\.setup\.ts/,
       teardown: "auth-teardown",
@@ -42,7 +47,7 @@ export default defineConfig({
     },
     {
       name: "desktop",
-      testMatch: /mvp1-release\.spec\.ts/,
+      testMatch: /mvp[13]-release\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -52,7 +57,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
-      testMatch: /mvp1-release\.spec\.ts/,
+      testMatch: /mvp[13]-release\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Pixel 5"],

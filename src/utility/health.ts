@@ -78,11 +78,23 @@ export function macroTargets(
   calories: number,
   weightKg: number,
   goal: PrimaryGoal,
+  dietaryPattern = "No restrictions",
 ): { proteinG: number; carbsG: number; fatG: number } {
   const proteinG = Math.round(weightKg * (goal === "strength" ? 1.8 : 1.6));
-  const fatG = Math.round((calories * 0.25) / 9);
-  const carbsG = Math.max(0, Math.round((calories - proteinG * 4 - fatG * 9) / 4));
+  const carbLimit = totalCarbLimit(dietaryPattern);
+  const ordinaryFatG = Math.round((calories * 0.25) / 9);
+  const ordinaryCarbsG = Math.max(0, Math.round((calories - proteinG * 4 - ordinaryFatG * 9) / 4));
+  const carbsG = carbLimit === null ? ordinaryCarbsG : Math.min(carbLimit, ordinaryCarbsG);
+  const fatG = carbLimit === null ? ordinaryFatG : Math.max(0, Math.round((calories - proteinG * 4 - carbsG * 4) / 9));
   return { proteinG, carbsG, fatG };
+}
+
+/** Product planning limits use total carbohydrate, not net carbohydrate. */
+export function totalCarbLimit(dietaryPattern: string): number | null {
+  const pattern = dietaryPattern.trim().toLowerCase();
+  if (pattern.includes("keto-style")) return 50;
+  if (pattern.includes("low-carb")) return 130;
+  return null;
 }
 
 export interface ProfileInput {
@@ -145,7 +157,8 @@ export function buildDailyTarget(profile: UserProfile, effectiveDate: string): D
       "This estimate is below the supported safety floor, so an automated target was not created.",
     );
   }
-  const macros = macroTargets(calories, profile.weightKg, profile.goal);
+  const macros = macroTargets(calories, profile.weightKg, profile.goal, profile.dietaryPattern);
+  const calculationVersion = totalCarbLimit(profile.dietaryPattern) === null ? HEALTH_POLICY_VERSION : "calicoach-health-v2-total-carbs";
   targetSeq += 1;
   return {
     id: `target-${targetSeq}`,
@@ -159,8 +172,8 @@ export function buildDailyTarget(profile: UserProfile, effectiveDate: string): D
     formula: BMR_FORMULA,
     activityFactor: factor,
     disclaimer: HEALTH_DISCLAIMER,
-    calculationAssumptions: `Policy ${HEALTH_POLICY_VERSION}; Mifflin–St Jeor; activity factor ${factor}; goal adjustment ${GOAL_ADJUSTMENT[profile.goal]}.`,
-    calculationVersion: HEALTH_POLICY_VERSION,
+    calculationAssumptions: `Policy ${calculationVersion}; Mifflin–St Jeor; activity factor ${factor}; goal adjustment ${GOAL_ADJUSTMENT[profile.goal]}.${totalCarbLimit(profile.dietaryPattern) === null ? "" : ` Total-carbohydrate planning limit ${totalCarbLimit(profile.dietaryPattern)} g/day; remaining energy allocated to fat. This is a planning estimate, not dietary care.`}`,
+    calculationVersion,
     rawCalories: calories,
     goalAdjustment: GOAL_ADJUSTMENT[profile.goal],
     safetyOutcome: "supported",

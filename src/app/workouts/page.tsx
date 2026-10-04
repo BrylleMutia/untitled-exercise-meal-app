@@ -10,11 +10,14 @@ import { ExerciseIllustration } from "@/components/ExerciseIllustration";
 import { EXERCISES, exerciseById } from "@/constants/exercises";
 import { startOfWeek, todayKey, weekDates, formatDay } from "@/utility/dates";
 import { suggestProgression } from "@/utility/progression";
+import { Button } from "@/components/ui/Button";
+import type { TrainingProgram } from "@/types/domain";
 
 const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function WorkoutsPage() {
-  const { snapshot, actions } = useApp();
+  const { snapshot, actions, pendingMutation } = useApp();
+  const [program, setProgram] = useState<TrainingProgram>(snapshot.profile?.trainingProgram ?? "calisthenics");
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [replacementId, setReplacementId] = useState("");
   const [replacementSets, setReplacementSets] = useState("");
@@ -53,6 +56,16 @@ export default function WorkoutsPage() {
 
   return (
     <div className="grid gap-5">
+      <Card>
+        <label className="grid gap-2 text-sm font-bold">Workout program
+          <select className="input" value={program} disabled={Boolean(pendingMutation)} onChange={(event) => setProgram(event.target.value as TrainingProgram)}>
+            <option value="calisthenics">Calisthenics</option><option value="pilates">Pilates foundations</option>
+          </select>
+        </label>
+        <p className="mt-2 text-xs font-semibold text-muted">Changing programs creates a future plan version. Completed sessions keep their original prescription. Pilates foundations focus on comfortable control; edits and substitutions are available.</p>
+        <Button className="mt-3" disabled={Boolean(pendingMutation) || program === (snapshot.profile?.trainingProgram ?? "calisthenics")} onClick={() => void actions.selectTrainingProgram(program)}>Save program choice</Button>
+        <Link href="/workouts/custom" className="mt-3 block min-h-11 py-3 text-sm font-extrabold underline">Create or log your own routine</Link>
+      </Card>
       <div className="flex items-end justify-between">
         <div>
           <h2 className="text-xl font-extrabold">This week&apos;s plan</h2>
@@ -98,7 +111,7 @@ export default function WorkoutsPage() {
                   const e = exerciseById(pe.exerciseId);
                   const slotKey = pe.slotKey ?? `day:${workout.dayOfWeek}:exercise:${pe.sortOrder ?? exerciseIndex + 1}`;
                   const editing = editingSlot === slotKey;
-                  const suggestion = suggestProgression(pe.exerciseId, snapshot.sessions);
+                  const suggestion = plan.trainingProgram === "pilates" ? null : suggestProgression(pe.exerciseId, snapshot.sessions);
                   const latestDecision = snapshot.progressionDecisions.find(
                     (decision) => decision.slotKey === slotKey && decision.plannedExerciseId === pe.id,
                   );
@@ -115,7 +128,7 @@ export default function WorkoutsPage() {
                         <span>{e?.name ?? "Exercise"}</span>
                       <button
                         type="button"
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white"
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white"
                         aria-label={`Edit ${e?.name ?? "exercise"}`}
                         onClick={() => {
                           setEditingSlot(editing ? null : slotKey);

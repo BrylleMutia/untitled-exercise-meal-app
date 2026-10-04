@@ -1,0 +1,53 @@
+begin;
+select no_plan();
+insert into auth.users(id,email) values ('00000000-0000-0000-0000-000000003001','mvp3-a@example.test'),('00000000-0000-0000-0000-000000003002','mvp3-b@example.test');
+insert into public.profiles(id,name,age,sex,height_cm,weight_kg,units,experience,equipment,days_per_week,session_minutes,goal)
+values('00000000-0000-0000-0000-000000003001','MVP3 A',30,'female',168,68,'metric','beginner',array['none'],3,30,'maintain'),
+('00000000-0000-0000-0000-000000003002','MVP3 B',30,'female',168,68,'metric','beginner',array['none'],3,30,'maintain');
+set local role authenticated;
+set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000003001';
+select lives_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',0,'expectedRevision',0,'idempotencyKey','m3-steps'))$$,'explicit zero is a saved observation');
+select lives_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',0,'expectedRevision',0,'idempotencyKey','m3-steps'))$$,'step retries replay');
+select is((select count(*)::int from public.daily_step_entries),1,'retry does not duplicate observations');
+select throws_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',1.5,'expectedRevision',1,'idempotencyKey','m3-fraction'))$$,'P0001','validation_failed','fractional steps rejected');
+select throws_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',1,'walkingMinutes',1441,'expectedRevision',1,'idempotencyKey','m3-minutes'))$$,'P0001',null,'out-of-range minutes rejected');
+select throws_ok($$select public.save_daily_steps(jsonb_build_object('date','2026-02-30','steps',1,'expectedRevision',1,'idempotencyKey','m3-date'))$$,'P0001',null,'invalid calendar date rejected');
+select throws_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',1,'expectedRevision',0,'idempotencyKey','m3-stale'))$$,'P0001','stale_version','stale step revision rejected');
+select throws_ok($$insert into public.daily_step_entries(user_id,entry_date,steps) values('00000000-0000-0000-0000-000000003001',current_date,4)$$,'42501',null,'direct step writes denied');
+select lives_ok($$select public.delete_daily_steps(jsonb_build_object('date',current_date::text,'expectedRevision',1,'idempotencyKey','m3-delete'))$$,'step deletion succeeds');
+select lives_ok($$select public.delete_daily_steps(jsonb_build_object('date',current_date::text,'expectedRevision',1,'idempotencyKey','m3-delete'))$$,'deletion retry replays after record removal');
+select lives_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',200,'expectedRevision',0,'idempotencyKey','m3-recreate'))$$,'observation can be recreated explicitly');
+select is((select revision from public.daily_step_entries),2,'recreated date keeps monotonic revision');
+select throws_ok($$select public.save_daily_steps(jsonb_build_object('date',current_date::text,'steps',400,'expectedRevision',1,'idempotencyKey','m3-aba'))$$,'P0001','stale_version','pre-deletion draft cannot overwrite recreated observation');
+select throws_ok($$select public.set_celebrations('{"enabled":true,"expectedRevision":1.2,"idempotencyKey":"m3-celebrate-fraction"}')$$,'P0001','validation_failed','fractional preference revision rejected');
+select lives_ok($$select public.set_celebrations('{"enabled":true,"expectedRevision":1,"idempotencyKey":"m3-celebrate"}')$$,'celebrations require explicit saved opt-in');
+
+select lives_ok($$select public.save_custom_workout('{"id":"m3-routine","expectedVersion":0,"definition":{"name":"Mobility","movements":[{"id":"reach","name":"Gentle reach","sets":2,"reps":6,"restSeconds":45}]},"idempotencyKey":"m3-routine-create"}')$$,'text movement routine saved');
+select lives_ok($$select public.save_custom_workout('{"id":"m3-routine","expectedVersion":0,"definition":{"name":"Mobility","movements":[{"id":"reach","name":"Gentle reach","sets":2,"reps":6,"restSeconds":45}]},"idempotencyKey":"m3-routine-create"}')$$,'routine retry replayed');
+select is((select count(*)::int from public.custom_workout_versions),1,'routine retry creates one version');
+select throws_ok($$select public.save_custom_workout('{"id":"bad","expectedVersion":0,"definition":{"name":"Invalid equipment","movements":[{"id":"pull","name":"Pull","exerciseId":"ex-pull-up","sets":2,"reps":6,"restSeconds":45}]},"idempotencyKey":"m3-equipment"}')$$,'P0001',null,'invalid catalog/equipment choice denied');
+select lives_ok($$select public.start_custom_workout(jsonb_build_object('id','m3-session','workoutId','m3-routine','expectedVersion',1,'date',current_date::text,'idempotencyKey','m3-start'))$$,'custom session captures version one');
+select lives_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":1,"actual":[],"status":"paused","idempotencyKey":"m3-pause"}')$$,'pause saves session state');
+select lives_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":2,"actual":[],"status":"in_progress","idempotencyKey":"m3-resume"}')$$,'resume saves state');
+select throws_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":3,"actual":[{"movementId":"other","sets":2,"reps":6,"status":"completed"}],"status":"completed","idempotencyKey":"m3-mismatch"}')$$,'P0001',null,'unknown actual movement denied');
+select throws_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":3,"actual":[{"movementId":"reach","sets":1,"reps":6,"status":"completed"}],"status":"completed","idempotencyKey":"m3-short"}')$$,'P0001',null,'reduced work must be marked modified');
+select lives_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":3,"actual":[{"movementId":"reach","sets":1,"reps":4,"status":"modified","rpe":8,"note":"Shortened comfortably"}],"status":"partial","idempotencyKey":"m3-partial"}')$$,'partial actual work retained');
+select lives_ok($$select public.save_custom_workout('{"id":"m3-routine","expectedVersion":1,"definition":{"name":"Mobility edited","movements":[{"id":"reach","name":"Gentle reach","sets":2,"reps":8,"restSeconds":45}]},"idempotencyKey":"m3-routine-edit"}')$$,'routine edit creates next version');
+select is((select (planned->'movements'->0->>'reps')::int from public.custom_workout_sessions),6,'completed prescription is immutable');
+select is((select (actual->0->>'reps')::int from public.custom_workout_sessions),4,'actual work is retained after plan edit');
+select is((select version from public.current_custom_workouts),2,'current view returns latest prescription');
+select throws_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":4,"actual":[],"status":"abandoned","idempotencyKey":"m3-rewrite"}')$$,'P0001','already_completed','finished history cannot be silently rewritten');
+select throws_ok($$delete from public.custom_workout_sessions$$,'42501',null,'direct session deletion denied');
+
+set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000003002';
+select is((select count(*)::int from public.daily_step_entries),0,'steps hidden across users');
+select is((select count(*)::int from public.current_custom_workouts),0,'invoker view respects owner RLS');
+select is((select count(*)::int from public.custom_workout_sessions),0,'sessions hidden across users');
+select throws_ok($$select public.start_custom_workout(jsonb_build_object('id','other-session','workoutId','m3-routine','expectedVersion',2,'date',current_date::text,'idempotencyKey','m3-other-start'))$$,'P0001','not_found','other user cannot start owned routine');
+select throws_ok($$select public.save_custom_workout_session('{"id":"m3-session","expectedRevision":4,"actual":[],"status":"paused","idempotencyKey":"m3-other-save"}')$$,'P0001','not_found','other user cannot mutate session');
+set local role anon;
+select throws_ok($$select * from public.daily_step_entries$$,'42501',null,'anonymous step reads denied');
+select throws_ok($$select * from public.current_custom_workouts$$,'42501',null,'anonymous routine reads denied');
+select throws_ok($$select public.save_custom_workout('{}')$$,'42501',null,'anonymous mutation denied');
+select * from finish();
+rollback;

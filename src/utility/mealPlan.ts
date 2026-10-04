@@ -3,8 +3,10 @@ import { SAVED_MEALS } from "@/constants/meals";
 import { FOODS } from "@/constants/foods";
 import { weekDates } from "./dates";
 import { mealNutrition } from "./nutrition";
+import { totalCarbLimit } from "./health";
+import { MVP3_MEAL_COST, MVP3_MEAL_PREP } from "@/constants/mvp3Catalog";
 
-type MealPlanCatalog = { savedMeals?: Meal[]; foods?: Food[] };
+type MealPlanCatalog = { savedMeals?: Meal[]; foods?: Food[]; dailyCalories?: number };
 
 function plannedMealMetadata(mealId: string | undefined, foodId: string | undefined, servings: number, savedMeals: Meal[], foods: Food[]) {
   if (mealId) {
@@ -14,11 +16,11 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
       return {
         expectedCalories: Math.round(nutrition.perServing.calories * servings),
         expectedProteinG: Math.round(nutrition.perServing.proteinG * servings * 10) / 10,
-        expectedCarbsG: Math.round(nutrition.perServing.carbsG * servings * 10) / 10,
+        expectedCarbsG: Math.ceil(nutrition.perServing.carbsG * servings * 100) / 100,
         expectedFatG: Math.round(nutrition.perServing.fatG * servings * 10) / 10,
-        source: "starter-catalog",
-        sourceVersion: "starter-v1",
-        assumptions: "Estimated from the saved recipe and catalog serving sizes.",
+        source: meal.ingredients.every((ingredient) => foods.find((food) => food.id === ingredient.foodId)?.valueSource === "trusted_catalog") ? "trusted-catalog" : "starter-catalog",
+        sourceVersion: meal.id.startsWith("meal-mvp3-") ? "USDA-SR-Legacy:2019-04-01" : "starter-v1",
+        assumptions: "Calculated from listed ingredients and labeled serving sizes. Portions and cooking can vary; all listed oil is included.",
         confidence: "medium" as const,
         preparationBasis: "as_labeled" as const,
       };
@@ -30,7 +32,7 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
       return {
         expectedCalories: Math.round(food.calories * servings),
         expectedProteinG: Math.round(food.proteinG * servings * 10) / 10,
-        expectedCarbsG: Math.round(food.carbsG * servings * 10) / 10,
+        expectedCarbsG: Math.ceil(food.carbsG * servings * 100) / 100,
         expectedFatG: Math.round(food.fatG * servings * 10) / 10,
         expectedFiberG: food.fiberG === undefined ? undefined : Math.round(food.fiberG * servings * 10) / 10,
         source: food.source,
@@ -68,29 +70,54 @@ export function generateMealPlan(
 ): MealPlan {
   const savedMeals = catalog.savedMeals ?? SAVED_MEALS;
   const foods = catalog.foods ?? FOODS;
+  const carbLimit = totalCarbLimit(constraints?.dietaryPattern ?? "");
+  const portion = (mealId: string | undefined, foodId: string | undefined, calorieShare: number) => {
+    if (carbLimit === null || catalog.dailyCalories === undefined) return 1;
+    const base = plannedMealMetadata(mealId, foodId, 1, savedMeals, foods).expectedCalories;
+    if (base <= 0) return null;
+    const servings = Math.floor(catalog.dailyCalories * calorieShare / base * 100) / 100;
+    return servings >= 0.25 && servings <= 4 ? servings : null;
+  };
   const allowedMealIds = new Set(
     savedMeals.filter((meal) => mealAllowed(meal.id, constraints, savedMeals, foods)).map((meal) => meal.id),
   );
   const customMealIds = savedMeals
     .filter((meal) => !meal.isSystem && allowedMealIds.has(meal.id) && mealFitsTimeAndBudget(meal.id, constraints))
     .map((meal) => meal.id);
-  const chooseMeal = (rotation: string[], index: number) => {
+  const chooseMeal = (rotation: string[], index: number, remainingCarbs: number, calorieShare: number) => {
     const rotated = rotation.map((_, offset) => rotation[(index + offset) % rotation.length]);
     const candidates = [...rotated, ...customMealIds]
       .filter((id) => allowedMealIds.has(id))
-      .filter((id) => mealFitsTimeAndBudget(id, constraints));
+      .filter((id) => mealFitsTimeAndBudget(id, constraints))
+      .filter((id) => {
+        const servings = portion(id, undefined, calorieShare);
+        return servings !== null && (carbLimit === null || plannedMealMetadata(id, undefined, servings, savedMeals, foods).expectedCarbsG <= remainingCarbs);
+      });
     return [...candidates].sort((a, b) => preferenceScore(b, constraints, savedMeals, foods) - preferenceScore(a, constraints, savedMeals, foods))[0];
   };
   const meals: PlannedMeal[] = [];
   weekDates(weekOf).forEach((date, i) => {
-    const breakfastId = chooseMeal(BREAKFAST_ROTATION, i);
-    const lunchId = chooseMeal(LUNCH_ROTATION, i);
-    const dinnerId = chooseMeal(DINNER_ROTATION, i);
-    const snackId = chooseFood(SNACK_ROTATION, i, constraints, foods);
-    const breakfast = plannedMealMetadata(breakfastId, undefined, 1, savedMeals, foods);
-    const lunch = plannedMealMetadata(lunchId, undefined, 1, savedMeals, foods);
-    const dinner = plannedMealMetadata(dinnerId, undefined, 1, savedMeals, foods);
-    const snack = plannedMealMetadata(undefined, snackId || undefined, 1, savedMeals, foods);
+    let remainingCarbs = carbLimit ?? Number.POSITIVE_INFINITY;
+    const breakfastId = chooseMeal(carbLimit === null ? BREAKFAST_ROTATION : ["meal-mvp3-eggs", "meal-mvp3-tofu-almonds", "meal-mvp3-tofu"], i, remainingCarbs, 0.25);
+    const breakfastServings = portion(breakfastId, undefined, 0.25) ?? 1;
+    const breakfast = plannedMealMetadata(breakfastId, undefined, breakfastServings, savedMeals, foods);
+    if (breakfastId) remainingCarbs -= breakfast.expectedCarbsG;
+    const lunchId = chooseMeal(carbLimit === null ? LUNCH_ROTATION : ["meal-mvp3-chicken", "meal-mvp3-tofu", "meal-mvp3-tofu-almonds"], i, remainingCarbs, 0.3);
+    const lunchServings = portion(lunchId, undefined, 0.3) ?? 1;
+    const lunch = plannedMealMetadata(lunchId, undefined, lunchServings, savedMeals, foods);
+    if (lunchId) remainingCarbs -= lunch.expectedCarbsG;
+    const dinnerId = chooseMeal(carbLimit === null ? DINNER_ROTATION : ["meal-mvp3-tofu", "meal-mvp3-chicken", "meal-mvp3-tofu-almonds"], i, remainingCarbs, 0.3);
+    const dinnerServings = portion(dinnerId, undefined, 0.3) ?? 1;
+    const dinner = plannedMealMetadata(dinnerId, undefined, dinnerServings, savedMeals, foods);
+    if (dinnerId) remainingCarbs -= dinner.expectedCarbsG;
+    const snackRotation = carbLimit === null ? SNACK_ROTATION : ["food-mvp3-170567", "food-mvp3-173424"];
+    const snackCandidates = snackRotation.filter((id) => {
+      const servings = portion(undefined, id, 0.15);
+      return servings !== null && plannedMealMetadata(undefined, id, servings, savedMeals, foods).expectedCarbsG <= remainingCarbs;
+    });
+    const snackId = chooseFood(snackCandidates, i, constraints, foods, Number.POSITIVE_INFINITY);
+    const snackServings = portion(undefined, snackId || undefined, 0.15) ?? 1;
+    const snack = plannedMealMetadata(undefined, snackId || undefined, snackServings, savedMeals, foods);
     meals.push(
       {
         id: `pm-${date}-breakfast`,
@@ -98,7 +125,7 @@ export function generateMealPlan(
         slot: "breakfast",
         mealId: breakfastId,
         label: savedMeals.find((m) => m.id === breakfastId)?.name ?? "Choose a meal that fits",
-        servings: 1,
+        servings: breakfastServings,
         ...breakfast,
       },
       {
@@ -107,7 +134,7 @@ export function generateMealPlan(
         slot: "lunch",
         mealId: lunchId,
         label: savedMeals.find((m) => m.id === lunchId)?.name ?? "Choose a meal that fits",
-        servings: 1,
+        servings: lunchServings,
         ...lunch,
       },
       {
@@ -116,7 +143,7 @@ export function generateMealPlan(
         slot: "dinner",
         mealId: dinnerId,
         label: savedMeals.find((m) => m.id === dinnerId)?.name ?? "Choose a meal that fits",
-        servings: 1,
+        servings: dinnerServings,
         ...dinner,
       },
       {
@@ -125,7 +152,7 @@ export function generateMealPlan(
         slot: "snack",
         foodId: snackId || undefined,
         label: snackId ? "Snack" : "Choose a safe snack",
-        servings: 1,
+        servings: snackServings,
         ...snack,
       },
     );
@@ -141,10 +168,13 @@ function mealAllowed(
 ): boolean {
   const meal = savedMeals.find((candidate) => candidate.id === mealId);
   if (!meal) return false;
+  if (!Number.isFinite(meal.servings) || meal.servings <= 0 || meal.ingredients.some((ingredient) => !Number.isFinite(ingredient.servings) || ingredient.servings <= 0)) return false;
   const foods = meal.ingredients
     .map((ingredient) => catalogFoods.find((food) => food.id === ingredient.foodId))
     .filter((food): food is Food => Boolean(food));
+  if (foods.length !== meal.ingredients.length || foods.length === 0) return false;
   const pattern = constraints?.dietaryPattern.toLowerCase() ?? "";
+  if (totalCarbLimit(pattern) !== null && foods.some((food) => food.valueSource !== "trusted_catalog" || !Number.isFinite(food.carbsG) || food.carbsG < 0)) return false;
   const veganForbidden = new Set([
     "food-egg",
     "food-chicken",
@@ -154,8 +184,10 @@ function mealAllowed(
     "food-cheddar",
     "food-butter",
     "food-honey",
+    "food-mvp3-173424",
+    "food-mvp3-171477",
   ]);
-  const vegetarianForbidden = new Set(["food-chicken", "food-salmon"]);
+  const vegetarianForbidden = new Set(["food-chicken", "food-salmon", "food-mvp3-171477"]);
   const forbidden = pattern.includes("vegan")
     ? veganForbidden
     : pattern.includes("vegetarian")
@@ -171,16 +203,18 @@ function chooseFood(
   index: number,
   constraints?: Pick<UserProfile, "dietaryPattern" | "allergies" | "foodPreferences" | "cookingTimeMinutes" | "mealBudget">,
   foods: Food[] = FOODS,
+  remainingCarbs = Number.POSITIVE_INFINITY,
 ): string {
   const allergies = constraints?.allergies.map((a) => a.trim().toLowerCase()).filter(Boolean) ?? [];
   const pattern = constraints?.dietaryPattern.toLowerCase() ?? "";
-  const veganForbidden = new Set(["food-egg", "food-milk", "food-greek-yogurt"]);
+  const veganForbidden = new Set(["food-egg", "food-milk", "food-greek-yogurt", "food-mvp3-173424"]);
   return (
     rotation
       .map((_, offset) => rotation[(index + offset) % rotation.length])
       .filter((id) => {
         const food = foods.find((candidate) => candidate.id === id);
         if (!food) return false;
+        if (totalCarbLimit(pattern) !== null && (food.valueSource !== "trusted_catalog" || !Number.isFinite(food.carbsG) || food.carbsG < 0 || food.carbsG > remainingCarbs)) return false;
         if (pattern.includes("vegan") && veganForbidden.has(id)) return false;
         return !allergies.some((allergy) => foodMatchesAllergy(food, allergy));
       })
@@ -192,6 +226,7 @@ function chooseFood(
  * relative score rather than a currency claim. A low budget keeps the plan
  * on lower-cost catalog staples; users can still edit every slot. */
 const MEAL_COST_UNITS: Record<string, number> = {
+  ...MVP3_MEAL_COST,
   "meal-yogurt-bowl": 6,
   "meal-pb-toast": 4,
   "meal-chicken-rice": 7,
@@ -199,6 +234,7 @@ const MEAL_COST_UNITS: Record<string, number> = {
 };
 
 const MEAL_PREP_MINUTES: Record<string, number> = {
+  ...MVP3_MEAL_PREP,
   "meal-yogurt-bowl": 5,
   "meal-pb-toast": 8,
   "meal-chicken-rice": 25,
@@ -244,6 +280,8 @@ function foodMatchesAllergy(food: (typeof FOODS)[number], allergy: string): bool
   const name = food.name.toLowerCase();
   if (allergy.includes("dairy") || allergy.includes("milk")) return food.category === "Dairy";
   if (allergy.includes("nut")) return /peanut|almond|nut/.test(name);
+  if (allergy.includes("soy")) return /soy|tofu/.test(name);
+  if (allergy.includes("gluten") || allergy.includes("wheat")) return /wheat|bread|pasta/.test(name);
   if (allergy.includes("egg")) return name.includes("egg");
   if (allergy.includes("fish") || allergy.includes("seafood")) return /salmon|fish/.test(name);
   return name.includes(allergy);

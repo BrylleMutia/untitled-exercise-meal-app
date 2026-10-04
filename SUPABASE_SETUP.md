@@ -2,17 +2,34 @@
 
 This document is the operational checklist for the app's Supabase boundary.
 The repository contains the forward-only domain schema, authored catalog seed
-data, and authenticated RPC/repository phase. The current RC3 local and
-read-only linked-project checks are recorded first; historical RC2 evidence
-below remains an audit trail.
+data, and authenticated RPC/repository phase. The current MVP-3 checkpoint is
+summarized first; RC3 and RC2 evidence below remains a historical audit trail.
 
 The MVP authority is Supabase Auth plus Postgres. Browser storage may cache
-read models or preserve recoverable drafts later, but it must not become a
+read models or preserve recoverable drafts, but it must not become a
 second source of truth. Durable mutations use deliberate authenticated RPC
 wrappers backed by private implementations; direct client table writes remain
 revoked.
 
-## RC3 verification checkpoint — 2026-09-29
+## MVP-3 operational handover — 2026-10-04
+
+Shared Cali already received the seven verified MVP-3 forward migrations on
+2026-10-01. At that checkpoint all 46 local/remote versions, 12 schema comparison
+categories, and 39 rollback-only deployed RPC/RLS assertions matched/passed.
+Generated public types reflect that deployed schema. Git commit/push packaging
+does not require another database push. Do not edit or replay applied migrations;
+perform a fresh preflight before any future database change.
+
+Local Mailpit signup/resend and token-hash confirmation passed. Hosted app
+deployment, hosted signup template/Site URL/redirect configuration, and staging
+SMTP delivery remain pending; the user deferred the staging email check.
+Section [9](#9-mvp-3-confirmation-and-schema-release-gates) owns the operational
+procedure. [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) supplies the full checklist
+and commit manifest; [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) preserves
+dated fingerprints and test evidence. No shared service settings change is part
+of this documentation/Git handover.
+
+## Historical RC3 verification checkpoint — 2026-09-29
 
 - The disposable local Supabase database reset successfully. All 39 repository
   migrations applied in order, including `20260918033000`; applied history has
@@ -852,3 +869,49 @@ closeout steps before declaring the tagged release complete:
 
 Production Site URL/redirects, live SMTP delivery, leaked-password protection,
 and public deployment remain post-RC launch gates.
+
+## 9. MVP-3 confirmation and schema release gates
+
+The seven MVP-3 forward migrations were applied to shared Cali on 2026-10-01
+after explicit user authorization and verified preflight. The initial comparison
+matched all 39 baseline migration versions and all 11 baseline schema fingerprint
+categories. The authorized `npx supabase db push --linked --skip-vault --yes`
+applied exactly the reviewed set through `20261001062329`.
+
+Post-push verification matched all 46 local/remote migration versions and all 12
+schema fingerprint categories, including view definitions. The linked dry run
+reports no pending migrations, seeds, or roles. A rollback-only transaction passed
+39 deployed RPC/RLS assertions; subsequent queries confirmed no test fixtures
+remained. Linked public database types were regenerated and typecheck passed.
+The detailed fingerprints and advisor review are in `MVP_Priority_Matrix.md`.
+Preserve the RC3 evidence above as historical evidence. Database rollout does not
+complete app deployment or the staging email release gate.
+
+The reviewed local confirmation template is
+`supabase/templates/confirmation.html`. Configure the staging **Confirm signup**
+template with the same token-hash link:
+`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding`.
+Keep the app's correct HTTPS Site URL and authorized redirect URLs. Token-hash
+verification supports opening the email in another browser without relying on
+the signup browser's PKCE verifier. Never record live tokens in release evidence.
+
+`npm run test:email:local` uses Mailpit at `127.0.0.1:56324`, requires the disposable
+local project at `127.0.0.1:56321`, temporarily enables confirmations, then restores
+the original local auth config. It leaves a reduced test stack running (database,
+Auth, PostgREST, Kong, and Mailpit); run `npm run supabase:start` to restore optional
+services when needed. Do not run it alongside other local Supabase tests.
+The staging gate additionally requires real inbox receipt, resend receipt,
+successful confirmation return, safe invalid/reused-link behavior, environment
+and template identification, test date, and disposable-user cleanup. Local mail
+tests and mocked responses do not satisfy the staging delivery gate.
+
+Staging SMTP delivery is deferred at the user's request on 2026-10-01. This is
+an unverified release gate, not a passing test.
+
+The pinned local stack currently runs PostgREST 14.5. After prolonged local
+activity/reset, repository tests intermittently returned `JWT issued at future`.
+Restarting only `supabase_rest_untitled-exercise-meal-app` cleared the local issue;
+the final eight repository scenarios passed without weakening JWT verification.
+The [official PostgREST changelog](https://github.com/PostgREST/postgrest/blob/main/CHANGELOG.md)
+records clock-related JWT corrections in later versions. Keep this operational
+limitation separate from database migration or application evidence.

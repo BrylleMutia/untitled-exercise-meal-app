@@ -32,14 +32,14 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r'
-), 24, 'the public application schema contains exactly 24 tables');
+), 27, 'the public application schema contains exactly 27 tables');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 24, 'every public application table has RLS enabled');
+), 27, 'every public application table has RLS enabled');
 
 select ok((
   select count(*) = 10
@@ -64,14 +64,14 @@ select ok((
 ), 'required date, timestamp, identity, and JSON columns use the expected types');
 
 select ok((
-  select count(*) = 18
+  select count(*) = 20
   from information_schema.columns c
   where c.table_schema = 'public' and c.column_name = 'app_id'
     and c.is_nullable = 'NO'
 ), 'application-facing app_id columns are present and non-null');
 
 select ok((
-  select count(*) = 22
+  select count(*) = 24
   from information_schema.columns c
   join pg_class t on t.relname = c.table_name
   join pg_namespace n on n.oid = t.relnamespace and n.nspname = 'public'
@@ -82,7 +82,7 @@ select ok((
 ), 'all internal row_id columns are identity-backed');
 
 select ok((
-  select count(*) = 16
+  select count(*) = 18
   from pg_constraint c
   join pg_class t on t.oid = c.conrelid
   join pg_namespace n on n.oid = t.relnamespace
@@ -128,9 +128,9 @@ select is((
 ), 0, 'every public foreign key has a leftmost B-tree index');
 
 select is((select count(*)::int from public.exercises where is_system), 21, 'starter exercise count');
-select is((select count(*)::int from public.foods where is_system), 22, 'starter food count');
-select is((select count(*)::int from public.meals where is_system), 4, 'starter meal count');
-select is((select count(*)::int from public.meal_ingredients), 14, 'starter meal ingredient count');
+select is((select count(*)::int from public.foods where is_system), 28, 'starter and reviewed food count');
+select is((select count(*)::int from public.meals where is_system), 8, 'starter and reviewed meal count');
+select is((select count(*)::int from public.meal_ingredients), 28, 'catalog meal ingredient count');
 
 select ok((
   exists (select 1 from public.exercises where app_id = 'ex-knee-push-up' and slug = 'knee-push-up')

@@ -1,6 +1,6 @@
 # MVP Priority Matrix
 
-Audit date: 2026-09-29
+Handover update: 2026-10-04; implementation verification date: 2026-10-01
 Implementation specification revision: 2026-09-28
 
 This document summarizes the current implementation and the work required to
@@ -10,11 +10,216 @@ interaction guidance in [`DESIGN.md`](./DESIGN.md), and the operational backend
 status in [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md). Source code, migrations,
 generated types, and tests are treated as the implementation truth.
 
-## Current phase status — MVP-2 / RC3 — 2026-09-29
+## MVP-3 proposal — Everyday Usability and Choice — 2026-09-30
 
-This is the current status entry and supersedes stale “pending” or “complete”
-claims in earlier phase checklists. Historical release evidence below is kept
-as an audit trail; it is not evidence for RC3.
+This is a forward-looking release plan. The MVP-2 / RC3 record below remains
+historical evidence; it does not establish that any MVP-3 gate has passed.
+The fresh-browser sign-in fix was preserved and integrated into MVP-3.
+
+| Requested improvement | Audited baseline | MVP-3 outcome |
+|---|---|---|
+| Confirmation resend | Form and `auth.resend` action exist; no delivery/link test | Local mail integration test and staging SMTP/link evidence |
+| Meal budget | Relative catalog cost score exists; numeric units are unclear | Plain-language Budget-friendly, Balanced, Flexible choices, with legacy values preserved |
+| Onboarding | Four steps mix movement and food; final save has no button-local pending state | Basics, Movement, Food, Goal, Review; accessible save/retry state |
+| Steps and energy | No steps; completed-workout energy estimate exists | Editable daily steps with optional walking minutes and separate estimated walking-energy range |
+| Workout choice | Deterministic calisthenics only; substitutions exist | Curated beginner Pilates generation and reusable custom workouts |
+| Diet choice | Vegetarian and vegan filters exist | Enforced Low-carb and Keto-style constraints with trusted data and unresolved-slot handling |
+| Calorie budget | Numeric intake/target and progress bars exist | Accessible decreasing remaining-calories ring with unknown/over-target states |
+| Interaction and motivation | Basic fade/pop and reduced-motion support exist | Shared input feedback, Home quick actions, and non-punitive milestones |
+
+### M3.1 — Onboarding and account reliability (P0)
+
+- Split onboarding into five clear groups, keep optional inputs skippable, and
+  keep first-plan setup under five minutes. Replace medical/technical jargon
+  with short explanations while retaining the health eligibility boundary.
+- Map cost choices to existing relative meal-cost limits: Budget-friendly `4`,
+  Balanced `7`, Flexible no cap. Explain that they are not prices. Keep
+  nonstandard saved numeric values intact until the user changes the choice.
+- Disable duplicate final submits; show “Saving your plan…” on the button and
+  a status announcement; retain the recoverable draft on failure; navigate only
+  after the authoritative response. Test resend through local inbox and stage
+  actual SMTP delivery and confirmation-link return without exposing whether
+  an email is registered.
+
+### M3.2 — Daily activity and nutrition clarity (P0)
+
+- Add one editable, authenticated step observation per local date. Capture
+  optional walking minutes and source `manual`. Keep missing days unknown.
+  Derive a broad walking-energy range only when minutes and an eligible weight
+  input are available; label the assumptions, avoid combining it with workout
+  burn, and never increase the nutrition target from it.
+- Show remaining calories as a decreasing ring on Home and Nutrition; use
+  numeric text for intake/target, an explicit unlogged state, visible estimate
+  ranges, a neutral over-target message, and a no-target fallback. Add Home
+  shortcuts to food, steps, and workouts.
+- Defer automatic sync. Health Connect and HealthKit need native integration;
+  the Google Health API is not onboarding new projects as of this audit.
+
+### M3.3 — Workout choice (P0)
+
+- Add a curated beginner Pilates catalog/program and deterministic style
+  selection. Respect equipment, days, experience, expected minutes, warm-up,
+  rest, cooldown, regressions, and safety guidance. Keep the existing
+  `@bryllim/workout-guide` media for supported movements; use accessible
+  text-only guidance for new movements without approved catalog media.
+- Add reusable custom workouts with catalog or named user movements. Do not
+  calculate automatic progression for user-authored movements. Persist plan
+  versions and keep completed planned/actual session snapshots immutable.
+
+### M3.4 — Dietary choice (P0)
+
+- Add Low-carb at no more than 130 g total carbohydrate/day and Keto-style at
+  no more than 50 g total carbohydrate/day as explicit product assumptions.
+  Do not claim clinical ketosis or individualized dietary care.
+- Expand trusted meals and serving data before enabling the choices. Generate
+  future target/meal-plan versions; enforce allergy, diet, serving, and daily
+  carbohydrate rules in deterministic code and the authorized mutation path.
+  Leave infeasible slots unresolved and explain why instead of claiming a
+  compliant plan. Previously logged nutrition remains unchanged.
+
+### M3.5 — Polish, motivation, and release proof (P1)
+
+- Standardize touch/keyboard feedback, pressed and validation states, pending
+  and success cues, focus behavior, large text, and brief reduced-motion-safe
+  transitions. Derive gentle first-workout, first-meal, and participation
+  milestones from durable facts; no streak penalties or calorie rewards.
+- Add typed Context/repository actions, forward migrations, generated types,
+  RLS/grant checks, idempotent RPCs, and account export/deletion coverage for
+  new durable entities. Run typecheck, lint, unit, database, build, and
+  authenticated 390×844 and desktop browser checks. Verify stale edits,
+  offline/retry, cross-user denial, history independence, screen-reader labels,
+  keyboard order, large text, and reduced motion. MVP-3 sign-off requires
+  staging SMTP delivery evidence; do not mark that gate passed from a mock.
+
+Implementation should proceed in dependency order: contracts/migrations and
+catalog content; pure calculations and repositories; route UX; full local and
+staging verification. Update `FEATURES.md`, `ARCHITECTURE.md`, and `DESIGN.md`
+when implemented behavior lands. No linked database push is included without
+the migration-equivalence audit and explicit shared-remote authorization.
+
+## MVP-3 implementation evidence — 2026-10-01
+
+The implementation and handover are packaged on `codex/mvp-3-handover`, based on
+`main` at
+`3cdd4d757916f00b2b4750e4e78c027d609c6fba`. Existing fresh-browser auth changes
+were preserved and integrated. This records implementation and verification;
+the seven database migrations were applied to shared Supabase with explicit user
+authorization on 2026-10-01. App deployment and MVP-3 sign-off remain incomplete.
+The proposal above remains a release plan,
+and the RC3 record below remains historical evidence.
+
+### Handover and release boundaries — 2026-10-04
+
+[`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) lists every completed feature, pending
+release gate, impacted file, and ordered commit group. Packaging the source on a
+review branch does not deploy the app or satisfy staging SMTP. The seven shared
+migrations are already applied; do not push them again as a handover step.
+The user approved the exact configured GitHub destination on 2026-10-04. The
+35-commit candidate is published on
+[`codex/mvp-3-handover`](https://github.com/BrylleMutia/untitled-exercise-meal-app/tree/codex/mvp-3-handover);
+the initial automatic approval block was resolved. The handover records the
+destination and commit manifest. Review/CI and merge remain pending.
+Review/CI on the exact candidate, merge, hosted deployment, staging confirmation
+delivery, hosted mobile/desktop acceptance, and release tagging/sign-off remain
+pending. Staging delivery was deferred by the user. Automatic health sync and
+PWA/offline synchronization are later scope, not missing MVP-3 implementation.
+The verification table below retains its original 2026-10-01 date; any fresh
+handover checks are recorded separately in the handover document.
+
+| Package | Implemented behavior | Release status |
+|---|---|---|
+| M3.1 | Five plain-language onboarding groups; relative cost choices with legacy numeric preservation; labeled, duplicate-safe final save and retained retry draft; full document navigation after authentication; token-hash confirmation template and real Mailpit resend/link test | Implemented locally; staging SMTP and hosted template verification deferred by the user |
+| M3.2 | Authenticated daily step edits/deletion and optional walking minutes; broad 2.8–3.8 MET estimate for eligible ages 19–59; separate food/workout estimates; reducing calories-remaining ring and Home quick actions | Implemented locally; automatic device sync remains deferred |
+| M3.3 | Deterministic Pilates foundations; equipment/experience/time checks; reusable catalog or named custom routines; immutable routine versions and copied planned/actual session history; pause/resume, partial completion, notes, RPE, export | Implemented locally; named custom movements receive no automatic progression |
+| M3.4 | Low-carb 130 g and Keto-style 50 g total-carbohydrate limits; combined vegetarian/vegan choices; six reviewed USDA foods and four ingredient-based meals; conservative portions, future target versions, server enforcement, unresolved slots | Implemented locally; product planning assumptions and uncertainty remain explicit |
+| M3.5 | Shared pressed/focus/validation feedback, reduced-motion-safe transitions, optional saved-fact firsts and participation milestones, typed intents and authorized versioned RPCs | Locally verified; database rollout verified; app deployment and staging gates remain |
+
+### Verification record
+
+All commands below use the disposable local project at `127.0.0.1:56321` unless
+the row explicitly says linked/shared. No provider secrets or test credentials
+are recorded. Browser provider responses in the existing release suite remain
+mocked; the local confirmation test delivers actual mail through Mailpit.
+
+| Gate | Evidence |
+|---|---|
+| Clean migrations | `npm run supabase:reset` passed with all 46 migrations, through `20261001062329_mvp3_explicit_variable_types.sql`; the original 39 applied migrations were not edited |
+| Database security and behavior | `npm run supabase:test`: 11 suites / 475 assertions passed after reset, including new range, whole-number, retry, monotonic revision, history, direct-write, anonymous, and cross-user checks |
+| Database lint | `npm run supabase:lint`: no schema errors or warnings after the forward explicit-variable-types correction |
+| Generated contract | Public database types regenerated from the deployed linked schema after push. TypeScript verified mutual assignability of local/linked public contracts after normalizing local `NonNullable<Json>` to the hosted `Json` representation. Hosted PostgREST metadata retained; typecheck passed |
+| Domain tests | `npm run test:local`: 21 files / 96 tests passed; covers Pilates schedule/duration, carb caps and infeasible cases, custom validation, steps, walking uncertainty, ring states, effective target dates, and milestones |
+| Repository scenarios | `npm run test:repository`: 8/8 passed after clean reset and local PostgREST restart, including simultaneous competing step, routine, and session edits. The pinned local PostgREST 14.5 intermittently returned `JWT issued at future`; the failed runs are environment failures, and no JWT checks were disabled |
+| Static application gates | Typecheck and lint passed against regenerated local contracts; final production build also passed TypeScript verification |
+| Production build | Final `npm run build` passed with 21 routes and 21 exercise assets |
+| Authenticated browsers | `npm run test:e2e:release`: 34/34 passed across 1440×900 desktop and 390×844 mobile plus setup/cleanup. Covers the existing primary loop, fresh-browser sign-in, onboarding failed save/duplicate prevention/retry, Pilates and Keto-style choices, unknown intake, opt-in milestones, step edits/deletion/offline drafts, and custom routine/session history. Keyboard, enlarged text, reduced motion, and narrow overflow checks passed; mobile/desktop saved screenshots were inspected |
+| Final date/history correction | Effective target selection uses a bounded current-week read model, with past/future/same-day version tests. The affected-route desktop/mobile rerun passed 10/10 after this correction, and the repository read-model assertions passed 8/8 |
+| Public browsers | `npm run test:e2e:public`: 4/4 passed for signed-out routing, signup validation, preserved inputs, password visibility, and keyboard order |
+| Local confirmation delivery | `npm run test:email:local`: 1/1 passed for actual signup mail, resend mail, fresh-browser token-hash confirmation, reused/invalid links, safe redirects, and account cleanup; normal local auth config restored |
+| Local test environment | Reduced stack retained to avoid memory pressure: database, Auth, PostgREST, Kong, and Mailpit. Optional services can be restored with `npm run supabase:start` |
+| Linked preflight | Initial history matched all 39 baseline versions and dry run was up to date. Local/linked normalized columns, constraints, indexes, policies, relations, routines/bodies, routine grants, schemas, schema grants, table grants, and triggers matched exactly. Immediately before push, `npm run supabase:push:dry` listed exactly the seven reviewed MVP-3 forward migrations, with no repairs or additional versions |
+| Shared rollout | User authorized the verified migrations on 2026-10-01. `npx supabase db push --linked --skip-vault --yes` applied exactly seven migrations to Cali (`ifunkhvbvkdxolhpxjvk`). All 46 local/remote history versions now match; post-push dry run reports `upToDate: true` and no pending migrations, seeds, or roles |
+| Deployed schema and behavior | All 12 normalized local/shared schema fingerprint categories match, including the invoker view. A rollback-only transaction passed 39 native assertions adapted from `mvp3_usability_test.sql`: step edits/replays/ranges/deletion/monotonic revisions, explicit opt-in, custom versions/session states/planned-versus-actual history, direct-write denial, cross-user RLS, invoker-view ownership, and anonymous denial. Subsequent queries confirmed zero fixture users, steps, routine versions, or sessions remained; no shared pgTAP extension was installed |
+| Shared security advisor | Reviewed on 2026-10-01. The advisor flags 40 deliberately exposed authenticated `SECURITY DEFINER` wrappers; their controlled search paths, ownership checks, grants, and bodies match the verified local schema. The server-only provider-rate-limit table intentionally has RLS with no client policy. The existing disabled leaked-password protection setting remains an operational follow-up; no Auth configuration was changed |
+| Staging SMTP | Deferred at the user's request; unverified. Actual staging inbox receipt, resend receipt, confirmation return, and hosted template/Site URL evidence are still required for MVP-3 sign-off |
+
+### Migration preflight evidence
+
+The original baseline ended at `20260924103000`. Matching local/linked counts and
+normalized fingerprints were recorded before creating the MVP-3 migration set:
+
+| Category | Count | Matching fingerprint |
+|---|---:|---|
+| Columns | 648 | `c8388e5ec797b46eeb58038f518b7265` |
+| Constraints | 292 | `50e1998400fdd761652c8ec9f454dc1a` |
+| Indexes | 124 | `a2ed1fef011d3f52a53110f041b1b9b2` |
+| Policies | 23 | `f601a160db420e8ce2b4c7cc42a9922d` |
+| Relations | 46 | `ac35565454ab48a6e6a012d769cb5886` |
+| Routines | 100 | `54ec0170f1c7f98205b732d6733f5e2e` |
+| Routine grants | 168 | `0472e84fb18187e264e4c3710342b451` |
+| Schemas | 2 | `ecfb3b1b78495ef25eca4ba7bf418ac2` |
+| Schema grants | 9 | `8230f32afe8ac91bb14cfe7ab40a3995` |
+| Table grants | 364 | `68e8bf6cb3aaaa937b1d1de92a010006` |
+| Triggers | 21 | `4ab40e0a1623d7d61c909ec6dd131034` |
+
+No migration repair was needed. The seven new migrations, authorized and applied
+to the shared database on 2026-10-01,
+add daily observations/preferences, program/diet snapshots and reviewed catalog,
+custom routine/session versions, hardened wrappers/read models and revision ledger,
+the session-version index, stable mutation error codes, and explicit variable types.
+
+### Shared post-push schema evidence — 2026-10-01
+
+The query in `scripts/release-schema-fingerprint.sql` produced identical values
+from the reset local database and the deployed shared database:
+
+| Category | Count | Matching fingerprint |
+|---|---:|---|
+| Columns | 716 | `7d95ba9d2ec0466612dd91e2468ded5d` |
+| Constraints | 321 | `f65a9c003ae186f33c9562a46a3efb0d` |
+| Indexes | 135 | `c4166f4caca62efe9937ceee70e4d081` |
+| Policies | 26 | `c740dcdb24ca236c0542cd3e9663c031` |
+| Relations | 53 | `e1add4957df5a233bdd3745737f488ea` |
+| Routines | 122 | `872ef0d69fbb3f84a2e6c6ff9437132b` |
+| Routine grants | 206 | `84f7bad8fff7ac5df3595315f6b87451` |
+| Schemas | 2 | `ecfb3b1b78495ef25eca4ba7bf418ac2` |
+| Schema grants | 9 | `8230f32afe8ac91bb14cfe7ab40a3995` |
+| Table grants | 431 | `b3f458239c995f4e98876173cec7d498` |
+| Triggers | 26 | `ee3426dc0f008112aae765fd6df0a1a3` |
+| Views | 1 | `cc00f653d15fc3082c7b1b0715678dde` |
+
+Security advisor references:
+[authenticated definer functions](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+[RLS without client policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy),
+and [password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+## Historical phase status — MVP-2 / RC3 — 2026-09-29
+
+This was the RC3 status entry and superseded stale “pending” or “complete” claims
+in earlier phase checklists. It is retained as historical evidence and is not
+evidence that the later MVP-3 requirements are complete.
+The older checkpoints and priority/implementation checklists that follow retain
+their original dates and status wording. Use the MVP-3 sections above and the
+handover for current completed/pending work.
 
 | Gate | Current result |
 |---|---|

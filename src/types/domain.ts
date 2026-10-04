@@ -22,6 +22,7 @@ export type PreparationBasis =
 export type MovementCategory = "push" | "pull" | "squat" | "hinge" | "core" | "mobility";
 export type GroceryCategory = "Produce" | "Protein" | "Dairy" | "Grains" | "Pantry" | "Other";
 export type TargetEligibility = "eligible" | "unsupported" | "not_answered";
+export type TrainingProgram = "calisthenics" | "pilates";
 
 export interface EstimateTriple {
   low: number;
@@ -46,6 +47,7 @@ export interface UserProfile {
   weightKg: number;
   units: UnitSystem;
   experience: ExperienceLevel;
+  trainingProgram?: TrainingProgram;
   equipment: EquipmentId[];
   daysPerWeek: number;
   sessionMinutes: number;
@@ -57,6 +59,7 @@ export interface UserProfile {
   mealBudget?: number;
   /** Explicit opt-in preference; delivery is outside MVP-1. */
   notificationsEnabled: boolean;
+  celebrationsEnabled?: boolean;
   /** Optimistic concurrency revision supplied by the authoritative profile row. */
   revision?: number;
   /** Stored screening outcome; no sensitive screening explanation is retained. */
@@ -150,6 +153,7 @@ export interface PlannedWorkout {
 }
 
 export interface WorkoutPlan {
+  trainingProgram?: TrainingProgram;
   id: string;
   version: number;
   createdAt: string;
@@ -192,6 +196,7 @@ export interface ExerciseLog {
 }
 
 export interface WorkoutSession {
+  trainingProgram?: TrainingProgram;
   id: string;
   plannedWorkoutId: string;
   plannedPlanVersion?: number;
@@ -372,6 +377,60 @@ export interface GroceryList {
   revision?: number;
 }
 
+export interface DailyStepEntry {
+  date: string;
+  steps: number;
+  walkingMinutes?: number;
+  source: "manual";
+  revision: number;
+  updatedAt: string;
+}
+
+export interface CustomMovement {
+  id: string;
+  name: string;
+  exerciseId?: string;
+  sets: number;
+  reps?: number;
+  holdSeconds?: number;
+  restSeconds: number;
+}
+export interface CustomWorkoutDefinition {
+  name: string;
+  movements: CustomMovement[];
+  estimatedMinutes?: number;
+  warmup?: string[];
+  cooldown?: string[];
+  safety?: string;
+}
+export interface CustomWorkout {
+  id: string;
+  version: number;
+  definition: CustomWorkoutDefinition;
+  createdAt: string;
+}
+export interface CustomMovementLog {
+  movementId: string;
+  sets: number;
+  reps?: number;
+  holdSeconds?: number;
+  rpe?: number;
+  status: "completed" | "modified" | "skipped";
+  note?: string;
+}
+export interface CustomWorkoutSession {
+  id: string;
+  workoutId: string;
+  workoutVersion: number;
+  date: string;
+  planned: CustomWorkoutDefinition;
+  actual: CustomMovementLog[];
+  status: "in_progress" | "paused" | "completed" | "partial" | "abandoned";
+  revision: number;
+  startedAt: string;
+  finishedAt?: string;
+}
+
 export interface AppSnapshot {
   schemaVersion: 1;
   userId: string;
@@ -381,6 +440,8 @@ export interface AppSnapshot {
   foods: Food[];
   goal: Goal | null;
   target: DailyTarget | null;
+  /** Bounded read model of effective targets for the current nutrition week. */
+  nutritionWeekTargets: DailyTarget[];
   plan: WorkoutPlan | null;
   workoutOverrides: WorkoutPlanOverride[];
   mealPlan: MealPlan | null;
@@ -391,9 +452,16 @@ export interface AppSnapshot {
   grocery: GroceryList | null;
   savedMeals: Meal[];
   progressionDecisions: ProgressionDecision[];
+  dailySteps: DailyStepEntry[];
+  customWorkouts: CustomWorkout[];
+  customSessions: CustomWorkoutSession[];
 }
 
 export type SemanticEvent =
+  | { type: "custom-workout-saved"; workoutId: string }
+  | { type: "custom-session-saved"; sessionId: string }
+  | { type: "daily-steps-saved"; date: string }
+  | { type: "daily-steps-deleted"; date: string }
   | { type: "profile-updated" }
   | { type: "notification-preference-updated" }
   | { type: "goal-updated"; goalId: string }

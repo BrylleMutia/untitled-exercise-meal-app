@@ -34,6 +34,7 @@ export function estimateWorkoutEnergyKcal({
   for (const session of sessions) {
     if (
       session.status !== "completed" ||
+      session.trainingProgram === "pilates" ||
       session.date < fromDate ||
       session.date > toDate ||
       !session.finishedAt

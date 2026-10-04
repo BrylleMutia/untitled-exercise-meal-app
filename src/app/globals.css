@@ -81,6 +81,19 @@ body {
   font-size: 1rem;
   font-weight: 700;
   color: var(--color-ink);
+  border: 1px solid transparent;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.input:hover {
+  border-color: var(--color-lav-300);
+}
+.input:focus-visible {
+  background: white;
+  border-color: var(--color-lav-500);
+  box-shadow: 0 0 0 3px rgb(153 135 207 / 15%);
+}
+.input[aria-invalid="true"] {
+  border-color: var(--color-coral-300);
 }
 .input::placeholder {
   color: var(--color-muted);

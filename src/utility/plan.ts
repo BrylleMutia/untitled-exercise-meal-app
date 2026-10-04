@@ -78,10 +78,11 @@ export function generateWorkoutPlan(
   targetId: string,
   now: string,
 ): WorkoutPlan {
+  if (profile.trainingProgram === "pilates") return generatePilatesPlan(profile, targetId, now);
   const days = DAY_SPREAD[Math.min(7, Math.max(1, profile.daysPerWeek))];
   const rotation = FOCUS_ROTATION[Math.min(5, days.length)] ?? FOCUS_ROTATION[5];
   const dose = SETS_REPS[profile.experience];
-  const exerciseCount = Math.min(5, Math.max(3, Math.floor(profile.sessionMinutes / 9)));
+  const exerciseCount = Math.min(5, Math.max(1, Math.floor((profile.sessionMinutes - 6) / (dose.sets * 2.4))));
   const owned: EquipmentId[] = ["none", ...profile.equipment];
 
   const workouts: PlannedWorkout[] = days.map((dayOfWeek, i) => {
@@ -135,8 +136,39 @@ export function generateWorkoutPlan(
   return {
     id: `plan-${now}`,
     version: 1,
-    createdAt: new Date().toISOString(),
+    createdAt: `${now}T00:00:00.000Z`,
     targetId,
+    trainingProgram: "calisthenics",
     workouts,
   };
+}
+
+/** Beginner mat foundations reuse approved catalog movements and media. */
+export function generatePilatesPlan(profile: UserProfile, targetId: string, now: string): WorkoutPlan {
+  const days = DAY_SPREAD[profile.daysPerWeek];
+  const reps = profile.experience === "beginner" ? 6 : 8;
+  const rotations = [
+    ["ex-glute-bridge", "ex-dead-bug", "ex-bird-dog", "ex-side-plank"],
+    ["ex-bird-dog", "ex-glute-bridge", "ex-dead-bug", "ex-side-plank"],
+  ];
+  const workouts = days.map((dayOfWeek, index): PlannedWorkout => {
+    const gentle = index > 0 && dayOfWeek === days[index - 1] + 1;
+    const sets = gentle ? 1 : 2;
+    const count = Math.min(4, Math.max(2, Math.floor((profile.sessionMinutes - 8) * 60 / (sets * (reps * 4 + 45)))));
+    const maxDifficulty = profile.experience === "beginner" ? 2 : profile.experience === "intermediate" ? 4 : 5;
+    const exercises = rotations[index % rotations.length].filter((id) => EXERCISES.find((exercise) => exercise.id === id)!.difficulty <= maxDifficulty).slice(0, count).map((id, order): PlannedExercise => {
+      const exercise = EXERCISES.find((candidate) => candidate.id === id)!;
+      return { id: `pe-pilates-${index}-${exercise.slug}`, exerciseId: id, sets, ...(exercise.measure === "reps" ? { reps } : { holdSeconds: 15 }), restSeconds: 45, sortOrder: order + 1, slotKey: `day:${dayOfWeek}:exercise:${order + 1}` };
+    });
+    const seconds = exercises.reduce((sum, exercise) => sum + sets * ((exercise.reps ?? 0) * 4 + (exercise.holdSeconds ?? 0) + 45), 0);
+    return {
+      id: `pw-pilates-${index + 1}`, dayOfWeek,
+      title: gentle ? "Pilates foundations · gentle practice" : `Pilates foundations ${index % 2 === 0 ? "A" : "B"}`,
+      focus: "Slow control, breathing, and comfortable range. Regress by reducing reps or range; progress gradually only after comfortable practice. This is a beginner mat routine, not rehabilitation.",
+      warmup: ["2 min relaxed breathing; keep breathing during every movement", "2 min gentle pelvic tilts and shoulder circles", "1 min easy cat-cow within a comfortable range"],
+      cooldown: ["1 min relaxed breathing", "1 min gentle seated or lying stretch", "1 min easy mobility; stop for pain, dizziness, or breathlessness"],
+      exercises, estimatedMinutes: Math.ceil(8 + seconds / 60),
+    };
+  });
+  return { id: `plan-${now}`, version: 1, createdAt: `${now}T00:00:00.000Z`, targetId, trainingProgram: "pilates", workouts };
 }

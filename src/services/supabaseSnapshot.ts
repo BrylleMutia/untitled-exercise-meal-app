@@ -24,9 +24,12 @@ import type {
   LoggedMeal,
   MacroEstimateRange,
   NutritionValueSource,
+  CustomWorkoutDefinition,
+  CustomMovementLog,
 } from "@/types/domain";
 import type { HistoryQuery, HistoryReadModel } from "@/types/backend";
 import { addDays, todayKey } from "@/utility/dates";
+import { targetsForNutritionWeek } from "@/utility/targetHistory";
 
 type AppSupabaseClient = SupabaseClient<Database>;
 type ProfileRow = Tables<"profiles">;
@@ -65,6 +68,7 @@ function mapProfile(row: ProfileRow): UserProfile {
     weightKg: Number(row.weight_kg),
     units: row.units as UserProfile["units"],
     experience: row.experience as UserProfile["experience"],
+    trainingProgram: row.training_program as UserProfile["trainingProgram"],
     equipment: row.equipment.filter(isEquipment),
     daysPerWeek: row.days_per_week,
     sessionMinutes: row.session_minutes,
@@ -75,6 +79,7 @@ function mapProfile(row: ProfileRow): UserProfile {
     ...(row.cooking_time_minutes === null ? {} : { cookingTimeMinutes: row.cooking_time_minutes }),
     ...(row.meal_budget === null ? {} : { mealBudget: Number(row.meal_budget) }),
     notificationsEnabled: row.notifications_enabled,
+    celebrationsEnabled: row.celebrations_enabled,
     revision: row.revision,
     targetEligibility: row.eligibility_status as UserProfile["targetEligibility"],
     eligibilityVersion: row.eligibility_version,
@@ -237,6 +242,7 @@ function mapWorkoutPlan(
     createdAt: row.created_at,
     targetId: target?.app_id ?? "",
     workouts: mappedWorkouts,
+    trainingProgram: row.training_program as WorkoutPlan["trainingProgram"],
   };
 }
 
@@ -296,6 +302,7 @@ function mapSession(
     id: row.app_id,
     plannedWorkoutId: workout?.app_id ?? "",
     plannedPlanVersion: row.planned_plan_version,
+    trainingProgram: row.training_program as WorkoutSession["trainingProgram"],
     date: row.session_date,
     startedAt: row.started_at,
     ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
@@ -420,6 +427,10 @@ function emptySnapshot(userId: string): AppSnapshot {
     grocery: null,
     savedMeals: [],
     progressionDecisions: [],
+    dailySteps: [],
+    nutritionWeekTargets: [],
+    customWorkouts: [],
+    customSessions: [],
   };
 }
 
@@ -452,18 +463,16 @@ export async function loadAppSnapshot(
   client: AppSupabaseClient,
   userId: string,
 ): Promise<AppSnapshot> {
-  const profile = await required(
-    client.from("profiles").select("*").eq("id", userId).maybeSingle(),
-  );
-  const targets = await required(
-    client.from("daily_targets").select("*").eq("user_id", userId).order("version", { ascending: false }),
-  );
+  const [profile, targets] = await Promise.all([
+    required(client.from("profiles").select("*").eq("id", userId).maybeSingle()),
+    required(client.from("daily_targets").select("*").eq("user_id", userId).order("version", { ascending: false })),
+  ]);
   const targetRows = targets as TargetRow[];
   const targetsByRow = new Map(targetRows.map((row) => [row.row_id, row]));
   const currentTarget = targetRows[0] ? mapTarget(targetRows[0]) : null;
 
   const historyFrom = addDays(todayKey(), -365);
-  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions, servingOptions, loggedMeals] =
+  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions, servingOptions, loggedMeals, dailySteps, customVersions, customSessions] =
     await Promise.all([
       required(client.from("exercises").select("*")),
       required(client.from("foods").select("*")),
@@ -481,6 +490,9 @@ export async function loadAppSnapshot(
       required(client.from("progression_decisions").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
       required(client.from("food_serving_options").select("*")),
       required(client.from("logged_meals").select("*").eq("user_id", userId).gte("log_date", historyFrom).order("log_date", { ascending: false })),
+      required(client.from("daily_step_entries").select("*").eq("user_id", userId).gte("entry_date", historyFrom).order("entry_date", { ascending: false }).limit(366)),
+      required(client.from("current_custom_workouts").select("*").eq("user_id", userId).order("row_id", { ascending: false }).limit(100)),
+      required(client.from("custom_workout_sessions").select("*").eq("user_id", userId).gte("session_date", historyFrom).order("row_id", { ascending: false }).limit(100)),
     ]);
 
   const exerciseRows = exercises as ExerciseRow[];
@@ -557,6 +569,7 @@ export async function loadAppSnapshot(
   // Unsupported screening outcomes may retain historical target rows for
   // audit/export, but they are not surfaced as an active automated target.
   snapshot.target = snapshot.profile?.targetEligibility === "unsupported" ? null : currentTarget;
+  snapshot.nutritionWeekTargets = snapshot.profile?.targetEligibility === "unsupported" ? [] : targetsForNutritionWeek(targetRows.map(mapTarget), todayKey());
   snapshot.plan = currentPlan
     ? mapWorkoutPlan(
         currentPlan,
@@ -596,6 +609,26 @@ export async function loadAppSnapshot(
     ...(row.ended_at ? { endedAt: row.ended_at } : {}),
   }));
   snapshot.progressionDecisions = progressionDecisionRows.map(mapProgressionDecision);
+  snapshot.dailySteps = (dailySteps ?? []).map((entry) => ({
+    date: entry.entry_date, steps: entry.steps, source: "manual" as const,
+    ...(entry.walking_minutes === null ? {} : { walkingMinutes: entry.walking_minutes }),
+    revision: entry.revision, updatedAt: entry.updated_at,
+  }));
+  const latestCustom = new Map<string, Tables<"custom_workout_versions">>();
+  for (const row of customVersions ?? []) if (row.app_id && row.row_id && row.version && row.user_id && row.created_at && row.definition && !latestCustom.has(row.app_id)) latestCustom.set(row.app_id, { ...row, app_id: row.app_id, row_id: row.row_id, version: row.version, user_id: row.user_id, created_at: row.created_at, definition: row.definition });
+  snapshot.customWorkouts = [...latestCustom.values()].map((row) => ({ id: row.app_id, version: row.version, createdAt: row.created_at, definition: row.definition as unknown as CustomWorkoutDefinition }));
+  const customVersionRows = new Map([...latestCustom.values()].map((row) => [row.row_id, row]));
+  const missingVersionIds = [...new Set((customSessions ?? []).map((row) => row.workout_version_row_id))].filter((id) => !customVersionRows.has(id));
+  if (missingVersionIds.length) {
+    const historyVersions = await required(client.from("custom_workout_versions").select("*").eq("user_id", userId).in("row_id", missingVersionIds));
+    for (const row of historyVersions ?? []) customVersionRows.set(row.row_id, row);
+  }
+  snapshot.customSessions = (customSessions ?? []).map((row) => ({
+    id: row.app_id, workoutId: customVersionRows.get(row.workout_version_row_id)?.app_id ?? "", workoutVersion: customVersionRows.get(row.workout_version_row_id)?.version ?? 1,
+    date: row.session_date, planned: row.planned as unknown as CustomWorkoutDefinition,
+    actual: row.actual as unknown as CustomMovementLog[], status: row.status as AppSnapshot["customSessions"][number]["status"],
+    revision: row.revision, startedAt: row.started_at, ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
+  }));
   snapshot.loggedMeals = loggedMealRows.map((row): LoggedMeal => ({
     id: row.app_id,
     date: row.log_date,

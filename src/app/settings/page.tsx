@@ -123,6 +123,14 @@ export default function SettingsPage() {
         </Link>
       </Card>
 
+      <Card>
+        <h2 className="font-extrabold">Gentle motivation</h2>
+        <p className="mt-2 text-xs font-semibold text-muted">Show personal firsts and participation milestones on Home. Rest days, missed entries, and calories never lose points.</p>
+        <Button className="mt-3" variant="soft" role="switch" aria-checked={profile?.celebrationsEnabled ?? false} disabled={Boolean(pendingMutation)} onClick={() => void actions.setCelebrations(!profile?.celebrationsEnabled)}>
+          {profile?.celebrationsEnabled ? "Milestones on" : "Milestones off"}
+        </Button>
+      </Card>
+
       <Card id="notifications">
         <h2 className="font-extrabold">Notifications</h2>
         <div className="mt-3 flex items-start justify-between gap-4 rounded-2xl bg-cream p-3">

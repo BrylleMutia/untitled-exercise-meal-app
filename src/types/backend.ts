@@ -12,6 +12,9 @@ import type {
   WeightEntry,
   Food,
   NutritionServingUnit,
+  TrainingProgram,
+  CustomWorkoutDefinition,
+  CustomWorkoutSession,
 } from "@/types/domain";
 
 export type MutationErrorCode =
@@ -92,12 +95,27 @@ export type AccountExport = {
   savedMeals: AccountExportRow[];
   savedMealIngredients: AccountExportRow[];
   loggedMeals: AccountExportRow[];
+  dailySteps: AccountExportRow[];
+  customWorkoutVersions: AccountExportRow[];
+  customWorkoutSessions: AccountExportRow[];
 };
 
 export type IdempotentInput = {
   /** Reuse this key when retrying the same intent. */
   idempotencyKey?: string;
 };
+
+export type SaveDailyStepsInput = IdempotentInput & {
+  date: string;
+  steps: number;
+  walkingMinutes?: number;
+  expectedRevision: number;
+};
+export type DeleteDailyStepsInput = IdempotentInput & { date: string; expectedRevision: number };
+export type CelebrationsPreferenceInput = IdempotentInput & { enabled: boolean; expectedRevision: number };
+export type SaveCustomWorkoutInput = IdempotentInput & { id: string; expectedVersion: number; definition: CustomWorkoutDefinition; profile: UserProfile };
+export type StartCustomWorkoutInput = IdempotentInput & { id: string; workoutId: string; expectedVersion: number; date: string };
+export type SaveCustomSessionInput = IdempotentInput & { id: string; expectedRevision: number; actual: CustomWorkoutSession["actual"]; status: CustomWorkoutSession["status"] };
 
 export type OnboardingInput = IdempotentInput & {
   profile: UserProfile;
@@ -113,6 +131,7 @@ export type OnboardingInput = IdempotentInput & {
 };
 
 export type ProfileUpdateInput = OnboardingInput & { expectedVersions?: ExpectedVersions };
+export type SelectTrainingProgramInput = IdempotentInput & { program: TrainingProgram; currentSnapshot: AppSnapshot };
 
 export type UpdateUnitsInput = IdempotentInput & {
   units: UnitSystem;

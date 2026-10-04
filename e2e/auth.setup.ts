@@ -25,6 +25,7 @@ async function completeOnboarding(page: import("@playwright/test").Page, display
   await page.getByLabel("Weight (kg)").fill("68");
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByText("Maintain weight", { exact: true }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await expect(page.getByRole("button", { name: "Create my plan" })).toBeVisible();
