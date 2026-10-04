@@ -31,10 +31,16 @@ describe("account export bundle", () => {
       savedMeals: [],
       savedMealIngredients: [],
       loggedMeals: [],
+      dailySteps: [],
+      customWorkoutVersions: [],
+      customWorkoutSessions: [],
     }, "2026-09-22T00:00:00.000Z");
     const files = unzipSync(zip);
     expect(Object.keys(files).sort()).toEqual([
       "dailyTargets.csv",
+      "dailySteps.csv",
+      "customWorkoutVersions.csv",
+      "customWorkoutSessions.csv",
       "exerciseLogs.csv",
       "foods.csv",
       "goals.csv",
