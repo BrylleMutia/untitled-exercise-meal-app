@@ -6,6 +6,22 @@
 > **Design contract:** [`DESIGN.md`](./DESIGN.md)
 > **Agent workflow:** [`AGENTS.md`](./AGENTS.md)
 
+## MVP-3 technical handover — 2026-10-04
+
+The MVP-3 Context/repository intents, authorized RPCs, generated types, bounded
+target-date read model, step revisions, and immutable custom routine/session
+snapshots are implemented. Seven forward migrations were applied to shared Cali
+with authorization on 2026-10-01; all 46 history versions and 12 schema fingerprint
+categories matched at that checkpoint. Preserve these applied migration files;
+corrections require a new forward migration and the normal safety preflight.
+
+Local database, repository, browser, and build evidence is dated 2026-10-01.
+Hosted app deployment and staging email delivery remain pending. Browser tests
+mock external nutrition providers; local Mailpit delivery is real. Neither
+establishes staging SMTP readiness. [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md)
+records the remaining gates, operational constraints, and commit/file manifest;
+[`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) retains the detailed audit.
+
 ## Architecture Baseline
 
 The first release is a single-user, responsive web application backed by
@@ -155,6 +171,8 @@ draft recovery must never make an unsaved or stale mutation appear persisted.
 | Actual workout facts | Supabase repository and Postgres history | `WorkoutSession`, `ExerciseLog`, notes, RPE |
 | Actual nutrition facts | Supabase repository and Postgres history | `NutritionLog`, `LoggedMeal`, serving, source, source version, confidence, date |
 | User observations | Supabase repository and Postgres history | `WeightEntry` |
+| Daily movement observations | Supabase repository and Postgres | `DailyStepEntry`, optional walking minutes, local date, revision |
+| Custom prescriptions and actuals | Supabase repository and Postgres | Immutable `CustomWorkout` versions and separately saved `CustomWorkoutSession` snapshots |
 | Grocery state | Supabase repository and Postgres list state | `GroceryList`, `GroceryItem`, checked and edited values |
 | Derived domain state | Pure utilities and selectors | BMR, BMI, TDEE, totals, trends, completion status, recommendations |
 | Pending AI candidates | Feature-local draft state until confirmation | Extracted foods, matches, assumptions, confidence |
@@ -249,6 +267,49 @@ Rules:
   cursors, while complete export remains a separate authoritative path.
 
 ## Repository Boundary and Supabase Authority
+
+### MVP-3 mutation and read contracts
+
+The compact `nutritionWeekTargets` read model retains at most seven distinct
+effective target versions needed by the current Nutrition week selector. Home
+and Nutrition select by local date and then version; future-effective targets
+do not replace earlier estimates. Full target history remains in Postgres and
+account export rather than being copied into the application snapshot.
+
+Typed Context intents call `save_daily_steps`, `delete_daily_steps`,
+`set_celebrations`, `save_custom_workout`, `start_custom_workout`, and
+`save_custom_workout_session`. Public wrappers delegate to private implementations
+with controlled search paths, ownership from `auth.uid()`, validation, row/advisory
+locks, natural uniqueness, and idempotency receipts. Client table writes remain
+revoked. Step revisions remain monotonic across deletion/recreation so older
+drafts cannot overwrite a replacement entry. Server errors carry stable codes
+in sanitized JSON details while preserving readable messages.
+
+Program selection uses the authorized profile/plan bundle intent. Profiles own
+the choice; each workout plan and started session retain its program snapshot.
+Carb-limited meal plans snapshot their dietary restrictions, allergies, and total
+carb limit. Deferred constraints recalculate every resolved day's carbohydrates
+from authoritative ingredients and serving quantities and reject unsafe edits.
+Historical plans and nutrition logs retain their original assumptions. USDA
+catalog additions have new IDs and recorded FDC/source versions.
+
+The custom-workout view is `security_invoker` and respects underlying owner RLS.
+The main snapshot loads up to 100 current routines and 100 recent custom
+sessions, daily steps for the past year, and referenced historical routine
+versions. Full version/session history remains available through account export.
+Custom history is shown on its dedicated route. Independent reads run together;
+derived energy ranges and milestone labels are recomputed from saved facts.
+
+Offline mutations fail immediately, retain drafts, and expose explicit retry;
+they are never silently queued. Unchanged retries reuse the intent's idempotency
+key. Changed drafts create a new intent, and stale edits require deliberate
+reapplication to refreshed state.
+
+`npm run test:email:local` temporarily enables email confirmations in this
+project's local stack, uses real Mailpit delivery, and restores the configuration
+in `finally`. It uses only local test credentials, disables token-bearing browser
+traces, and removes its disposable account. Hosted SMTP and the token-hash email
+template must be verified separately before MVP-3 sign-off.
 
 Every durable MVP feature uses the authenticated Supabase path:
 

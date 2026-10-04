@@ -14,6 +14,8 @@ architecture.
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stack, state/data ownership, persistence, security, testing, delivery, and migration procedures |
 | [`DESIGN.md`](DESIGN.md) | Current visual/design decisions, design tokens, UX patterns, responsive/navigation model, and auth-first setup |
 | [`SUPABASE_SETUP.md`](SUPABASE_SETUP.md) | Supabase dashboard, environment, auth URL, and cautious CLI setup |
+| [`MVP_Priority_Matrix.md`](MVP_Priority_Matrix.md) | Dated release evidence, priority matrix, and historical checkpoints |
+| [`MVP3_HANDOVER.md`](MVP3_HANDOVER.md) | MVP-3 completed/pending work, release follow-ups, and granular commit/file manifest; does not replace product or engineering contracts |
 | Source code, tests, migrations, generated types, and deployed configuration | Final truth for current implementation behavior |
 
 When `FEATURES.md` and `ARCHITECTURE.md` conflict, `FEATURES.md` defines

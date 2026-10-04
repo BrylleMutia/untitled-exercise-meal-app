@@ -1,11 +1,25 @@
 # Cali - Exercise and Meal Planner
 
-Initial feature plan for a responsive web app built with Next.js, with optional
+Living product contract for a responsive web app built with Next.js, with optional
 Progressive Web App (PWA) installation support.
+
+## MVP-3 handover status — 2026-10-04
+
+Everyday Usability and Choice is implemented: five onboarding groups and reliable
+save/retry, fresh-browser account loading, manual steps and separate walking
+estimates, remaining-calorie rings, Pilates, custom routine/session versions,
+Low-carb/Keto-style planning, shared interaction feedback, and opt-in milestones.
+The feature contracts below describe implemented behavior. Local verification
+and the shared database rollout were recorded on 2026-10-01; hosted deployment,
+staging SMTP, and final release sign-off are pending. Device sync is deferred;
+named custom movements have no automatic progression, and walking estimates
+never increase the food target. See [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) for
+the complete handover and [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) for
+dated evidence. Historical RC3 checks do not establish MVP-3 readiness.
 
 ## Product Goal
 
-Help a user follow a realistic calisthenics routine, eat toward a personal goal,
+Help a user follow a realistic workout routine, eat toward a personal goal,
 and see whether their habits are working.
 
 The MVP should protect one simple loop:
@@ -171,6 +185,23 @@ The first catalog should cover the movements needed for a balanced routine:
 Generate a weekly plan using deterministic rules and the profile inputs. AI is
 not required to choose exercises or calculate progression in the MVP.
 
+MVP-3 offers Calisthenics and Pilates foundations in onboarding and Workouts.
+Pilates uses approved mat movements, breathing, warm-up, rest, cooldown, and
+gentler doses on consecutive days. Beginner prescriptions exclude movements
+above the beginner catalog difficulty. Pilates has no automatic calisthenics
+progression suggestions or calisthenics energy estimate.
+
+Users can also create reusable routines at `/workouts/custom` from catalog
+exercises or named text-only movements. Catalog choices respect equipment and
+experience; all routines are checked against available workout time. Routines
+retain versioned prescriptions; sessions copy the prescription at start and
+store actual reps/holds, sets, RPE, notes, and completed/modified/skipped work
+separately. Pause/resume and partial completion are supported. Finished sessions
+cannot be overwritten by routine edits. User movements never progress
+automatically. Custom session history is available on the routines page and in
+account export; weekly planned-workout statistics remain specific to the weekly
+prescription.
+
 Each workout should contain:
 
 - Warm-up
@@ -229,6 +260,19 @@ Generate an editable weekly meal plan using the active target version, dietary
 pattern, food preferences, allergies and exclusions, cooking time, meal budget,
 and available saved meals or recipes. AI is not required to choose meals or
 calculate nutrition for the plan.
+
+MVP-3 adds Low-carb (maximum 130 g **total** carbohydrate/day) and Keto-style
+(maximum 50 g/day), also combined with vegetarian or vegan restrictions.
+These are conservative product planning assumptions, not guarantees of ketosis
+or dietary care. Future targets use a separate calculation version. Six
+reviewed USDA SR Legacy food records and four measured-portion meals use new
+identities to preserve historical starter values. A carb-limited plan uses only
+trusted serving data and enforces allergies, existing dietary restrictions,
+portions, and daily carbohydrate totals in generation and server mutations.
+Meals use cooked/labeled quantities and count all listed oil. If a safe slot
+cannot be filled, it remains visibly unresolved; a partially planned day is
+never described as fully compliant. Editing the future plan never rewrites
+logged food.
 
 Each planned meal should contain:
 
@@ -441,6 +485,36 @@ unsaved changes; they must not be shown as completed server mutations.
 
 ## P1 Features
 
+### MVP-3 everyday usability (implemented behavior; release gates tracked in the matrix)
+
+- Onboarding groups About you, Movement, Food choices, Your goal, and Review.
+  The meal cost preference offers Budget-friendly (`4` relative units), Balanced
+  (`7`), or Flexible (no cap). These are relative catalog costs, not prices;
+  existing numeric preferences are preserved until changed.
+- Final onboarding shows a labeled saving state, prevents duplicate submits,
+  retains a recoverable draft on failure, and navigates after a confirmed save.
+  An existing account loads its saved data after sign-in in a fresh browser.
+- Home offers food, steps, and workout quick actions. `/activity` stores one
+  manual step observation per local date, editable for the past year, with
+  optional walking minutes. Zero steps is an observation; a deleted/missing
+  entry is unlogged. Failed saves preserve drafts and require an explicit retry.
+- Walking energy is a broad derived estimate only with minutes, eligible profile
+  weight, and ages 19–59 covered by the adult reference. It uses 2.8–3.8 MET and
+  rounds the range outward to tens of kcal. It is separate from workout energy and never increases
+  the food target. Automatic device sync remains deferred.
+- Home and Nutrition show a decreasing calories-remaining ring. Unlogged intake
+  is unknown; partial logs say “Still logging”; estimates are labeled; over-target
+  intake has a neutral numeric message; missing targets stay unavailable.
+  The selected date uses its effective target version; a later target change
+  never replaces an earlier day's estimate.
+- Gentle motivation is off by default. A saved opt-in shows personal firsts and
+  participation on at least three distinct days in the past week. Rest days,
+  missed logging, and calories never incur a penalty.
+- Signup resend uses an actual local-mail delivery and link test. The local
+  confirmation template uses a token hash to support a different browser.
+  Staging SMTP delivery and matching hosted template configuration are required
+  before release sign-off; local evidence alone does not satisfy that gate.
+
 Add these after the core loop works:
 
 - Local workout and meal reminders
@@ -537,6 +611,8 @@ generated grocery quantities separately from user-adjusted quantities.
 - A new user can complete onboarding in under five minutes.
 - A user can create or sign in to an account and use the app with Supabase as the
   authoritative data store.
+- Signing in on a new browser loads an existing account's profile and saved data
+  immediately, without another onboarding flow or a manual refresh.
 - A user can see BMR, BMI, estimated TDEE, calorie target or range, and macro targets.
 - Invalid or unsupported health inputs do not produce automated targets.
 - A user can create or receive a deterministic weekly plan that respects equipment,
