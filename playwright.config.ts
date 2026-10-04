@@ -30,6 +30,11 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "confirmation",
+      testMatch: /confirmation\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], storageState: { cookies: [], origins: [] }, trace: "off", screenshot: "off", video: "off" },
+    },
+    {
       name: "auth-setup",
       testMatch: /auth\.setup\.ts/,
       teardown: "auth-teardown",

@@ -9,6 +9,7 @@
     "test:e2e": "playwright test",
     "test:e2e:release": "node scripts/run-local-supabase-test.mjs browser",
     "test:e2e:public": "playwright test --project=public",
+    "test:email:local": "node scripts/run-email-confirmation-test.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
