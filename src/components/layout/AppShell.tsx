@@ -14,6 +14,7 @@ const TITLES: Array<[string, string]> = [
   ["/grocery", "Grocery"],
   ["/progress", "Progress"],
   ["/settings", "Settings"],
+  ["/activity", "Daily activity"],
 ];
 
 const NAV_LINKS = [
