@@ -120,7 +120,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and p.prorettype = '3802'::oid
-), 39, 'the public API exposes the 39 jsonb mutation wrappers');
+), 40, 'the public API exposes the 40 jsonb mutation wrappers');
 
 select is((
   select count(*)::int
@@ -129,7 +129,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-), 39, 'authenticated execution is granted for every current wrapper');
+), 40, 'authenticated execution is granted for every current wrapper');
 
 select is((
   select count(*)::int
@@ -145,7 +145,7 @@ select is((
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef
-), 40, 'only the deliberate public mutation wrappers are SECURITY DEFINER');
+), 41, 'only the deliberate public mutation wrappers are SECURITY DEFINER');
 
 select is((
   select count(*)::int
@@ -154,7 +154,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and p.proconfig @> ARRAY['search_path=""']::text[]
-), 39, 'public wrappers use a controlled empty search_path');
+), 40, 'public wrappers use a controlled empty search_path');
 
 select is((
   select count(*)::int
@@ -192,7 +192,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and pg_get_functiondef(p.oid) not ilike '%user_metadata%'
-), 39, 'authorization does not rely on editable user metadata');
+), 40, 'authorization does not rely on editable user metadata');
 
 select is((
   select count(*)::int

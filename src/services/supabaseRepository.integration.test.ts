@@ -234,11 +234,12 @@ describe("Supabase repository against the disposable local stack", () => {
     expect(empty.nutritionWeekTargets).toEqual([]);
     initialA = empty;
     const onboarded = await userA.repository.completeOnboarding({
-      profile: profile(userA.id, "Repository Integration"),
+      profile: { ...profile(userA.id, "Repository Integration"), dailyStepTarget: 7500 },
       currentSnapshot: empty,
       idempotencyKey: `repo-onboard-${randomUUID()}`,
     });
     initialA = onboarded.snapshot;
+    expect((await userA.repository.load())?.profile?.dailyStepTarget).toBe(7500);
   });
 
   afterAll(async () => {
@@ -340,6 +341,69 @@ describe("Supabase repository against the disposable local stack", () => {
     const emptyB = await userB.repository.load();
     expect(emptyB?.profile).toBeNull();
     expect(emptyB?.nutritionLogs).toHaveLength(0);
+  });
+
+  it("changes only the daily step preference, supports retry, and rejects stale and cross-owner writes", async () => {
+    const initial = await userA.repository.load();
+    const observation = await userA.repository.saveDailySteps({ date: todayKey(), steps: 6500, walkingMinutes: 35, expectedRevision: initial?.dailySteps.find((entry) => entry.date === todayKey())?.revision ?? 0, idempotencyKey: `steps-${randomUUID()}` });
+    const before = observation.snapshot;
+    const revision = before.profile!.revision!;
+    const key = `step-target-${randomUUID()}`;
+    const input = { target: 8000, expectedRevision: revision, idempotencyKey: key };
+    const saved = await userA.repository.setDailyStepTarget(input);
+    const retry = await userA.repository.setDailyStepTarget(input);
+    expect(saved.snapshot.profile?.dailyStepTarget).toBe(8000);
+    expect(retry.snapshot.profile?.revision).toBe(saved.snapshot.profile?.revision);
+    expect(saved.snapshot.plan).toEqual(before.plan);
+    expect(saved.snapshot.mealPlan).toEqual(before.mealPlan);
+    expect(saved.snapshot.target).toEqual(before.target);
+    expect(saved.snapshot.dailySteps).toEqual(before.dailySteps);
+    expect(saved.snapshot.sessions).toEqual(before.sessions);
+    await expect(userA.repository.setDailyStepTarget({ target: 9000, expectedRevision: revision, idempotencyKey: `stale-target-${randomUUID()}` })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    const crossOwner = await userB.client.rpc("set_daily_step_target", { p_payload: { target: 9000, expectedRevision: saved.snapshot.profile!.revision!, userId: userA.id, idempotencyKey: `other-target-${randomUUID()}` } });
+    expect(crossOwner.error).not.toBeNull();
+    expect((await userA.repository.load())?.profile?.dailyStepTarget).toBe(8000);
+    const anon = makeClient();
+    const unauthenticated = await anon.rpc("set_daily_step_target", { p_payload: { ...input, idempotencyKey: `anon-${randomUUID()}` } });
+    expect(unauthenticated.error).not.toBeNull();
+    const directWrite = await userA.client.from("profiles").update({ daily_step_target: 9000 }).eq("id", userA.id);
+    expect(directWrite.error).not.toBeNull();
+    const { dailyStepTarget: omitted, ...oldProfile } = saved.snapshot.profile!;
+    expect(omitted).toBe(8000);
+    const renamed = await userA.repository.updateProfile({ profile: { ...oldProfile, name: "Target retained" }, currentSnapshot: saved.snapshot, idempotencyKey: `omit-${randomUUID()}` });
+    expect(renamed.snapshot.profile?.dailyStepTarget).toBe(8000);
+    const cleared = await userA.repository.setDailyStepTarget({ target: null, expectedRevision: renamed.snapshot.profile!.revision!, idempotencyKey: `clear-${randomUUID()}` });
+    expect(cleared.snapshot.profile?.dailyStepTarget).toBeUndefined();
+    expect(cleared.snapshot.dailySteps).toEqual(before.dailySteps);
+  });
+
+  it("serializes competing step targets and concurrent retries while preserving unrelated profile edits", async () => {
+    const before = await userA.repository.load();
+    if (!before?.profile) throw new Error("Missing profile");
+    const revision = before.profile.revision!;
+    const results = await Promise.allSettled([7000, 9000].map((target) => userA.repository.setDailyStepTarget({ target, expectedRevision: revision, idempotencyKey: randomUUID() })));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    if (!rejected || rejected.status !== "rejected") throw new Error("Expected stale competing target");
+    expect(rejected.reason).toMatchObject({ repositoryError: { code: "stale_version" } });
+    const winner = await userA.repository.load();
+    expect(winner?.profile?.revision).toBe(revision + 1);
+    expect([7000, 9000]).toContain(winner?.profile?.dailyStepTarget);
+
+    const retryInput = { target: 8000, expectedRevision: winner!.profile!.revision!, idempotencyKey: randomUUID() };
+    const retries = await Promise.all([userA.repository.setDailyStepTarget(retryInput), userA.repository.setDailyStepTarget(retryInput)]);
+    expect(retries[0].snapshot.profile).toEqual(retries[1].snapshot.profile);
+    expect(retries[0].snapshot.profile?.revision).toBe(retryInput.expectedRevision + 1);
+    const confirmed = retries[0].snapshot;
+    const { dailyStepTarget: omitted, ...legacyProfile } = confirmed.profile!;
+    expect(omitted).toBe(8000);
+    // A plan-affecting profile update from an older client must retain the preference.
+    const regenerated = await userA.repository.updateProfile({ profile: { ...legacyProfile, sessionMinutes: legacyProfile.sessionMinutes === 30 ? 45 : 30 }, currentSnapshot: confirmed, idempotencyKey: randomUUID() });
+    expect(regenerated.snapshot.profile?.dailyStepTarget).toBe(8000);
+    expect(regenerated.snapshot.dailySteps).toEqual(before.dailySteps);
+    expect(regenerated.snapshot.sessions).toEqual(before.sessions);
+    const exported = await userA.repository.exportData({ idempotencyKey: randomUUID() });
+    expect(exported.data?.profile?.daily_step_target).toBe(8000);
   });
 
   it("reconciles generated groceries without losing custom entries", async () => {

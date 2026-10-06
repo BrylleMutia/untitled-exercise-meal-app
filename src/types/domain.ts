@@ -51,6 +51,7 @@ export interface UserProfile {
   equipment: EquipmentId[];
   daysPerWeek: number;
   sessionMinutes: number;
+  dailyStepTarget?: number;
   goal: PrimaryGoal;
   dietaryPattern: string;
   allergies: string[];

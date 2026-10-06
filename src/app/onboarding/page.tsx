@@ -6,7 +6,7 @@ import { ArrowRight, ChevronLeft, LoaderCircle, TriangleAlert } from "lucide-rea
 import { useAppOptional } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { StatTile } from "@/components/ui/StatTile";
+import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import {
   HEALTH_DISCLAIMER,
   isAggressiveRate,
@@ -30,6 +30,7 @@ import type {
   TrainingProgram,
 } from "@/types/domain";
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
+import { validateDailyStepTarget } from "@/utility/dailySteps";
 
 const STEPS = ["About you", "Movement", "Food choices", "Your goal", "Review"] as const;
 
@@ -61,6 +62,7 @@ interface Draft {
   equipment: EquipmentId[];
   daysPerWeek: number;
   sessionMinutes: number;
+  dailyStepTarget: string;
   dietaryPattern: string;
   allergies: string;
   foodPreferences: string;
@@ -85,6 +87,7 @@ const initialDraft: Draft = {
   equipment: ["none"],
   daysPerWeek: 3,
   sessionMinutes: 45,
+  dailyStepTarget: "",
   dietaryPattern: "No restrictions",
   allergies: "",
   foodPreferences: "",
@@ -175,6 +178,10 @@ export default function OnboardingPage() {
   const heightCm = draft.units === "metric" ? Number(draft.height) : inToCm(Number(draft.height));
 
   const validationErrors = (): string[] => {
+    if (step === 1 || step === 4) {
+      const invalid = validateDailyStepTarget(draft.dailyStepTarget.trim() ? Number(draft.dailyStepTarget) : null);
+      if (invalid) return [invalid];
+    }
     if (step === 0) {
       const list: string[] = [];
       if (!draft.name.trim()) list.push("Tell us what to call you.");
@@ -225,6 +232,8 @@ export default function OnboardingPage() {
     finalizingRef.current = true;
     setFinalizing(true);
     try {
+    const invalidTarget = validateDailyStepTarget(draft.dailyStepTarget.trim() ? Number(draft.dailyStepTarget) : null);
+    if (invalidTarget) { setErrors([invalidTarget]); return; }
     const profile: UserProfile = {
       id: app.snapshot.userId || "authenticated-user",
       name: draft.name.trim(),
@@ -238,6 +247,7 @@ export default function OnboardingPage() {
       equipment: draft.equipment,
       daysPerWeek: draft.daysPerWeek,
       sessionMinutes: draft.sessionMinutes,
+      dailyStepTarget: draft.dailyStepTarget.trim() ? Number(draft.dailyStepTarget) : undefined,
       goal: draft.goal,
       dietaryPattern: draft.dietaryPattern,
       allergies: draft.allergies.split(",").map((item) => item.trim()).filter(Boolean),
@@ -330,7 +340,9 @@ export default function OnboardingPage() {
         <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
           Onboarding · step {step + 1} of {STEPS.length}
         </p>
-        <h1 ref={headingRef} tabIndex={-1} className="mt-1 text-2xl font-extrabold">{STEPS[step]}</h1>
+        <div className="flex items-center justify-between gap-2"><h1 ref={headingRef} tabIndex={-1} className="mt-1 text-2xl font-extrabold">{STEPS[step]}</h1><HelpPopover title={STEPS[step]}>
+          {step === 0 ? <><p>Your profile is used to estimate targets and build plans. The calorie formula uses age, height, weight, and the selected sex.</p><p>Some situations need individual advice. Screening saves only your choice, without a reason or diagnosis. Adults 18+ only; invalid values are rejected rather than clamped.</p></> : step === 1 ? <><p>Both workout programs stay editable. Pilates foundations use controlled beginner movements without special equipment.</p><p>Your experience, equipment, days, and session time shape the plan.</p></> : step === 2 ? <><p>Choose foods that work for you; you can change these later. Meals use measured portions and respect your exclusions. When no meal fits, the slot stays open.</p><p>Meal cost preferences compare the starter catalog; they are not prices or a money budget.</p></> : step === 3 ? <p>Goals guide estimated targets. Automated targets do not replace medical or dietary care; some health situations need professional advice.</p> : <p>Review your answers and estimated targets before saving. Plans remain editable, and later changes do not rewrite completed history.</p>}
+        </HelpPopover></div>
         <div className="mt-3 flex gap-1.5" aria-hidden>
           {STEPS.map((s, i) => (
             <span
@@ -468,7 +480,6 @@ export default function OnboardingPage() {
                 I am pregnant/postpartum, under 18, recovering from an eating disorder, managing a condition needing individualized care, or unsure
               </button>
             </div>
-            <p className="text-xs font-semibold text-muted">Some situations need individual advice. We save only your choice, without a reason or diagnosis.</p>
           </Field>
           <Field label="Units">
             <div className="grid grid-cols-2 gap-2">
@@ -508,8 +519,7 @@ export default function OnboardingPage() {
             </Field>
           </div>
           <p className="text-xs font-semibold text-muted">
-            Adults 18+ only. We reject out-of-range values instead of silently
-            clamping them.
+            Adults 18+ only.
           </p>
         </Card>
       ) : null}
@@ -521,7 +531,6 @@ export default function OnboardingPage() {
               <option value="calisthenics">Calisthenics · bodyweight strength</option>
               <option value="pilates">Pilates foundations · gentle mat practice</option>
             </select>
-            <p className="text-xs font-semibold text-muted">Both plans stay editable. Pilates foundations use controlled beginner movements; no special equipment is needed.</p>
           </Field>
           <Field label="Training experience">
             <div className="grid grid-cols-3 gap-2">
@@ -567,6 +576,7 @@ export default function OnboardingPage() {
               })}
             </div>
           </Field>
+          <div className="grid gap-2"><div className="flex items-center justify-between gap-2"><label htmlFor="onboarding-step-target" className="text-sm font-bold">Daily step target (optional)</label><HelpPopover title="Daily step target"><p>Choose a target that suits your routine. You can change or remove it in Settings.</p><p>Use a whole number from 1 to 200,000, or leave blank for no target. This range is a technical limit, not a recommendation.</p></HelpPopover></div><input id="onboarding-step-target" className="input" inputMode="numeric" value={draft.dailyStepTarget} placeholder="Leave blank for no target" onChange={(event) => set("dailyStepTarget", event.target.value)} /></div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Days per week">
               <select
@@ -600,7 +610,6 @@ export default function OnboardingPage() {
 
       {step === 2 ? (
         <Card className="grid gap-4">
-          <p className="text-sm font-semibold text-ink-soft">Choose foods that work for you. You can change these later.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Eating style">
               <select value={draft.dietaryPattern} onChange={(e) => set("dietaryPattern", e.target.value)} className="input">
@@ -627,7 +636,6 @@ export default function OnboardingPage() {
               </select>
             </Field>
           </div>
-          <p className="text-xs font-semibold text-muted">Choices use measured portions. Allergies still apply. When no meal fits, the slot stays open for your choice.</p>
           {draft.dietaryPattern.toLowerCase().includes("low-carb") || draft.dietaryPattern.includes("Keto-style") ? (
             <p className="rounded-2xl bg-peach-100 p-3 text-xs font-semibold text-ink-soft">
               {draft.dietaryPattern.toLowerCase().includes("low-carb") ? "Low-carb plans allow at most 130 g total carbs each day." : "Keto-style plans allow at most 50 g total carbs each day. This does not guarantee ketosis."} These are planning preferences, not dietary care. Unresolved slots mean the day has not been fully planned.
@@ -641,7 +649,6 @@ export default function OnboardingPage() {
               {draft.mealBudget && draft.mealBudget !== "4" && draft.mealBudget !== "7" ? <option value={draft.mealBudget}>Your saved custom preference</option> : null}
             </select>
           </Field>
-          <p className="text-xs font-semibold text-muted">These choices compare meals in our starter catalog. They are not prices or a money budget.</p>
         </Card>
       ) : null}
 
@@ -708,12 +715,11 @@ export default function OnboardingPage() {
       {step === 4 && preview ? (
         <div className="grid gap-4">
           <Card tone="blush">
-            <h2 className="font-extrabold">Your estimated daily food target</h2>
+            <HelpHeading title="Your estimated daily food target"><p>A starting point based on your answers. You can adjust your goal later.</p></HelpHeading>
             <p className="mt-2 text-3xl font-extrabold tabular-nums">≈{preview.calories} kcal</p>
-            <p className="mt-2 text-xs font-semibold text-ink-soft">A starting point based on your answers. You can adjust your goal later.</p>
           </Card>
           <Card tone="white">
-            <h2 className="font-extrabold">Macro targets (estimates)</h2>
+            <HelpHeading title="Macro targets (estimates)"><p>{HEALTH_DISCLAIMER}</p><p>Formula: Mifflin-St Jeor · activity factor {preview.activityFactor} from training days · effective {todayKey()}. Historical plans retain their original target version.</p><p>Energy at rest (BMR): {preview.bmr} kcal. Daily energy use (TDEE): {preview.tdee} kcal. Both are estimates.</p><p>BMI: {preview.bmi}. It compares weight with height and is information only, not a diagnosis.</p></HelpHeading>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
               {[
                 { label: "Protein", value: preview.proteinG },
@@ -726,19 +732,6 @@ export default function OnboardingPage() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 rounded-2xl bg-cream p-3 text-xs font-semibold text-muted">
-              {HEALTH_DISCLAIMER} Formula: Mifflin-St Jeor · activity factor from
-              your training days · effective {todayKey()}. Historical plans keep
-              the version they were created with.
-            </p>
-            <details className="mt-3 text-xs font-semibold">
-              <summary className="min-h-11 cursor-pointer py-3 font-bold">How we estimated this</summary>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <StatTile tone="lavender" label="Energy at rest" value={`${preview.bmr} kcal`} sub="BMR estimate" />
-                <StatTile tone="mint" label="Daily energy use" value={`${preview.tdee} kcal`} sub={`TDEE estimate · activity factor ${preview.activityFactor}`} />
-                <StatTile tone="peach" label="BMI" value={String(preview.bmi)} sub="Information only · not a diagnosis" />
-              </div>
-            </details>
           </Card>
         </div>
       ) : null}
@@ -757,6 +750,7 @@ export default function OnboardingPage() {
             {[
               { label: "About you", value: `${draft.name} · ${draft.age} years · ${draft.height} ${draft.units === "metric" ? "cm" : "in"} · ${draft.weight} ${draft.units === "metric" ? "kg" : "lb"}`, editStep: 0 },
               { label: "Movement", value: `${draft.trainingProgram === "pilates" ? "Pilates foundations" : "Calisthenics"} · ${draft.experience} · ${draft.daysPerWeek} days/week · ${draft.sessionMinutes} min`, editStep: 1 },
+              { label: "Daily step target", value: draft.dailyStepTarget.trim() ? `${Number(draft.dailyStepTarget).toLocaleString()} steps` : "Not set", editStep: 1 },
               { label: "Food choices", value: `${draft.dietaryPattern} · ${draft.mealBudget === "4" ? "Budget-friendly" : draft.mealBudget === "7" ? "Balanced" : draft.mealBudget ? "Saved custom cost preference" : "Flexible"} · ${draft.cookingTimeMinutes} min to cook`, editStep: 2 },
               { label: "Your goal", value: GOALS.find((goal) => goal.id === draft.goal)?.label ?? draft.goal, editStep: 3 },
             ].map((choice) => (
@@ -826,6 +820,7 @@ function profileToDraft(profile: UserProfile | null | undefined, goal?: { target
     equipment: profile.equipment,
     daysPerWeek: profile.daysPerWeek,
     sessionMinutes: profile.sessionMinutes,
+    dailyStepTarget: profile.dailyStepTarget?.toString() ?? "",
     dietaryPattern: profile.dietaryPattern,
     allergies: profile.allergies.join(", "),
     foodPreferences: (profile.foodPreferences ?? []).join(", "),

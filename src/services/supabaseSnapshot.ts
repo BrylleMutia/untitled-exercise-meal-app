@@ -72,6 +72,7 @@ function mapProfile(row: ProfileRow): UserProfile {
     equipment: row.equipment.filter(isEquipment),
     daysPerWeek: row.days_per_week,
     sessionMinutes: row.session_minutes,
+    ...(row.daily_step_target == null ? {} : { dailyStepTarget: row.daily_step_target }),
     goal: row.goal as UserProfile["goal"],
     dietaryPattern: row.dietary_pattern,
     allergies: row.allergies,

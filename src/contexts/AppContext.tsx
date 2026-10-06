@@ -52,6 +52,7 @@ export interface AppActions {
   saveCustomSession(session: CustomWorkoutSession): Promise<boolean>;
   selectTrainingProgram(program: TrainingProgram): Promise<boolean>;
   saveDailySteps(date: string, steps: number, walkingMinutes?: number, expectedRevision?: number): Promise<boolean>;
+  setDailyStepTarget(target: number | null, expectedRevision: number): Promise<boolean>;
   deleteDailySteps(date: string, expectedRevision: number): Promise<boolean>;
   setCelebrations(enabled: boolean): Promise<boolean>;
   notify(message: string, tone?: Toast["tone"]): void;
@@ -376,7 +377,9 @@ export function AppProvider({
                   ...nextError.details,
                   refreshedSnapshotAvailable,
                 }
-              : undefined,
+              : label === "set_daily_step_target"
+                ? { entity: "profile", refreshedSnapshotAvailable }
+                : undefined,
           };
         }
         retryRef.current = {
@@ -479,6 +482,12 @@ export function AppProvider({
       },
       async setCelebrations(enabled) {
         const outcome = await execute("set_celebrations", (current, idempotencyKey) => repository!.setCelebrations({ enabled, expectedRevision: current.profile?.revision ?? 1, idempotencyKey }));
+        return Boolean(outcome);
+      },
+      async setDailyStepTarget(target, expectedRevision) {
+        const outcome = await execute("set_daily_step_target", (_current, idempotencyKey) =>
+          repository!.setDailyStepTarget({ target, expectedRevision, idempotencyKey }),
+        );
         return Boolean(outcome);
       },
       async selectTrainingProgram(program) {

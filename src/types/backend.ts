@@ -113,6 +113,7 @@ export type SaveDailyStepsInput = IdempotentInput & {
 };
 export type DeleteDailyStepsInput = IdempotentInput & { date: string; expectedRevision: number };
 export type CelebrationsPreferenceInput = IdempotentInput & { enabled: boolean; expectedRevision: number };
+export type DailyStepTargetInput = IdempotentInput & { target: number | null; expectedRevision: number };
 export type SaveCustomWorkoutInput = IdempotentInput & { id: string; expectedVersion: number; definition: CustomWorkoutDefinition; profile: UserProfile };
 export type StartCustomWorkoutInput = IdempotentInput & { id: string; workoutId: string; expectedVersion: number; date: string };
 export type SaveCustomSessionInput = IdempotentInput & { id: string; expectedRevision: number; actual: CustomWorkoutSession["actual"]; status: CustomWorkoutSession["status"] };

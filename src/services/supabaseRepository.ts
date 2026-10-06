@@ -5,7 +5,7 @@ import { generateGroceryList, mergeGroceryLists } from "@/utility/grocery";
 import { buildDailyTarget } from "@/utility/health";
 import { generateMealPlan } from "@/utility/mealPlan";
 import { generateWorkoutPlan } from "@/utility/plan";
-import { validateDailySteps } from "@/utility/dailySteps";
+import { validateDailySteps, validateDailyStepTarget } from "@/utility/dailySteps";
 import { validateCustomWorkout } from "@/utility/customWorkouts";
 import { startOfWeek, todayKey } from "@/utility/dates";
 import type {
@@ -58,6 +58,7 @@ import type {
   SaveDailyStepsInput,
   DeleteDailyStepsInput,
   CelebrationsPreferenceInput,
+  DailyStepTargetInput,
   SelectTrainingProgramInput,
   SaveCustomWorkoutInput,
   StartCustomWorkoutInput,
@@ -73,6 +74,7 @@ type RpcName =
   | "save_daily_steps"
   | "delete_daily_steps"
   | "set_celebrations"
+  | "set_daily_step_target"
   | "complete_onboarding"
   | "update_profile"
   | "update_units"
@@ -347,6 +349,25 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     return this.mutate("save_daily_steps", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "daily-steps-saved", date: input.date }]);
   }
 
+  async setDailyStepTarget(input: DailyStepTargetInput): Promise<MutationOutcome> {
+    const invalid = validateDailyStepTarget(input.target);
+    if (invalid || !Number.isInteger(input.expectedRevision) || input.expectedRevision < 1 || input.expectedRevision > 2147483647) {
+      throw repositoryException(toRepositoryError(`validation_failed: ${invalid ?? "A valid profile revision is required."}`));
+    }
+    await this.requireDailyStepTargetSchema();
+    return this.mutate("set_daily_step_target", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "profile-updated" }]);
+  }
+
+  private async requireDailyStepTargetSchema(): Promise<void> {
+    const { error, status } = await this.client.from("profiles").select("daily_step_target").limit(0);
+    if (error) {
+      const missingColumn = error.code === "42703" || error.code === "PGRST204" || error.message.includes("daily_step_target");
+      throw repositoryException(toRepositoryError(missingColumn
+        ? "validation_failed: Daily step targets are not available on this database yet. Your draft is retained; the database update must be rolled out first."
+        : error.message, status, error.details));
+    }
+  }
+
   async deleteDailySteps(input: DeleteDailyStepsInput): Promise<MutationOutcome> {
     const invalid = validateDailySteps(input.date, 0);
     if (invalid) throw repositoryException(toRepositoryError(`validation_failed: ${invalid}`));
@@ -411,11 +432,19 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async completeOnboarding(input: OnboardingInput): Promise<MutationOutcome> {
+    const invalidTarget = validateDailyStepTarget(input.profile.dailyStepTarget);
+    if (invalidTarget) throw repositoryException(toRepositoryError(`validation_failed: ${invalidTarget}`));
+    if (input.profile.dailyStepTarget !== undefined || input.currentSnapshot.profile?.dailyStepTarget !== undefined) {
+      await this.requireDailyStepTargetSchema();
+    }
+    // Onboarding's blank optional field explicitly clears a previous selection.
+    // Other profile paths preserve omission for older clients and unrelated edits.
+    const profile = { ...input.profile, dailyStepTarget: input.profile.dailyStepTarget ?? null };
     if (input.profile.targetEligibility === "unsupported") {
       return this.mutate(
         "complete_onboarding",
         {
-          profile: input.profile,
+          profile,
           ...goalPayload(input.goal),
           expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
           idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
@@ -428,6 +457,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       "complete_onboarding",
       {
         ...bundle,
+        profile,
         ...goalPayload(input.goal),
         expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
@@ -441,6 +471,9 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async updateProfile(input: ProfileUpdateInput): Promise<MutationOutcome> {
+    const invalidTarget = validateDailyStepTarget(input.profile.dailyStepTarget);
+    if (invalidTarget) throw repositoryException(toRepositoryError(`validation_failed: ${invalidTarget}`));
+    if (input.profile.dailyStepTarget !== undefined) await this.requireDailyStepTargetSchema();
     const profileOnly = Boolean(
       input.currentSnapshot.profile && hasSamePlanInputs(input.currentSnapshot.profile, input.profile),
     );
