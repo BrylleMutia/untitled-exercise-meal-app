@@ -16,8 +16,11 @@ categories matched at that checkpoint. Preserve these applied migration files;
 corrections require a new forward migration and the normal safety preflight.
 
 Local database, repository, browser, and build evidence is dated 2026-10-01.
-Hosted app deployment and staging email delivery remain pending. Browser tests
-mock external nutrition providers; local Mailpit delivery is real. Neither
+PR #3 merged MVP-3 into `main` on 2026-10-04; candidate and resulting-main CI
+passed. CI uses a disposable database and does not repeat the shared-schema
+verification. Hosted app deployment, hosted Auth configuration, staging email
+delivery, final hosted acceptance, and release sign-off remain pending.
+Browser tests mock external nutrition providers; local Mailpit delivery is real. Neither
 establishes staging SMTP readiness. [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md)
 records the remaining gates, operational constraints, and commit/file manifest;
 [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) retains the detailed audit.
@@ -305,6 +308,52 @@ they are never silently queued. Unchanged retries reuse the intent's idempotency
 key. Changed drafts create a new intent, and stale edits require deliberate
 reapplication to refreshed state.
 
+The daily-step target contract is a nullable integer `profiles.daily_step_target`
+mapped to optional `UserProfile.dailyStepTarget`. It is a user preference outside
+plan-generation inputs, with no default, backfill, or historical target versions.
+The `setDailyStepTarget` intent carries a nullable target, expected
+profile revision, and idempotency key; `set_daily_step_target` returns a
+refreshed snapshot with the existing `profile-updated` event. The RPC
+validates 1–200,000 or null, resolves ownership from `auth.uid()`, claims the
+intent, locks the profile row, checks its revision, and updates only this preference.
+Execution is authenticated-only and direct table writes remain denied.
+Onboarding includes the target in its atomic profile transaction. Other profile
+persistence paths preserve omitted fields and clear only explicit null.
+The existing profile-row account export includes the new column.
+
+Local rollout evidence (2026-10-05): Docker virtualization is available. All 46
+baseline migration versions matched the linked history, and the pre-change dry
+run was up to date. Local/linked catalog comparisons matched all 1,082 objects
+(columns, constraints, indexes, policies, relations, triggers, and functions,
+including privileges and controlled search paths). Function bodies matched after
+normalizing CRLF to LF; no semantic schema differences or history repair were
+needed. Forward migration `20261005040646_daily_step_target.sql` applies on a
+clean local reset. Database lint and all 529 pgTAP assertions passed, and database
+types were regenerated from that local schema. Repository tests additionally
+verify simultaneous target conflicts, duplicate retries, atomic onboarding,
+omitted-field preservation during plan-affecting edits, and account export.
+The client checks column availability before target persistence and onboarding
+with a target to retain drafts on an older backend. Linked pushes require explicit
+authorization; database rollout precedes the client.
+After explicit owner authorization, the linked rollout on 2026-10-05 applied only
+`20261005040646_daily_step_target.sql`, with no seeds or role changes. All 47
+local/linked migration versions now match and the final linked dry run is up to
+date. The deployed catalog matches all 1,088 objects in the tested local schema,
+including function bodies, privileges, and controlled search paths. Linked type
+generation confirms the new nullable profile field and RPC signatures. Deployed
+checks confirm authenticated RPC execution, anonymous denial, and denied direct
+profile writes. Existing account targets remain unset until their owners save one.
+Security advisor review identified the expected authenticated SECURITY DEFINER
+wrapper notice; the RPC retains caller ownership checks and an empty search path.
+The pre-existing backend-only rate-limit table policy notice and disabled leaked
+password protection setting remain outside this migration's scope.
+
+Authenticated browser gates use a separate localhost port (3030 by default) and
+dedicated `.next-browser-tests` output with development indicators disabled.
+They refuse port 3000 and reuse no running server, so manual development and
+hosted account data remain untouched. Activity inputs stay disabled until draft
+recovery finishes, preventing a recovered draft from replacing newly typed input.
+
 `npm run test:email:local` temporarily enables email confirmations in this
 project's local stack, uses real Mailpit delivery, and restores the configuration
 in `finally`. It uses only local test credentials, disables token-bearing browser
@@ -591,6 +640,17 @@ screen reading.
   framework-specific scroll containers or safe-area components.
 
 ## Accessibility and Motion
+
+Contextual help is presentation-only client state owned by the shared
+`HelpPopover` component. Floating UI React owns collision-aware positioning,
+hover/focus interactions, dismissal, portals, and non-modal focus management.
+An in-page help-open event closes other open panels without adding domain state,
+storage, repository calls, or a global state library. Stable IDs associate the
+44px trigger with a named dialog and its expanded state. Preview opening leaves
+focus unchanged; explicit activation pins and focuses help. Dismissal prevents
+immediate reopening and restores focus only when appropriate. Help controls must
+remain outside form labels and other interactive controls. Essential warnings,
+consent, uncertainty, operational errors, and recovery actions remain visible.
 
 - Every interactive icon has an accessibility role, concise label, disabled state, and at least a 44x44 effective touch target.
 - Meaningful images have accessible descriptions; decorative images are hidden from accessibility.
