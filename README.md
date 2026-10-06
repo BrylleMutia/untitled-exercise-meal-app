@@ -11,7 +11,9 @@ MVP-3 adds clearer onboarding, reliable fresh-browser sign-in, manual steps,
 remaining-calorie rings, Pilates, versioned custom workouts, Low-carb and
 Keto-style planning, interaction feedback, and optional personal milestones.
 Implementation and local verification are complete; shared database rollout was
-verified on 2026-10-01. Hosted app deployment, staging SMTP, and release sign-off
+verified on 2026-10-01. PR #3 merged MVP-3 into `main` on 2026-10-04, and both
+candidate and resulting-main CI passed. Hosted app deployment, hosted Auth
+configuration, staging SMTP, final hosted acceptance, and release sign-off
 remain pending. Staging email checks were explicitly deferred by the user.
 
 Start with [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) for completed/pending work,

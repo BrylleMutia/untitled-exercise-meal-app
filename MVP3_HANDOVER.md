@@ -5,25 +5,43 @@ Handover date: **2026-10-04**. Original implementation/release evidence:
 
 ## Delivery summary
 
-The requested MVP-3 implementation is complete and locally verified. The shared
-Supabase schema rollout is complete. **MVP-3 release sign-off is pending**:
-hosted app deployment, staging email evidence, and final hosted acceptance remain
+The requested MVP-3 implementation is complete, locally verified, and merged
+into `main`; candidate and resulting-main CI passed on 2026-10-04. The shared
+Supabase schema rollout was verified on 2026-10-01.
+**MVP-3 release sign-off is pending**: hosted app deployment, hosted Auth
+configuration, staging email evidence, and final hosted acceptance remain
 open. Staging SMTP was explicitly deferred by the user; do not treat it as passed.
 
-Source is packaged on `codex/mvp-3-handover`, based on `main` at
+Source was packaged on `codex/mvp-3-handover`, based on `main` at
 `3cdd4d757916f00b2b4750e4e78c027d609c6fba`, for the existing origin repository
 [`BrylleMutia/untitled-exercise-meal-app`](https://github.com/BrylleMutia/untitled-exercise-meal-app).
 The ordered manifest below identifies each change and its exact files/hunks.
 Use `git log --reverse --oneline 3cdd4d7..codex/mvp-3-handover` to inspect the
-complete candidate, including the final documentation commit. Packaging/pushing
-this branch does not merge `main`, deploy the app, or create a release tag.
+complete candidate, including the final documentation commit. The branch was
+merged through PR #3. Git delivery and passing CI do not deploy the app or
+create a release tag.
 
 **Git delivery status:** the user approved the exact GitHub destination on
 2026-10-04. The 35-commit candidate is published to
 [`codex/mvp-3-handover`](https://github.com/BrylleMutia/untitled-exercise-meal-app/tree/codex/mvp-3-handover)
 at `https://github.com/BrylleMutia/untitled-exercise-meal-app.git`. The initial
-automatic approval block was resolved by that explicit approval. Review/CI,
-merge, hosted deployment and release sign-off remain pending.
+automatic approval block was resolved by that explicit approval. PR #3 is merged,
+and candidate and resulting-main CI passed. Hosted deployment, hosted Auth
+configuration, staging email evidence, final hosted acceptance, and release
+sign-off remain pending.
+
+### Completed Git delivery — 2026-10-04
+
+| Event | Verified evidence |
+|---|---|
+| Candidate packaged | 35 commits / 85 changed files; candidate SHA `8b3b6805e983372d105178d4275eb93b3e84d76c` |
+| Candidate CI | [Run 17](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/37190109504) passed both `web` and `integration` on that candidate SHA |
+| PR merged | [PR #3](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/3) merged on 2026-10-04 at 5:12 PM Asia/Manila; merge SHA `36418d98d204d90676753f00cecab41bd3204627` |
+| Resulting-main CI | [Run 18](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/37191384969) passed both `web` and `integration` on that merge SHA |
+
+The detailed CI coverage is recorded separately in the matrix. These results
+establish Git delivery and CI verification; they do not establish independent
+review approval, hosted acceptance, staging SMTP delivery, or live-provider health.
 
 ## Document ownership
 
@@ -78,12 +96,11 @@ individual and no external notification has been sent.
 
 | Priority / suggested owner | Remaining task | Acceptance evidence |
 |---|---|---|
-| P0 / maintainer | Review the granular branch, run CI on the exact candidate, then merge through normal review | Both CI jobs green on the reviewed source; record branch/PR and exact SHA. Feature-branch push alone does not trigger current CI; a PR does |
 | P0 / deployment owner | Deploy the reviewed app to staging/hosting with the correct server-only environment | Hosted candidate URL and source SHA; successful authenticated load, no missing RPC/contract errors; secrets remain in environment management |
 | P0 / Auth owner | Configure hosted Confirm signup token-hash template, HTTPS Site URL and allowed redirects | Match the reviewed `supabase/templates/confirmation.html`; operational procedure in Supabase setup section 9 |
 | P0 / Auth + QA | Resume the deferred staging SMTP delivery check | Actual inbox receipt for signup and resend, confirmation in another browser, safe invalid/reused links and redirects, timestamp/environment/template, disposable-account cleanup; never record live tokens |
 | P0 / QA | Recheck hosted mobile/desktop primary loop and MVP-3 states | Fresh-browser existing-account sign-in; onboarding failure/retry; steps/offline draft; calorie ring states; Pilates/custom history; diet infeasible states; keyboard, large text, reduced motion and narrow overflow |
-| P0 / release owner | Record final sign-off and release packaging | Link exact candidate/deployed SHA and required evidence, green resulting-main CI, approved tag/version; do not infer release readiness from old RC3 evidence |
+| P0 / release owner | Record final sign-off and release packaging | Link exact deployed SHA and required hosted evidence, retain the completed candidate/main CI record, and create the approved tag/version; any later release SHA needs its own CI evidence |
 | Operational / Auth owner | Review the existing disabled leaked-password protection setting and platform availability | Document the decision/settings; no Auth security setting was changed during this handover |
 
 No additional MVP-3 feature implementation is currently identified as pending.
@@ -127,7 +144,7 @@ Detailed commands, fingerprints, limitations and advisor findings are in the
 matrix. External nutrition providers are mocked in the current browser suite.
 Earlier RC3 provider evidence retains its original date. Staging SMTP is unverified.
 
-### Handover checks — 2026-10-04
+### Local handover and pre-commit checks — 2026-10-04
 
 | Fresh check | Result |
 |---|---|
@@ -138,14 +155,16 @@ Earlier RC3 provider evidence retains its original date. Staging SMTP is unverif
 | `git diff --check` | Passed |
 | Commit manifest preflight | All 85 changed/new files classified into 35 groups; four deliberate partial-staging groups validated |
 | Artifact exclusions | Environment, demo credentials, raw tooling/test results and generated video confirmed ignored |
-| Packaging audit | First 34 commits match all 77 source/test/migration files; working-tree content preserved byte-for-byte, including all seven applied migrations; eight handover documents remain for commit 35 |
+| Pre-commit packaging audit | At this checkpoint, the first 34 commits matched all 77 source/test/migration files; working-tree content was preserved byte-for-byte, including all seven applied migrations; eight handover documents awaited commit 35. That documentation commit is now included in the merged candidate |
 | Documentation checks | Local Markdown file links resolve; whitespace checks pass; original historical evidence retained |
 
 The initial sandboxed lint/test attempts hit local filesystem/process `EPERM`
 restrictions; both reruns with the necessary execution access passed. There was
 no application test failure in those blocked attempts. The October 1 database,
-browser and delivery evidence above is not represented as a new run. Hosted CI
-on the final candidate remains a separate release gate.
+browser and delivery evidence above is not represented as a new run. The later
+October 4 candidate/main CI results are recorded in Completed Git delivery and
+the matrix; their disposable database checks do not repeat shared-schema
+verification. Hosted deployment, acceptance, and staging SMTP remain open.
 
 ## Operations for the next developer
 

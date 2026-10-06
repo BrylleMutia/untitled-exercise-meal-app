@@ -20,9 +20,15 @@ Generated public types reflect that deployed schema. Git commit/push packaging
 does not require another database push. Do not edit or replay applied migrations;
 perform a fresh preflight before any future database change.
 
+PR #3 merged MVP-3 into `main` on 2026-10-04; candidate and resulting-main CI
+passed. CI database checks use a disposable local stack and do not constitute
+a new shared-database verification. The handover and matrix link the exact
+candidate/merge SHAs and successful runs separately from the October 1 evidence.
+
 Local Mailpit signup/resend and token-hash confirmation passed. Hosted app
 deployment, hosted signup template/Site URL/redirect configuration, and staging
-SMTP delivery remain pending; the user deferred the staging email check.
+SMTP delivery, final hosted acceptance, and release sign-off remain pending;
+the user deferred the staging email check.
 Section [9](#9-mvp-3-confirmation-and-schema-release-gates) owns the operational
 procedure. [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) supplies the full checklist
 and commit manifest; [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) preserves

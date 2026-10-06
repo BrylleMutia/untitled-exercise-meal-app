@@ -1,6 +1,6 @@
 # MVP Priority Matrix
 
-Handover update: 2026-10-04; implementation verification date: 2026-10-01
+Handover and Git delivery update: 2026-10-04; implementation verification date: 2026-10-01
 Implementation specification revision: 2026-09-28
 
 This document summarizes the current implementation and the work required to
@@ -10,11 +10,18 @@ interaction guidance in [`DESIGN.md`](./DESIGN.md), and the operational backend
 status in [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md). Source code, migrations,
 generated types, and tests are treated as the implementation truth.
 
+MVP-3 implementation is complete and merged into `main` through PR #3;
+candidate and resulting-main CI passed on 2026-10-04. Shared database rollout
+was verified on 2026-10-01. Hosted deployment, hosted Auth configuration,
+staging SMTP, final hosted acceptance, and release sign-off remain pending.
+
 ## MVP-3 proposal — Everyday Usability and Choice — 2026-09-30
 
-This is a forward-looking release plan. The MVP-2 / RC3 record below remains
-historical evidence; it does not establish that any MVP-3 gate has passed.
-The fresh-browser sign-in fix was preserved and integrated into MVP-3.
+This is the original September 30 proposal, retained as the planning record.
+Current implementation, Git delivery, and remaining release gates are recorded
+in the MVP-3 evidence sections below. The MVP-2 / RC3 record remains historical
+evidence; it does not establish that any MVP-3 gate has passed. The fresh-browser
+sign-in fix was preserved and integrated into MVP-3.
 
 | Requested improvement | Audited baseline | MVP-3 outcome |
 |---|---|---|
@@ -99,13 +106,13 @@ the migration-equivalence audit and explicit shared-remote authorization.
 
 ## MVP-3 implementation evidence — 2026-10-01
 
-The implementation and handover are packaged on `codex/mvp-3-handover`, based on
+The implementation and handover were packaged on `codex/mvp-3-handover`, based on
 `main` at
 `3cdd4d757916f00b2b4750e4e78c027d609c6fba`. Existing fresh-browser auth changes
 were preserved and integrated. This records implementation and verification;
 the seven database migrations were applied to shared Supabase with explicit user
 authorization on 2026-10-01. App deployment and MVP-3 sign-off remain incomplete.
-The proposal above remains a release plan,
+The proposal above remains the original planning record,
 and the RC3 record below remains historical evidence.
 
 ### Handover and release boundaries — 2026-10-04
@@ -115,26 +122,51 @@ release gate, impacted file, and ordered commit group. Packaging the source on a
 review branch does not deploy the app or satisfy staging SMTP. The seven shared
 migrations are already applied; do not push them again as a handover step.
 The user approved the exact configured GitHub destination on 2026-10-04. The
-35-commit candidate is published on
+35-commit / 85-file candidate was published on
 [`codex/mvp-3-handover`](https://github.com/BrylleMutia/untitled-exercise-meal-app/tree/codex/mvp-3-handover);
 the initial automatic approval block was resolved. The handover records the
-destination and commit manifest. Review/CI and merge remain pending.
-Review/CI on the exact candidate, merge, hosted deployment, staging confirmation
-delivery, hosted mobile/desktop acceptance, and release tagging/sign-off remain
-pending. Staging delivery was deferred by the user. Automatic health sync and
-PWA/offline synchronization are later scope, not missing MVP-3 implementation.
-The verification table below retains its original 2026-10-01 date; any fresh
-handover checks are recorded separately in the handover document.
+destination and commit manifest. PR #3 merged the candidate into `main`, and
+candidate and resulting-main CI passed on 2026-10-04, as recorded below.
+Hosted deployment, hosted signup template/Site URL/redirect verification,
+staging confirmation delivery, hosted mobile/desktop acceptance, and release
+tagging/sign-off remain pending. Staging delivery was deferred by the user.
+The existing leaked-password protection setting remains an operational follow-up.
+Automatic health sync and PWA/offline synchronization are later scope, not
+missing MVP-3 implementation.
+The October 1 verification table retains its original date and counts; local
+October 4 handover checks are recorded separately in the handover document.
 
 | Package | Implemented behavior | Release status |
 |---|---|---|
-| M3.1 | Five plain-language onboarding groups; relative cost choices with legacy numeric preservation; labeled, duplicate-safe final save and retained retry draft; full document navigation after authentication; token-hash confirmation template and real Mailpit resend/link test | Implemented locally; staging SMTP and hosted template verification deferred by the user |
-| M3.2 | Authenticated daily step edits/deletion and optional walking minutes; broad 2.8–3.8 MET estimate for eligible ages 19–59; separate food/workout estimates; reducing calories-remaining ring and Home quick actions | Implemented locally; automatic device sync remains deferred |
-| M3.3 | Deterministic Pilates foundations; equipment/experience/time checks; reusable catalog or named custom routines; immutable routine versions and copied planned/actual session history; pause/resume, partial completion, notes, RPE, export | Implemented locally; named custom movements receive no automatic progression |
-| M3.4 | Low-carb 130 g and Keto-style 50 g total-carbohydrate limits; combined vegetarian/vegan choices; six reviewed USDA foods and four ingredient-based meals; conservative portions, future target versions, server enforcement, unresolved slots | Implemented locally; product planning assumptions and uncertainty remain explicit |
-| M3.5 | Shared pressed/focus/validation feedback, reduced-motion-safe transitions, optional saved-fact firsts and participation milestones, typed intents and authorized versioned RPCs | Locally verified; database rollout verified; app deployment and staging gates remain |
+| M3.1 | Five plain-language onboarding groups; relative cost choices with legacy numeric preservation; labeled, duplicate-safe final save and retained retry draft; full document navigation after authentication; token-hash confirmation template and real Mailpit resend/link test | Implementation merged; local and CI checks passed; hosted Auth configuration and acceptance remain; staging SMTP explicitly deferred |
+| M3.2 | Authenticated daily step edits/deletion and optional walking minutes; broad 2.8–3.8 MET estimate for eligible ages 19–59; separate food/workout estimates; reducing calories-remaining ring and Home quick actions | Implementation merged; local and CI checks passed; hosted acceptance remains; automatic device sync is later scope |
+| M3.3 | Deterministic Pilates foundations; equipment/experience/time checks; reusable catalog or named custom routines; immutable routine versions and copied planned/actual session history; pause/resume, partial completion, notes, RPE, export | Implementation merged; local and CI checks passed; hosted acceptance remains; named custom movements receive no automatic progression |
+| M3.4 | Low-carb 130 g and Keto-style 50 g total-carbohydrate limits; combined vegetarian/vegan choices; six reviewed USDA foods and four ingredient-based meals; conservative portions, future target versions, server enforcement, unresolved slots | Implementation merged; local and CI checks passed; hosted acceptance remains; product planning assumptions and uncertainty stay explicit |
+| M3.5 | Shared pressed/focus/validation feedback, reduced-motion-safe transitions, optional saved-fact firsts and participation milestones, typed intents and authorized versioned RPCs | Implementation merged; local and CI checks passed; shared rollout verified October 1; hosted deployment, acceptance, staging gates, and release sign-off remain |
 
-### Verification record
+### GitHub delivery and CI evidence — 2026-10-04
+
+| Event | Source / result |
+|---|---|
+| Packaged candidate | [PR #3](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/3): 35 commits / 85 changed files; head `8b3b6805e983372d105178d4275eb93b3e84d76c` |
+| Candidate CI | [Run 17](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/37190109504), triggered by the PR on that head: completed successfully; both `web` and `integration` passed |
+| Merge | [PR #3](https://github.com/BrylleMutia/untitled-exercise-meal-app/pull/3) merged on 2026-10-04 at 5:12 PM Asia/Manila; resulting `main` SHA `36418d98d204d90676753f00cecab41bd3204627` |
+| Resulting-main CI | [Run 18](https://github.com/BrylleMutia/untitled-exercise-meal-app/actions/runs/37191384969), triggered by the `main` push on that merge SHA: completed successfully; both `web` and `integration` passed |
+
+Both runs passed typecheck, lint, local tests, production build, and public
+browser tests in `web`. Their `integration` jobs passed disposable local
+database reset/history/lint/tests, RPC smoke and concurrency checks, repository
+tests, and authenticated browser tests. These are October 4 GitHub results;
+the numerical counts below remain the October 1 evidence, not newly claimed
+CI counts. CI database checks do not repeat the shared-schema verification.
+
+The local confirmation runner remains a separate manual gate. Browser nutrition
+providers are mocked; passing CI does not establish live-provider health or
+staging SMTP delivery. Merge and CI do not establish independent review approval,
+hosted deployment/acceptance, or final release sign-off. The handover owns the
+[remaining checklist](./MVP3_HANDOVER.md#pending-release-work).
+
+### Verification record — 2026-10-01
 
 All commands below use the disposable local project at `127.0.0.1:56321` unless
 the row explicitly says linked/shared. No provider secrets or test credentials
