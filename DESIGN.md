@@ -12,15 +12,19 @@
 ## MVP-3 design handover — 2026-10-04
 
 Implemented surfaces include five focused onboarding groups, relative meal-cost
-choices, a labeled final save, Home quick actions, remaining-calorie rings,
+choices, a labeled final save, Home summary actions, remaining-calorie rings,
 daily activity, Pilates selection, custom routines and session controls,
 explicit unresolved diet slots, shared pressed/validation feedback, and optional
 personal milestones. The pastel tokens and existing exercise media are retained.
 
 Desktop 1440×900 and mobile 390×844 flows, keyboard order, large text, reduced
-motion, and narrow overflow were verified locally on 2026-10-01. Recheck these
+motion, and narrow overflow were verified locally on 2026-10-01. PR #3 merged
+these surfaces into `main` on 2026-10-04; candidate and resulting-main CI passed,
+including the public and authenticated browser suites. Recheck these
 flows on the hosted candidate after deployment; no new hosted design acceptance
-is implied. See [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) for remaining release
+is implied. Hosted deployment, hosted Auth configuration, staging SMTP, final
+hosted acceptance, and release sign-off remain pending.
+See [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) for remaining release
 work and [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) for dated evidence.
 
 ## Table of Contents
@@ -97,14 +101,96 @@ tints and rounded corners; screens are stat-focused and mobile-first.
 
 - **Reference influence:** `assets/ui_reference_01.jpg` shows pastel hero
   cards with a greeting, stat grids, and quick-link cards. The Home screen
-  follows this shape: a blush "Today's meals" hero, a lavender "Your progress"
-  card, a four-tile quick-links grid, and a full-width "Today's workout" card.
-  The meals hero uses a compact two-column view of calorie and macro target
-  bars with an estimate note; unlogged days say "Not logged" instead of showing
+  follows this shape: a blush "Today's meals" hero, compact workout and activity
+  summaries, and a four-tile quick-links grid.
+  The meals hero groups its heading, local-date pill, logging status, and three
+  compact macro columns on the left, with
+  a vertically centered 116px calorie ring and overlapping Add food action on
+  the right, matching the workout and steps summaries. The ring retains its
+  short logging-status caption. Each macro column shows its label, bold recorded
+  value (or "Not logged"), an "of {target} g" line, and a short bar underneath.
+  Bars align across the strip, including when a value wraps. Card-content widths
+  below 420px on non-mobile layouts place the heading and date across the top,
+  logging status beside the ring, and the full-width macro strip beneath.
+  Below the 768px mobile breakpoint, the ring is horizontally centered below
+  the heading and date, with logging status and full-width macros underneath.
+  The strip uses three equal
+  columns when it has at least 15rem available, otherwise stacks the macros to
+  support narrow cards and enlarged text. Long values wrap without truncation.
+  Target assumptions stay in contextual help;
+  unlogged days say "Not logged" instead of showing
   zero intake. It keeps one Add food action, without duplicate meal or progress
   shortcuts. Target details remain available in Nutrition and Settings. The
   weekly progress ring tracks workout completion and centers a rough energy
   estimate from completed sessions when supported profile inputs are available.
+- Beside the meals hero, compact lavender "Your progress" and mint "Today's
+  steps" cards form a right-column stack with a 16px gap and content-driven
+  heights. At 1024px and wider, meals and "Today's workout" form an independent
+  left-column stack, while progress and steps occupy the right-column stack.
+  Both stacks start 35px below the dashboard origin, with 16px between cards.
+  Desktop meals uses 50px vertical and 23px horizontal padding; today's workout
+  uses 39px vertical padding and its existing 16px horizontal padding. Progress
+  and steps each use 26px vertical and 23px horizontal padding from 768px upward.
+  At 768–1023px, meals also uses 26px vertical and 23px horizontal padding.
+  These Home-only overrides follow the existing tablet and desktop breakpoints;
+  below 768px, meals retains 20px padding and the other summaries retain 16px.
+  Today's workout keeps 16px padding below 1024px. Meals follows its content height
+  rather than stretching to match the right column. Columns need not end at the same height; shortcuts
+  begin below the taller stack. Below 1024px, only meals keeps the 35px top margin.
+  Both right-column rings are 116px, matching the meals ring, and
+  centered vertically beside each card's full summary. Below 1024px, the order
+  is meals, workout progress, steps, the compact full-width workout card, then
+  shortcut tiles. The workout action sits beside its summary when its card has at least
+  420px of content width; otherwise it sits below at full width. Long content
+  and enlarged text can increase either stack's height without a fixed budget.
+  A shared stateless workout summary serves two responsive placements with
+  distinct heading IDs. Complementary display rules expose only one region and
+  action at a time, preserving visible reading and keyboard order.
+  Each ring has a 44px circular plus action overlapping its upper-right edge,
+  using the meals card's pale surface and chip shadow. Workout plus opens
+  `/workouts` directly; steps plus opens `/activity` as the sole log/edit steps
+  action, with an accessible label reflecting whether today's entry exists.
+- Steps shows one bold, tabular confirmed count: "2,000 / 10,000" when a
+  target exists, or "2,000" with "No daily target" when unset. The heading
+  supplies the visible unit; assistive text announces "steps" and reads the
+  slash as "of" once. The date and manual-source explanation
+  stay in help. Missing entries say "Not logged" and "No steps logged today",
+  with the chosen target when present; saved zero remains an observation.
+  Recorded walking minutes, including zero, use a white clock-icon pill matching
+  the meals date pill. The approximate calorie range ("≈110–160 kcal") uses
+  a matching white pill with a decorative fire icon on the left. These
+  informational pills share a wrapping row with a 12px gap and a fixed 16px
+  top margin at every breakpoint.
+  Missing walking time stays explicitly "Walking time not logged"; energy states
+  distinguish unlogged activity, missing minutes, zero minutes, and unsupported
+  profiles. The ring sits to the right of the summary and its target action.
+  The duplicate log/edit steps button is omitted; the overlapping plus action
+  serves both states. Estimate details open from the card's help panel. Below
+  768px, workout and steps headings precede their horizontally centered rings;
+  the completion percentage and step counter appear beneath their respective
+  rings. Below 768px, the full progress and steps summaries are centered,
+  including percentages, counts, supporting states, pills, each wrapped detail
+  row, and steps actions. At 768px and wider, summaries and action rows remain
+  left-aligned beside the rings. Headings and help controls keep their positions.
+  Missing/unavailable walking energy remains plain supporting text. Their
+  summaries and actions wrap to preserve readable enlarged text. Shortcut headings
+  and icons wrap as well. All actions remain at least 44px tall.
+  No target shows an empty track and dash with "No daily target"; a chosen
+  target with unlogged activity also shows a dash, labeled "Not logged" rather
+  than 0%. Saved zero shows 0%; other saved values fill steps divided by target.
+  At or above the target, visual fill caps at 100% and the ring caption replaces
+  "Of target" with "Target reached";
+  the actual count remains unchanged. Accessible labels distinguish these states.
+- The optional Movement onboarding target starts blank, can be skipped, and
+  appears in Review as the chosen number or "Not set". Settings has a dedicated
+  `/settings#daily-step-target` section for save/remove and draft recovery.
+  It is a personal preference with no suggested default or calorie reward.
+  Supported walking energy remains separate and uses the same broad range as
+  Activity, with assumptions and an "Estimate details" link in contextual help.
+- The workout-energy unlogged/unavailable status in Your progress uses a white
+  informational pill with a decorative fire icon and a fixed 17px top margin
+  at every breakpoint. It wraps with enlarged text
+  and is omitted when the ring has an available estimate.
 - **Tone:** warm greetings ("Hello, {name}!" / "Welcome back"), encouraging,
   non-guilt-based feedback ("Rest days are part of the plan, not a failure",
   "Unlogged day — no entries, that is fine"), and explicit estimate/disclaimer
@@ -165,6 +251,39 @@ names directly (for example `bg-cream`, `text-ink`, `bg-lav-100`).
 
 ## Typography
 
+### Contextual help and copy density
+
+Use a balanced reduction of visible text across product and authentication
+screens. Keep headings, labels, units, saved values, primary actions, and concise
+state messages visible. Remove repeated introductions and shortcut slogans.
+Move calculation methods, assumptions, feature descriptions, and version/history
+explanations into grouped contextual help. Keep estimate ranges, source/confidence
+labels, privacy consent, destructive confirmations, and immediate exercise safety
+cues visible at the decision point. Retain the short app/auth footer disclaimer.
+
+`HelpPopover` uses a circled question-mark icon in a 44×44px button, usually one
+per card or related section. Distinct concepts such as daily step targets, BMR,
+BMI, TDEE, and RPE may have their own help. The icon sits beside the heading or
+label, outside labels and other interactive elements. Panels use existing
+colors, a white rounded surface, readable body text, and a soft shadow.
+
+Mouse hover after 300ms and keyboard focus show a preview without moving focus.
+Click/tap or Enter/Space pins the panel and focuses its named non-modal dialog.
+Links and a close button remain keyboard accessible. Escape, the trigger, close,
+or outside interaction dismiss it; keyboard/close dismissal restores trigger
+focus while outside interaction retains destination focus. A dismissed panel
+does not immediately reopen from lingering hover or focus. Only one panel is
+open at a time. Portals avoid clipping; positioning respects 16px viewport
+margins, a 320px maximum width, available height, enlarged text, and reduced
+motion. Historical records and task editors keep their existing expanders.
+
+Local verification on 2026-10-06 covered 1168×930, 1440×900, 390×844,
+320px width, enlarged text, and reduced motion. Shared help and representative
+route checks cover mouse preview, keyboard and touch activation, dismissal,
+focus return, source links, one open panel, viewport bounds, and unchanged
+drafts. Public and authenticated scenarios passed across the full gate and
+focused onboarding/account rechecks using isolated local accounts and port 3030.
+
 - **Family:** [Nunito](https://nextjs.org/docs/app/api-reference/components/font)
   loaded via `next/font/google` with the `--font-nunito` variable. Fallbacks:
   `ui-rounded`, `"Segoe UI"`, `system-ui`, `sans-serif`. Applied through the
@@ -217,6 +336,10 @@ request.
 - Left: an avatar-initial round button (links to `/settings`) plus either a
   route title (from a `TITLES` map) or a "Welcome back / Hello, {name}!"
   greeting.
+  Home's greeting has no date row. The local date appears as a white rounded
+  pill immediately after the meals-card help icon, with a 12px left margin.
+  It wraps within the heading group at narrow widths and enlarged text sizes.
+  Home has no separate Quick actions card.
 - Center (desktop only, `md:flex`): inline primary nav links (Home, Workouts,
   Nutrition, Grocery, Progress) as rounded pills.
 - Right: a notification bell placeholder and a settings button,
@@ -246,7 +369,7 @@ numeric text. An unlogged day shows a dash, partial logs say “Still logging,�
 over-target intake has a neutral numeric label, and missing targets are explicit.
 The ring follows the selected date's effective target version; a later target
 change does not alter the earlier day's display.
-Food intake and activity energy remain separate. Home quick actions use large
+Food intake and activity energy remain separate. Home summary actions use large
 touch targets. Steps and custom-routine forms retain drafts during failures.
 Custom sessions keep the planned dose visible above actual inputs and provide
 large complete/skip, pause/resume, and finish controls.
@@ -256,6 +379,27 @@ use hover, focus, and invalid borders. Existing focus rings, keyboard behavior,
 pastel surfaces, and global reduced-motion overrides are preserved. Optional
 milestone cards use the existing short pop transition; no guilt or calorie reward
 is attached to the milestone labels.
+Settings uses matching cream rows for Milestones and future reminders, with a
+visible label and description beside a stateful switch. The switch keeps a
+44px touch target and its thumb position matches the saved on/off state.
+Settings reads from profile to Your targets and Units & weight, then Daily step
+target, Gentle motivation, Notifications, and account controls. This order is
+the same on mobile and desktop so visual and keyboard navigation agree.
+The profile summary presents experience, weekly training days, session length,
+and goal as separate wrapping pills close beneath the name. The avatar stays
+vertically centered beside the content. Edit uses the primary button and is
+centered against the card from the small breakpoint upward; on narrower screens
+it stays beside the name to leave room for the wrapping pills.
+The step-target field uses the card heading as its visible label and retains an
+accessible input label without repeating the heading on screen.
+The four target tiles align their labels, help controls, and values. Their
+backgrounds use the Home palette in order: blush for BMR, lavender for BMI,
+mint for TDEE, and peach for the daily target. Color adds visual variety without
+carrying health meaning; each tile retains its text label and value. Unit choices
+display Metric and Imperial in title case while retaining their saved values.
+Data controls groups Export JSON, Export CSV bundle, and Regenerate plan as
+filled gray buttons in one row from the medium breakpoint; they stack on
+smaller screens. Export status appears below that group, before account actions.
 
 ### Bottom navigation (`BottomNav.tsx`)
 
@@ -296,6 +440,7 @@ components in `src/components/`.
 | `Card` | `ui/Card.tsx` | `CardTone` union → tint background; `rounded-3xl p-5 shadow-card`; no default padding override unless `className` adds `p-4` (as `StatTile` does). |
 | `Button` | `ui/Button.tsx` | Variants `primary` (`bg-ink text-white`), `soft` (`bg-white/70`), `ghost`, `danger` (`bg-coral-200`). `min-h-12` (3rem = 44px+) target, `rounded-2xl px-5 text-sm font-bold`, disabled = `opacity-50` + `cursor-not-allowed`. |
 | `Chip` | `ui/Chip.tsx` | Round frosted icon chip, `h-11 w-11` (44px target), `bg-white/70 shadow-chip`, required `label` → `aria-label` + `title`. |
+| `HelpPopover` / `HelpHeading` | `ui/HelpPopover.tsx` | Grouped circled-question-mark help; 44px trigger; hover/focus preview and click/tap pinning; named non-modal dialog, source links, viewport-aware portal, and deliberate focus return. |
 | `ProgressRing` | `ui/ProgressRing.tsx` | Accessible circular progress; `role="img"` + `aria-label` percentage; `tabular-nums` center value. |
 | `ProgressBar` | `ui/ProgressBar.tsx` | `role="progressbar"` with `aria-valuenow/min/max` for logged values and text for unlogged values; `tabular-nums` value/target; compact styling and bar color overridable. |
 | `StatTile` | `ui/StatTile.tsx` | `Card`-based, `p-4`, `tabular-nums` value, optional sub-line. |
@@ -303,7 +448,7 @@ components in `src/components/`.
 | `DayStrip` | `components/DayStrip.tsx` | Horizontal week selector (`role="group"`, `aria-pressed` per day); 44px minimum day controls with compact gaps, today highlighted with a lavender badge. |
 | `EmptyState` | `components/EmptyState.tsx` | Dashed lavender-bordered centered panel with optional action node. |
 | `ExerciseIllustration` | `components/ExerciseIllustration.tsx` | Renders `/exercises/<slug>.png` via `next/image`; `illustrationAlt` alt text plus an `sr-only` CC BY-SA 4.0 credit. |
-| `Sparkline` / `HistoryList` | `components/progress/progressShared.tsx` | Weight sparkline (`role="img"`, `aria-label`) and accessible calendar history summary list. Nutrition entries show human-readable food labels instead of internal IDs. Each history row stays within the card width and exposes horizontal scrolling for long details on narrow screens. |
+| `Sparkline` / `HistoryList` | `components/progress/progressShared.tsx` | Weight sparkline (`role="img"`, `aria-label`) appears only with at least two entries; empty and single-entry states use compact dated text rather than an empty chart or fabricated change. The Weight card keeps its content height beside the taller Calendar card on desktop. The chart has inset endpoints and a capped width, with its date range and entry count below. The accessible calendar history summary lists entries; nutrition rows show human-readable food labels instead of internal IDs. Each history row stays within the card width and exposes horizontal scrolling for long details on narrow screens. |
 
 ## Accessibility and Interaction
 
