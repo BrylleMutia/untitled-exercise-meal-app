@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createAuthenticatedContext, createLocalAccount, deleteLocalAccount } from "./local-account";
+import { addDays, todayKey } from "../src/utility/dates";
 
 test.use({ navigationTimeout: 60_000 });
 test.setTimeout(180_000);
@@ -11,6 +12,8 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
   let releaseSave: (() => void) | undefined;
   try {
     const page = await context.newPage();
+    const viewport = test.info().project.use.viewport;
+    if (viewport) await page.setViewportSize(viewport);
     await page.goto("/onboarding");
     await page.getByLabel("What should we call you?").fill("Everyday Test");
     await page.getByLabel("Age", { exact: true }).fill("30");
@@ -18,11 +21,19 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
     await page.getByLabel("Height (cm)").fill("168");
     await page.getByLabel("Weight (kg)").fill("68");
     await page.getByRole("button", { name: /Continue/ }).click();
-    await page.getByLabel("Workout program").selectOption("pilates");
+    await page.getByRole("combobox", { name: /Workout program/ }).selectOption("pilates");
+    await expect(page.getByLabel("Daily step target (optional)")).toHaveValue("");
+    await page.getByLabel("Daily step target (optional)").fill("8000");
+    await page.reload();
+    await expect(page.getByText("Onboarding draft restored from this device.")).toBeVisible();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByLabel("Daily step target (optional)")).toHaveValue("8000");
     await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByLabel("Eating style").selectOption("Keto-style");
     await page.getByLabel("Meal cost preference").selectOption("7");
-    await expect(page.getByText(/They are not prices/)).toBeVisible();
+    await page.getByRole("button", { name: "About Food choices", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Food choices", exact: true }).getByText(/not prices or a money budget/)).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByText("Maintain weight", { exact: true }).click();
     await page.getByRole("button", { name: /Continue/ }).click();
@@ -37,6 +48,7 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
     await savedExpect(page.getByRole("button", { name: "Retry saving", exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/onboarding$/);
     await expect(page.getByText(/Keto-style · Balanced/)).toBeVisible();
+    await expect(page.getByText("8,000 steps", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Retry saving", exact: true }).click();
     await expect(page.getByRole("button", { name: "Saving your plan…", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Back", exact: true })).toBeDisabled();
@@ -44,9 +56,12 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
     releaseSave?.();
     await savedExpect(page).toHaveURL(/:\d+\/$/);
     expect(attempts).toBe(2);
+    await expect(page.getByRole("img", { name: "No steps logged today; daily target 8,000 steps" })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("img", { name: "No steps logged today; daily target 8,000 steps" })).toBeVisible();
     await expect(page.getByRole("img", { name: "No meals logged; intake is unknown" })).toBeVisible();
     await page.goto("/workouts");
-    await expect(page.getByLabel("Workout program")).toHaveValue("pilates");
+    await expect(page.getByRole("combobox", { name: /Workout program/ })).toHaveValue("pilates");
     await expect(page.getByRole("heading", { name: /Pilates foundations/ }).first()).toBeVisible();
     await page.goto("/nutrition");
     await expect(page.getByText(/50 g total carbs per planned day/)).toBeVisible();
@@ -72,8 +87,28 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
 });
 
 test("daily steps preserve drafts on network failure and save edits and deletion", async ({ page, context }) => {
+  const stepsCard = page.getByRole("region", { name: "Today's steps", exact: true });
+  await page.goto("/");
+  await expect(stepsCard.getByText("Not logged", { exact: true })).toBeVisible();
+  await expect(stepsCard.getByText("No steps logged today", { exact: true })).toBeVisible();
+  await stepsCard.getByRole("link", { name: "Log daily steps", exact: true }).click();
+  await page.getByLabel("Date", { exact: true }).fill(addDays(todayKey(), -1));
+  await page.getByLabel("Steps", { exact: true }).fill("1234");
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await savedExpect(page.getByRole("heading", { name: "1,234 steps saved" })).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.getByText("Not logged", { exact: true })).toBeVisible();
+  await expect(stepsCard.getByText("1,234 steps", { exact: true })).toHaveCount(0);
   await page.goto("/activity");
   await expect(page.getByRole("heading", { name: "Daily steps", exact: true })).toBeVisible();
+  await page.getByLabel("Steps", { exact: true }).fill("0");
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await savedExpect(page.getByRole("heading", { name: "0 steps saved" })).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.locator("p.text-2xl > [aria-hidden=true]")).toHaveText("0");
+  await expect(stepsCard.locator("p.text-2xl > .sr-only")).toHaveText("0 steps");
+  await expect(stepsCard.getByText("Walking time not logged", { exact: true })).toBeVisible();
+  await stepsCard.getByRole("link", { name: "Edit daily steps", exact: true }).click();
   await page.getByLabel("Steps", { exact: true }).fill("6500");
   await page.getByLabel("Walking minutes (optional)").fill("35");
   await context.setOffline(true);
@@ -81,22 +116,265 @@ test("daily steps preserve drafts on network failure and save edits and deletion
   await expect(page.getByLabel("Steps", { exact: true })).toHaveValue("6500");
   await expect(page.getByText("6,500 steps saved", { exact: true })).toHaveCount(0);
   await context.setOffline(false);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.locator("p.text-2xl > [aria-hidden=true]")).toHaveText("0");
+  await stepsCard.getByRole("link", { name: "Edit daily steps", exact: true }).click();
+  await expect(page.getByLabel("Steps", { exact: true })).toHaveValue("6500");
   await page.getByRole("button", { name: "Save steps", exact: true }).click();
   await savedExpect(page.getByRole("heading", { name: "6,500 steps saved" })).toBeVisible();
   await expect(page.getByText(/Walking energy: roughly/)).toBeVisible();
+  const activityEnergy = await page.getByText(/Walking energy: roughly/).innerText();
+  const energyRange = activityEnergy.match(/\d+–\d+ kcal/)![0];
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.locator("p.text-2xl > [aria-hidden=true]")).toHaveText("6,500");
+  await expect(stepsCard.locator("p.text-2xl > .sr-only")).toHaveText("6,500 steps");
+  await expect(stepsCard.locator('a[href="/activity"]')).toHaveCount(1);
+  await expect(stepsCard.getByRole("link", { name: "Edit steps", exact: true })).toHaveCount(0);
+  await expect(stepsCard.getByRole("link", { name: "Edit daily steps", exact: true })).toHaveAttribute("href", "/activity");
+  await expect(stepsCard.getByText("35 walking minutes", { exact: true })).toBeVisible();
+  await expect(stepsCard.getByText(`≈${energyRange}`, { exact: true })).toBeVisible();
+  const timePill = stepsCard.getByText("35 walking minutes", { exact: true }).locator("..");
+  expect(await timePill.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(255, 255, 255)");
+  await expect(timePill.locator("svg.lucide-clock[aria-hidden=true]")).toHaveCount(1);
+  await expect(timePill).not.toHaveAttribute("role", "button");
+  const caloriePill = stepsCard.getByText(`≈${energyRange}`, { exact: true }).locator("..");
+  expect(await caloriePill.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(255, 255, 255)");
+  await expect(caloriePill.locator("svg.lucide-flame[aria-hidden=true]")).toHaveCount(1);
+  await expect(caloriePill).not.toHaveAttribute("role", "button");
+  const pillStyles = (element: Element) => {
+    const style = getComputedStyle(element);
+    return [style.padding, style.borderRadius, style.fontSize, style.gap];
+  };
+  expect(await caloriePill.evaluate(pillStyles)).toEqual(await timePill.evaluate(pillStyles));
+  await expect(stepsCard.getByText(/Manual entry|Tuesday,|Monday,/)).toHaveCount(0);
+  await expect(stepsCard.locator(".sr-only").filter({ hasText: "Estimated walking energy:" })).toHaveText(`Estimated walking energy: approximately ${energyRange.replace("–", " to ").replace(" kcal", " kilocalories")}`);
+  await stepsCard.getByRole("button", { name: "About Today's steps", exact: true }).click();
+  const stepsHelp = page.getByRole("dialog", { name: "Today's steps", exact: true });
+  await expect(stepsHelp.getByText(/does not change food targets/)).toBeVisible();
+  await stepsHelp.getByRole("link", { name: "Estimate details", exact: true }).click();
+  await page.getByRole("button", { name: "About Walking energy", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Walking energy", exact: true }).getByRole("link", { name: "Walking estimate source" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.reload();
   await expect(page.getByLabel("Steps", { exact: true })).toHaveValue("6500");
   await page.getByLabel("Steps", { exact: true }).fill("7000");
   await page.getByRole("button", { name: "Save steps", exact: true }).click();
   await savedExpect(page.getByRole("heading", { name: "7,000 steps saved" })).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page).toHaveURL(/:\d+\/$/);
+  await page.reload();
+  await expect(stepsCard.locator("p.text-2xl > [aria-hidden=true]")).toHaveText("7,000");
+  await stepsCard.getByRole("link", { name: "Edit daily steps", exact: true }).click();
+  await page.getByLabel("Walking minutes (optional)").fill("0");
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await savedExpect(page.getByText("Steps saved to your account.", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.getByText("0 walking minutes", { exact: true })).toBeVisible();
+  await expect(stepsCard.getByText("Energy unavailable for 0 minutes", { exact: true })).toBeVisible();
+  await expect(stepsCard.getByRole("link", { name: "Estimate details" })).toHaveCount(0);
+  await stepsCard.getByRole("link", { name: "Edit daily steps", exact: true }).click();
+  await page.getByLabel("Walking minutes (optional)").fill("");
+  await page.getByRole("button", { name: "Save steps", exact: true }).click();
+  await savedExpect(page.getByText("Steps saved to your account.", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.getByText("Walking time not logged", { exact: true })).toBeVisible();
+  await expect(stepsCard.getByText("Add walking minutes for an estimate", { exact: true })).toBeVisible();
+  await stepsCard.getByRole("link", { name: "Edit daily steps", exact: true }).click();
   await page.getByRole("button", { name: "Remove entry" }).click();
   await savedExpect(page.getByRole("heading", { name: "No steps logged for this date" })).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.getByText("Not logged", { exact: true })).toBeVisible();
+  const workoutCard = page.getByRole("region", { name: "Today's workout", exact: true });
+  const workoutBounds = await workoutCard.boundingBox();
+  const stepsBounds = await stepsCard.boundingBox();
+  if ((await page.viewportSize())!.width < 1024) expect(stepsBounds!.y + stepsBounds!.height).toBeLessThan(workoutBounds!.y);
+  const progressBounds = await page.getByRole("heading", { name: "Your progress", exact: true }).boundingBox();
+  expect(stepsBounds!.y).toBeGreaterThan(progressBounds!.y);
+  if ((await page.viewportSize())!.width >= 1024) {
+    expect(stepsBounds!.width).toBeCloseTo(workoutBounds!.width);
+    expect(stepsBounds!.x).toBeGreaterThan(workoutBounds!.x);
+  }
+  await stepsCard.getByRole("link", { name: "Log daily steps", exact: true }).focus();
+  await expect(stepsCard.getByRole("link", { name: "Log daily steps", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(stepsCard.getByRole("link", { name: "Set target", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(stepsCard.getByRole("link", { name: "Log daily steps", exact: true })).toBeFocused();
+  expect(await stepsCard.getByRole("link", { name: "Log daily steps", exact: true }).evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  const actionBounds = await stepsCard.getByRole("link", { name: "Log daily steps", exact: true }).boundingBox();
+  expect(actionBounds!.height).toBeGreaterThanOrEqual(44);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addStyleTag({ content: "html { font-size: 24px !important; }" });
-  await page.getByLabel("Steps", { exact: true }).focus();
-  await expect(page.getByLabel("Steps", { exact: true })).toBeFocused();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe("24px");
+  const overflow = await page.evaluate(() => ({ width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth, elements: Array.from(document.querySelectorAll("main *")).filter((element) => element.getBoundingClientRect().right > window.innerWidth + 1).map((element) => ({ tag: element.tagName, text: element.textContent?.slice(0, 70) })) }));
+  expect(overflow.scrollWidth, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width);
   await page.screenshot({ path: `test-results/mvp3-steps-${test.info().project.name}.png`, fullPage: true });
+});
+
+test("daily step targets retain offline drafts, reject stale edits, and survive reload and removal", async ({ page, context }) => {
+  const stepsCard = page.getByRole("region", { name: "Today's steps", exact: true });
+  await page.goto("/");
+  await stepsCard.getByRole("link", { name: "Set target", exact: true }).click();
+  const settings = page.getByRole("region", { name: "Daily step target", exact: true });
+  const input = settings.getByLabel("Daily step target", { exact: true });
+  await input.fill("0");
+  await settings.getByRole("button", { name: "Save target", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText(/whole number/);
+  await input.fill("8000");
+  await settings.getByRole("button", { name: "Save target", exact: true }).click();
+  await savedExpect(settings.getByRole("status")).toContainText("saved to your account");
+  await page.reload();
+  await expect(input).toHaveValue("8000");
+  await input.fill("9000");
+  await context.setOffline(true);
+  await settings.getByRole("button", { name: "Save target", exact: true }).click();
+  await expect(input).toHaveValue("9000");
+  await expect(settings.getByRole("alert")).toContainText(/draft is retained/);
+  await context.setOffline(false);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(stepsCard.getByRole("img", { name: "No steps logged today; daily target 8,000 steps" })).toBeVisible();
+  await stepsCard.getByRole("link", { name: "Edit target", exact: true }).click();
+  await expect(input).toHaveValue("9000");
+  const second = await context.newPage();
+  try {
+    await second.goto("/settings#daily-step-target");
+    const secondSettings = second.getByRole("region", { name: "Daily step target", exact: true });
+    await secondSettings.getByLabel("Daily step target", { exact: true }).fill("10000");
+    await secondSettings.getByRole("button", { name: "Save target", exact: true }).click();
+    await savedExpect(secondSettings.getByRole("status")).toContainText("saved to your account");
+    await settings.getByRole("button", { name: "Save target", exact: true }).click();
+    await savedExpect(settings.getByRole("alert")).toContainText("Your profile changed elsewhere");
+    await expect(input).toHaveValue("9000");
+    await settings.getByRole("button", { name: "Reapply my step target", exact: true }).click();
+    await savedExpect(settings.getByRole("status")).toContainText("saved to your account");
+  } finally { await second.close(); }
+  await page.goto("/");
+  await expect(stepsCard.getByRole("img", { name: "No steps logged today; daily target 9,000 steps" })).toBeVisible();
+  for (const [steps, percent] of [[0, 0], [6500, 72], [9000, 100], [12000, 100]]) {
+    await stepsCard.getByRole("link", { name: steps === 0 ? "Log daily steps" : "Edit daily steps", exact: true }).click();
+    await page.getByLabel("Steps", { exact: true }).fill(String(steps));
+    await page.getByLabel("Walking minutes (optional)").fill("35");
+    await page.getByRole("button", { name: "Save steps", exact: true }).click();
+    await savedExpect(page.getByRole("heading", { name: `${steps.toLocaleString()} steps saved` })).toBeVisible();
+    await page.getByRole("link", { name: "Home", exact: true }).click();
+    await expect(stepsCard.getByRole("img", { name: `Daily step target progress: ${percent}%` })).toBeVisible();
+    await expect(stepsCard.locator("p.text-2xl > [aria-hidden=true]")).toHaveText(`${steps.toLocaleString()} / 9,000`);
+    await expect(stepsCard.locator("p.text-2xl > .sr-only")).toHaveText(`${steps.toLocaleString()} of 9,000 steps`);
+    if (steps >= 9000) await expect(stepsCard.getByText(/Target reached/)).toBeVisible();
+  }
+  for (const viewport of [{ width: 1027, height: 930 }, { width: 959, height: 930 }, { width: 842, height: 930 }, { width: 768, height: 930 }, { width: 767, height: 930 }, { width: 693, height: 930 }, { width: 547, height: 930 }, { width: 1168, height: 930 }, { width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const bounds = await stepsCard.boundingBox();
+    const progress = await page.getByRole("heading", { name: "Your progress", exact: true }).boundingBox();
+    const workout = await page.getByRole("region", { name: "Today's workout", exact: true }).boundingBox();
+    expect(bounds!.y).toBeGreaterThan(progress!.y);
+    if (viewport.width < 1024) expect(bounds!.y + bounds!.height).toBeLessThan(workout!.y);
+    const summary = stepsCard.locator("p.text-2xl").locator("..");
+    expect(await summary.locator(":scope > div").first().evaluate((element) => getComputedStyle(element).marginTop)).toBe("16px");
+    expect(await summary.evaluate((element) => getComputedStyle(element).textAlign)).toBe(viewport.width < 768 ? "center" : "left");
+    for (const row of await summary.locator(":scope > div").all()) {
+      const layout = await row.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const rows: Array<{ middle: number; left: number; right: number }> = [];
+        for (const child of element.children) {
+          const box = child.getBoundingClientRect();
+          const middle = box.y + box.height / 2;
+          const existing = rows.find((line) => Math.abs(line.middle - middle) < 1);
+          if (existing) { existing.left = Math.min(existing.left, box.left); existing.right = Math.max(existing.right, box.right); }
+          else rows.push({ middle, left: box.left, right: box.right });
+        }
+        return { center: bounds.x + bounds.width / 2, left: bounds.x, rows, gap: getComputedStyle(element).columnGap };
+      });
+      expect(layout.gap).toBe("12px");
+      for (const line of layout.rows) {
+        if (viewport.width < 768) expect((line.left + line.right) / 2).toBeCloseTo(layout.center, 0);
+        else expect(line.left).toBeCloseTo(layout.left, 0);
+      }
+    }
+    for (const action of await stepsCard.getByRole("link").all()) expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({ path: `test-results/step-target-${test.info().project.name}-${viewport.width}.png`, fullPage: true });
+  }
+  await stepsCard.getByRole("link", { name: "Edit target", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(stepsCard.getByRole("link", { name: "Edit target", exact: true })).toBeFocused();
+  expect(await stepsCard.getByRole("link", { name: "Edit target", exact: true }).evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const enlargedTextStyles = await page.addStyleTag({ content: "html { font-size: 24px !important; }" });
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe("24px");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await enlargedTextStyles.evaluate((element) => element.parentNode?.removeChild(element));
+  await stepsCard.getByRole("link", { name: "Edit target", exact: true }).click();
+  await settings.getByRole("button", { name: "Remove target", exact: true }).click();
+  await savedExpect(settings.getByRole("status")).toContainText("removed");
+  await page.goto("/");
+  await page.reload();
+  await expect(stepsCard.getByRole("img", { name: "Daily step target is not set" })).toBeVisible();
+  await stepsCard.getByRole("link", { name: "Edit daily steps", exact: true }).click();
+  await page.getByRole("button", { name: "Remove entry", exact: true }).click();
+  await savedExpect(page.getByRole("heading", { name: "No steps logged for this date" })).toBeVisible();
+});
+
+test("compact Home workout starts a session and preserves rest-day navigation", async ({ page }) => {
+  await page.goto("/workouts");
+  await expect(page.getByRole("heading", { name: "This week's plan", exact: true })).toBeVisible();
+  // Change the browser date after hydration; the server clock remains real.
+  await page.clock.setFixedTime(new Date(2026, 9, 5, 12));
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  const workout = page.getByRole("region", { name: "Today's workout", exact: true });
+  await expect(workout.getByText("Push + Core", { exact: true })).toBeVisible();
+  const started = page.waitForResponse((response) => response.url().endsWith("/rpc/start_workout_session") && response.request().method() === "POST");
+  await workout.getByRole("link", { name: "Start workout", exact: true }).click();
+  expect((await started).ok()).toBe(true);
+  await expect(page).toHaveURL(/\/workouts\/session\//);
+  await savedExpect(page.getByText(/Saving start workout session/)).toBeHidden();
+  await expect(page.getByRole("group", { name: "Rate of perceived exertion" })).toBeVisible();
+  await page.getByRole("button", { name: "Discard session", exact: true }).click();
+  await savedExpect(page).toHaveURL(/\/workouts$/);
+  await page.clock.setFixedTime(new Date(2026, 9, 4, 12));
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page).toHaveURL(/:\d+\/$/);
+  await expect(workout.getByText(/Rest day — no workout scheduled/)).toBeVisible();
+  await workout.getByRole("link", { name: "View this week", exact: true }).click();
+  await expect(page).toHaveURL(/\/workouts$/);
+});
+
+test("Home keeps saved steps visible outside the walking-energy adult reference", async ({ browser }) => {
+  const account = await createLocalAccount(`home-steps-reference-${test.info().project.name}`);
+  const context = await createAuthenticatedContext(browser, process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000", account);
+  try {
+    const page = await context.newPage();
+    const viewport = test.info().project.use.viewport;
+    if (viewport) await page.setViewportSize(viewport);
+    await page.goto("/onboarding");
+    await page.getByLabel("What should we call you?").fill("Steps Reference Test");
+    await page.getByLabel("Age", { exact: true }).fill("60");
+    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await page.getByLabel("Height (cm)").fill("168");
+    await page.getByLabel("Weight (kg)").fill("68");
+    for (let step = 0; step < 3; step += 1) await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByText("Maintain weight", { exact: true }).click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("button", { name: "Create my plan", exact: true }).click();
+    await savedExpect(page).toHaveURL(/:\d+\/$/);
+    await page.goto("/activity");
+    await page.getByLabel("Steps", { exact: true }).fill("6500");
+    await page.getByLabel("Walking minutes (optional)").fill("35");
+    await page.getByRole("button", { name: "Save steps", exact: true }).click();
+    await savedExpect(page.getByRole("heading", { name: "6,500 steps saved" })).toBeVisible();
+    await expect(page.getByText("Walking energy estimate unavailable for this profile.", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "Home", exact: true }).click();
+    const card = page.getByRole("region", { name: "Today's steps", exact: true });
+    await expect(card.locator("p.text-2xl > [aria-hidden=true]")).toHaveText("6,500");
+    await expect(card.locator("p.text-2xl > .sr-only")).toHaveText("6,500 steps");
+    await expect(card.getByText("35 walking minutes", { exact: true })).toBeVisible();
+    await expect(card.getByText("Energy unavailable for this profile", { exact: true })).toBeVisible();
+    await expect(card.getByRole("link", { name: "Estimate details" })).toHaveCount(0);
+  } finally {
+    await context.close();
+    await deleteLocalAccount(account);
+  }
 });
 
 test("custom routine versions preserve planned and actual history", async ({ page }) => {
