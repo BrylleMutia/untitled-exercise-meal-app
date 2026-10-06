@@ -1,5 +1,6 @@
 interface ProgressRingProps {
-  value: number; // 0..1
+  value: number | null; // 0..1, or unknown
+  unavailableLabel?: string;
   size?: number;
   stroke?: number;
   trackClassName?: string;
@@ -12,6 +13,7 @@ interface ProgressRingProps {
 /** Accessible circular progress with a text alternative via aria-label. */
 export function ProgressRing({
   value,
+  unavailableLabel,
   size = 96,
   stroke = 9,
   trackClassName = "text-white/70",
@@ -20,14 +22,14 @@ export function ProgressRing({
   centerLabel,
   centerSub,
 }: ProgressRingProps) {
-  const clamped = Math.min(1, Math.max(0, value));
+  const clamped = value === null ? 0 : Math.min(1, Math.max(0, value));
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   return (
     <div
       className="relative grid place-items-center"
       role="img"
-      aria-label={`${label}: ${Math.round(clamped * 100)}%`}
+      aria-label={value === null ? unavailableLabel ?? `${label}: unavailable` : `${label}: ${Math.round(clamped * 100)}%`}
     >
       <svg width={size} height={size} className="-rotate-90">
         <circle
