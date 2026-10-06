@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import { ExerciseIllustration } from "@/components/ExerciseIllustration";
 import { EXERCISES, exerciseById } from "@/constants/exercises";
 import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
@@ -24,9 +25,8 @@ export default function CustomWorkoutsPage() {
   const active = snapshot.customSessions.find((session) => session.status === "in_progress" || session.status === "paused");
   return <div className="grid gap-4">
     <Card tone="mint">
-      <h2 className="text-xl font-extrabold">Your own routines</h2>
-      <p className="mt-2 text-sm font-semibold text-ink-soft">Save a routine for Pilates, strength, mobility, or another activity you know. Catalog exercises use the existing guides. Named movements are text-only and never receive automatic progression.</p>
-      <p className="mt-2 text-xs font-semibold text-muted">Choose familiar movements within your ability. Stop for pain, dizziness, or unusual breathlessness. Editing a routine keeps earlier sessions intact.</p>
+      <HelpHeading title="Your own routines" className="text-xl font-extrabold"><p>Save a routine for Pilates, strength, mobility, or another familiar activity. Catalog exercises use the existing guides; named movements are text-only and do not receive automatic progression.</p><p>Editing a routine keeps earlier sessions intact.</p></HelpHeading>
+      <p className="mt-2 text-xs font-semibold text-ink-soft">Choose familiar movements. Stop for pain, dizziness, or unusual breathlessness.</p>
       <Link href="/workouts" className="inline-block min-h-11 py-3 text-sm font-bold underline">Back to weekly workouts</Link>
     </Card>
     {active ? <CustomSession key={active.id} session={active} /> : null}
@@ -103,7 +103,7 @@ function RoutineEditor({ routine, onClose }: { routine?: CustomWorkout; onClose:
   }
   return <Card>
     <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <h2 className="text-lg font-extrabold">{routine ? "Edit routine" : "Create routine"}</h2>
+      <HelpHeading title={routine ? "Edit routine" : "Create routine"} className="text-lg font-extrabold"><p>Catalog movements include exercise guides. Named movements are text-only, with no automatic progression. Duration includes a 5-minute warm-up and 3-minute cooldown.</p><p>Saving changes creates the next routine version. Earlier sessions stay intact.</p></HelpHeading>
       <label className="grid gap-2 text-sm font-bold">Routine name<input className="input" maxLength={100} value={draft.definition.name} onChange={(event) => setDraft((current) => ({ ...current, definition: { ...current.definition, name: event.target.value } }))} disabled={Boolean(pendingMutation)} /></label>
       <fieldset disabled={Boolean(pendingMutation)} className="grid gap-3"><legend className="mb-2 font-bold">Add movement</legend>
         <label className="grid gap-2 text-sm font-bold">Movement source<select className="input" value={selection} onChange={(event) => setSelection(event.target.value)}><option value="text">My own named movement</option>{available.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select></label>
@@ -115,7 +115,7 @@ function RoutineEditor({ routine, onClose }: { routine?: CustomWorkout; onClose:
         <label className="grid gap-2 text-sm font-bold">Rest seconds<input className="input" type="number" min={15} max={180} value={movement.restSeconds} onChange={(event) => update(movement.id, { restSeconds: Number(event.target.value) })} /></label>
         <div className="flex flex-wrap gap-2"><Button variant="ghost" disabled={index === 0} onClick={() => setDraft((current) => { const movements = [...current.definition.movements]; [movements[index - 1], movements[index]] = [movements[index], movements[index - 1]]; return { ...current, definition: { ...current.definition, movements } }; })}>Move up</Button><Button variant="ghost" onClick={() => setDraft((current) => ({ ...current, definition: { ...current.definition, movements: current.definition.movements.filter((item) => item.id !== movement.id) } }))}>Remove movement</Button></div>
       </fieldset>)}
-      <p className="text-sm font-semibold text-muted">About {customWorkoutMinutes(draft.definition)} min including 5 min warm-up and 3 min cooldown. Your profile allows {profile?.sessionMinutes} min.</p>
+      <p className="text-sm font-semibold text-ink-soft">About {customWorkoutMinutes(draft.definition)} min · profile limit {profile?.sessionMinutes} min</p>
       {message ? <p role="status" className="text-sm font-bold">{message}</p> : null}
       {error?.code === "stale_version" ? <div role="alert"><p className="text-sm font-semibold">This routine changed elsewhere. Your draft is retained.</p><Button variant="soft" disabled={Boolean(pendingMutation)} onClick={() => void save(true)}>Save my draft as the next version</Button></div> : null}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={!ready || Boolean(pendingMutation)} aria-busy={Boolean(pendingMutation)}>{pendingMutation ? "Saving…" : "Save routine"}</Button><Button variant="ghost" disabled={Boolean(pendingMutation)} onClick={onClose}>Close editor</Button></div>
@@ -166,8 +166,8 @@ function CustomSession({ session }: { session: CustomWorkoutSession }) {
   }
   const finishStatus = actual.length === session.planned.movements.length && actual.every((entry) => entry.status === "completed") ? "completed" : "partial";
   return <Card tone="peach">
-    <h2 className="text-xl font-extrabold">{session.planned.name} · {session.status === "paused" ? "Paused" : "In progress"}</h2>
-    <p className="mt-2 text-sm font-semibold">Routine version {session.workoutVersion}. Mark what happened, then save progress or finish.</p>
+    <div className="flex items-center justify-between gap-2"><h2 className="text-xl font-extrabold">{session.planned.name} · {session.status === "paused" ? "Paused" : "In progress"}</h2><HelpPopover title="Routine logging"><p>Record what happened, then save progress or finish. Unsaved changes are drafts.</p><p>RPE describes effort from 1 (very easy) to 10 (maximum). Named movements do not receive automatic progression.</p></HelpPopover></div>
+    <p className="mt-2 text-xs font-semibold">Routine version {session.workoutVersion}</p>
     <p className="mt-2 text-sm font-semibold">Warm-up: {session.planned.warmup?.join(" · ")}</p>
     <div className="mt-4 grid gap-4">{session.planned.movements.map((movement) => {
       const entry = actual.find((item) => item.movementId === movement.id);

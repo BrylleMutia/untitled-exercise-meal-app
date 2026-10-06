@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@bryllim/workout-guide": "^1.0.0",
+    "@floating-ui/react": "^0.27.20",
     "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.115.0",
     "fflate": "^0.8.3",

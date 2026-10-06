@@ -41,7 +41,7 @@ export default function SignUpPage() {
     <AuthShell
       eyebrow="Start gently"
       title="Create your account"
-      description="Your account keeps future plans and completed history separate, editable, and private."
+      help="Your account keeps future plans and completed history separate, editable, and private. Finish your profile after email confirmation."
       footer={
         <>
           Already have an account? <Link href="/auth/sign-in" className="font-extrabold text-ink underline underline-offset-4">Sign in</Link>
@@ -98,7 +98,7 @@ export default function SignUpPage() {
             markEdited("confirmPassword");
           }}
         />
-        <p className="text-[11px] font-semibold text-muted">Use at least 8 characters. You can finish your profile after email confirmation.</p>
+        <p className="text-xs font-semibold text-muted">Use at least 8 characters.</p>
         <SubmitButton>Create account</SubmitButton>
       </form>
     </AuthShell>

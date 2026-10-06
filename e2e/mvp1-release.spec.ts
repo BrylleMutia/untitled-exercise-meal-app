@@ -20,7 +20,7 @@ test("loads an existing account immediately after signing in from a fresh browse
     await page.goto("/auth/sign-in", { waitUntil: "domcontentloaded" });
     await page.getByRole("textbox", { name: "Email address" }).fill(accounts[0].email);
     await page.getByLabel("Password", { exact: true }).fill(accounts[0].password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
     await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
     await expect(page.getByRole("heading", { name: "Hello, Fixture User A!" })).toBeVisible();
@@ -158,7 +158,7 @@ async function completeWorkout(page: Page) {
   const sessionHref = await sessionLink.getAttribute("href");
   expect(sessionHref).toMatch(/^\/workouts\/session\//);
   const sessionStarted = nextRpcResponse(page, "start_workout_session");
-  await sessionLink.click({ force: true });
+  await sessionLink.click();
   expect((await sessionStarted).ok()).toBe(true);
   await expect(page).toHaveURL(new RegExp(`${sessionHref!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), { timeout: 30_000 });
   await expect(page.getByText(/Saving start workout session/)).toBeHidden({ timeout: 30_000 });
@@ -370,7 +370,7 @@ test.describe("MVP-1 release browser gate", () => {
     }));
     const field = page.getByRole("textbox", { name: "Search for a food or describe a meal" });
     await field.fill("2 cups fried rice with 2 eggs");
-    await expect(page.getByText(/sent to DeepSeek only when you choose Analyze this meal/i)).toBeVisible();
+    await expect(page.getByText("Analyze sends your description to DeepSeek.", { exact: true })).toBeVisible();
     expect(extractionCalls).toBe(0);
     await page.getByRole("button", { name: "Analyze this meal" }).click();
     await expect(page.getByRole("region", { name: "Guided meal review" })).toBeVisible();
@@ -386,7 +386,8 @@ test.describe("MVP-1 release browser gate", () => {
     await page.getByRole("checkbox", { name: "Include cooking oil" }).check();
     await page.getByRole("button", { name: "Estimate selected unresolved" }).click();
     await expect(page.getByText(/AI estimate · low confidence · range 90–130 kcal/)).toBeVisible();
-    await expect(page.getByText(/Catalog values are authoritative/i)).toBeVisible();
+    await page.getByRole("button", { name: "About Meal review", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Meal review", exact: true }).getByText(/Catalog values are authoritative/i)).toBeVisible();
   });
 
   test("retains the meal description when the provider fails", async ({ page }) => {

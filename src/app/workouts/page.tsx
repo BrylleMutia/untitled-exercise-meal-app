@@ -11,6 +11,7 @@ import { EXERCISES, exerciseById } from "@/constants/exercises";
 import { startOfWeek, todayKey, weekDates, formatDay } from "@/utility/dates";
 import { suggestProgression } from "@/utility/progression";
 import { Button } from "@/components/ui/Button";
+import { HelpPopover } from "@/components/ui/HelpPopover";
 import type { TrainingProgram } from "@/types/domain";
 
 const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -44,7 +45,7 @@ export default function WorkoutsPage() {
     return (
       <EmptyState
         title="No plan yet"
-        message="Finish onboarding to generate a week that respects your equipment, schedule, and experience."
+        message="Finish onboarding to create your weekly plan."
         action={
           <Link href="/onboarding" className="font-extrabold underline underline-offset-4">
             Start onboarding
@@ -57,21 +58,18 @@ export default function WorkoutsPage() {
   return (
     <div className="grid gap-5">
       <Card>
-        <label className="grid gap-2 text-sm font-bold">Workout program
-          <select className="input" value={program} disabled={Boolean(pendingMutation)} onChange={(event) => setProgram(event.target.value as TrainingProgram)}>
+        <div className="flex items-center justify-between gap-2"><label htmlFor="workout-program" className="text-sm font-bold">Workout program</label><HelpPopover title="Workout program"><p>Changing programs creates a future plan version. Completed sessions keep their original prescription. Pilates foundations focus on comfortable control; both programs allow edits and substitutions.</p></HelpPopover></div>
+          <select id="workout-program" className="input" value={program} disabled={Boolean(pendingMutation)} onChange={(event) => setProgram(event.target.value as TrainingProgram)}>
             <option value="calisthenics">Calisthenics</option><option value="pilates">Pilates foundations</option>
           </select>
-        </label>
-        <p className="mt-2 text-xs font-semibold text-muted">Changing programs creates a future plan version. Completed sessions keep their original prescription. Pilates foundations focus on comfortable control; edits and substitutions are available.</p>
         <Button className="mt-3" disabled={Boolean(pendingMutation) || program === (snapshot.profile?.trainingProgram ?? "calisthenics")} onClick={() => void actions.selectTrainingProgram(program)}>Save program choice</Button>
         <Link href="/workouts/custom" className="mt-3 block min-h-11 py-3 text-sm font-extrabold underline">Create or log your own routine</Link>
       </Card>
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-xl font-extrabold">This week&apos;s plan</h2>
+          <div className="flex items-center gap-2"><h2 className="text-xl font-extrabold">This week&apos;s plan</h2><HelpPopover title="This week's plan"><p>Your plan uses your profile, equipment, experience, and schedule. Edits create a new version and leave completed history unchanged.</p></HelpPopover></div>
           <p className="text-xs font-semibold text-muted">
-            Version {plan.version} · deterministic from your profile · edits create a
-            new version, history stays untouched.
+            Version {plan.version}
           </p>
         </div>
         <span className="rounded-full bg-lav-100 px-3 py-1 text-xs font-extrabold">

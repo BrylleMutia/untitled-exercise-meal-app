@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
+import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
 import type { GroceryCategory } from "@/types/domain";
@@ -88,9 +89,6 @@ export default function GroceryPage() {
         </p>
       ) : null}
 
-      <p className="mt-3 text-xs font-semibold text-ink-soft">
-        Add an item not included in your meal plan, like dish soap or an extra ingredient.
-      </p>
 
       <div className="mt-3 flex flex-wrap gap-2 sm:flex-nowrap">
         <input
@@ -156,11 +154,10 @@ export default function GroceryPage() {
       <div className="grid gap-4 pb-4">
         <EmptyState
           title="No grocery list yet"
-          message="A meal plan creates one automatically. Generate a plan first, then tweak here — your checks and edits stay put on regenerations."
+          message="Generate a meal plan to create a grocery list."
         />
         <Card tone="mint">
-          <h2 className="font-extrabold">Add an extra item</h2>
-          <p className="mt-1 text-xs font-semibold text-ink-soft">Your recoverable draft stays available even while the latest grocery list is unavailable.</p>
+          <div className="flex items-center justify-between gap-2"><h2 className="font-extrabold">Add an extra item</h2><HelpPopover title="Extra grocery items"><p>Add items outside your meal plan, such as household supplies. Your recoverable draft stays available while the latest list is unavailable.</p></HelpPopover></div>
           {customItemEditor}
         </Card>
       </div>
@@ -174,11 +171,7 @@ export default function GroceryPage() {
       <Card tone="mint">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-extrabold">This week&apos;s list</h2>
-            <p className="text-xs font-semibold text-ink-soft">
-              From {snapshot.plan?.workouts.length ?? 0} workouts and one week of
-              planned meals · generated vs. adjusted quantities are kept separate.
-            </p>
+            <div className="flex items-center gap-1"><h2 className="font-extrabold">This week&apos;s list</h2><HelpPopover title="This week's list"><p>The list comes from planned meals. Generated quantities and your adjustments remain separate.</p><p>Checked items, quantity edits, removals, and extra items survive regeneration. Changed generated amounts are shown rather than silently replacing your edits.</p><p>You can also add items outside the meal plan.</p></HelpPopover></div>
           </div>
           <Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={actions.regenerateGrocery}>
             <RefreshCw className="h-4 w-4" aria-hidden /> Regenerate
@@ -265,11 +258,6 @@ export default function GroceryPage() {
         })}
       </div>
 
-      <p className="text-center text-[11px] font-semibold text-muted">
-        Checked items, your quantity edits, removals, and custom items survive
-        regeneration — changed generated amounts are shown, never silently
-        overwritten.
-      </p>
     </div>
   );
 }

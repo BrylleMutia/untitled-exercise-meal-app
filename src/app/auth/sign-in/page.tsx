@@ -30,7 +30,7 @@ function SignInForm() {
     <AuthShell
       eyebrow="Welcome back"
       title="Sign in to your coach"
-      description="Keep your plan, workout history, meals, and progress connected to your account."
+      help="Your account keeps your plans, workout history, meals, and progress together."
       footer={
         <>
           New here? <Link href="/auth/sign-up" className="font-extrabold text-ink underline underline-offset-4">Create an account</Link>

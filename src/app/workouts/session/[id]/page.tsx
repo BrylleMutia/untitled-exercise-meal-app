@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
+import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Button } from "@/components/ui/Button";
 import { ExerciseIllustration } from "@/components/ExerciseIllustration";
 import { EmptyState } from "@/components/EmptyState";
@@ -281,8 +282,7 @@ export default function SessionPage() {
           Exercise {index + 1} of {workout.exercises.length}
           {log?.status === "skipped" ? " · skipped" : log?.status === "modified" ? " · modified" : ""}
         </p>
-        <h2 className="mt-1 text-2xl font-extrabold">{exercise?.name}</h2>
-        <p className="mt-1 text-sm font-semibold text-ink-soft">{exercise?.description}</p>
+        <div className="flex items-center justify-between gap-2"><h2 className="mt-1 text-2xl font-extrabold">{exercise?.name}</h2>{exercise ? <HelpPopover title={exercise.name}><p>{exercise.description}</p></HelpPopover> : null}</div>
 
         {exercise ? (
           <div className="mt-4">
@@ -363,7 +363,7 @@ export default function SessionPage() {
         </div>
 
         <div className="mt-4" role="group" aria-label="Rate of perceived exertion">
-          <p className="text-xs font-extrabold text-ink-soft">How hard was it? (RPE)</p>
+          <div className="flex items-center justify-between gap-2"><p className="text-xs font-extrabold text-ink-soft">How hard was it? (RPE)</p><HelpPopover title="RPE"><p>Rate of perceived exertion describes how hard the exercise felt, from 1 (very easy) to 10 (maximum effort).</p><p>RPE 1–7 can qualify for progression. RPE 9–10 or pain means pulling back. Stop when form or breathing breaks down.</p></HelpPopover></div>
           <div className="mt-2 grid grid-cols-5 gap-1.5">
             {RPE_OPTIONS.map((value) => (
               <button
@@ -379,9 +379,6 @@ export default function SessionPage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] font-semibold text-muted">
-            1-7 and it qualifies for progression. 9-10 or pain means we pull back.
-          </p>
           <div className="mt-3 grid gap-2">
             <label className="flex min-h-11 items-center gap-3 rounded-2xl bg-white/70 px-3 text-xs font-bold">
               <input
@@ -390,7 +387,7 @@ export default function SessionPage() {
                 onChange={(e) => updateLog((l) => ({ ...l, manageable: e.target.checked }))}
                 className="h-5 w-5 accent-lav-500"
               />
-              No RPE? Mark this work as manageable to qualify.
+              Manageable effort (if no RPE)
             </label>
             <label className="flex min-h-11 items-center gap-3 rounded-2xl bg-coral-100 px-3 text-xs font-bold">
               <input

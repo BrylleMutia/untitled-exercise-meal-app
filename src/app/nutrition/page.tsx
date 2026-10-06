@@ -8,6 +8,7 @@ import { CalorieBudgetRing } from "@/components/ui/CalorieBudgetRing";
 import { Button } from "@/components/ui/Button";
 import { DayStrip } from "@/components/DayStrip";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import { FOODS } from "@/constants/foods";
 import { parseMealText, servingPlanForCandidate, type CandidateServingPlan, type ParsedCandidate } from "@/utility/textMeal";
 import { dayStatus, entriesForDate, totalsForDate, foodMacros, mealNutrition } from "@/utility/nutrition";
@@ -122,15 +123,15 @@ export default function NutritionPage() {
         <DayStrip selected={selected} onSelect={setSelected} />
         <div className="mt-4 flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-extrabold">
+            <div className="flex items-center gap-2"><h2 className="font-extrabold">
               {isToday ? "Today" : selected}
-            </h2>
+            </h2><HelpPopover title="Daily nutrition"><p>Targets are estimates from your profile. Missing meal slots stay unknown, not zero intake. Estimated entries retain their ranges and confidence.</p></HelpPopover></div>
             <p className="text-xs font-bold text-ink-soft">
               {status === "complete"
                 ? "Fully logged"
                 : status === "partial"
                   ? "Partially logged — missing slots are not zero"
-                  : "Unlogged day — no entries, that is fine"}
+                  : "Unlogged day — no entries"}
             </p>
           </div>
           <CalorieBudgetRing target={target?.calories ?? null} logged={totals.calories} status={status} estimated={snapshot.nutritionLogs.some((entry) => entry.date === selected && entry.estimated)} size={96} />
@@ -148,7 +149,7 @@ export default function NutritionPage() {
       {snapshot.mealPlan ? (
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-extrabold">Planned for this day</h2>
+            <div className="flex items-center gap-1"><h2 className="font-extrabold">Planned for this day</h2><HelpPopover title="Planned meals"><p>Editing or skipping changes the future meal plan. Logged history is untouched.</p>{carbLimit !== null ? <p>{snapshot.profile?.dietaryPattern} uses at most {carbLimit} g total carbs per planned day. This is a planning preference, not dietary care or a promise of ketosis. Unresolved slots mean the day is not fully planned.</p> : null}</HelpPopover></div>
             <Button
               variant="soft"
               className="!min-h-11 !px-3 text-xs"
@@ -203,11 +204,7 @@ export default function NutritionPage() {
               onCancel={() => setEditingPlannedMealId(null)}
             />
           ) : null}
-          <p className="mt-2 text-[11px] font-semibold text-muted">
-            {carbLimit !== null ? `${snapshot.profile?.dietaryPattern}: at most ${carbLimit} g total carbs per planned day. Unresolved slots mean the day is not fully planned. This is a planning label, not dietary care or a promise of ketosis. ` : ""}
-            Skipping only changes the future plan snapshot — logged history is
-            untouched.
-          </p>
+          {carbLimit !== null ? <p className="mt-2 text-xs font-semibold text-ink-soft">{snapshot.profile?.dietaryPattern}: at most {carbLimit} g total carbs per planned day.</p> : null}
         </Card>
       ) : null}
 
@@ -311,10 +308,7 @@ export default function NutritionPage() {
       <Card>
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h2 className="font-extrabold">Saved meals</h2>
-            <p className="text-xs font-semibold text-muted">
-              Create, reuse, or adjust recipes without changing logged history.
-            </p>
+            <div className="flex items-center gap-1"><h2 className="font-extrabold">Saved meals</h2><HelpPopover title="Saved meals"><p>Create, reuse, or adjust recipes without changing logged history.</p></HelpPopover></div>
           </div>
           <Button
             variant="soft"
@@ -725,13 +719,14 @@ export default function NutritionPage() {
           <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={providerLoading || query.trim().length < 2} onClick={() => void runProviderSearch()}>{providerLoading ? "Searching USDA…" : "Search trusted USDA"}</Button>
           <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={() => onMode("custom")}>Enter nutrition manually</Button>
         </div>
-        {shouldSuggestAnalysis ? <div className="rounded-xl bg-lav-50 px-3 py-2 text-xs font-semibold"><p>Looks like a meal description. DeepSeek can suggest ingredients and questions for you to review.</p><p className="mt-1 text-muted">Your description will be sent to DeepSeek only when you choose Analyze this meal.</p><Button className="mt-2 !min-h-11 !px-3 text-xs" disabled={analysisLoading} onClick={() => void analyzeMeal()}><Sparkles className="h-4 w-4" aria-hidden /> {analysisLoading ? "Analyzing…" : "Analyze this meal"}</Button></div> : null}
+        {shouldSuggestAnalysis ? <div className="rounded-xl bg-lav-50 px-3 py-2 text-xs font-semibold"><div className="flex items-center justify-between gap-2"><p>Analyze sends your description to DeepSeek.</p><HelpPopover title="Meal analysis"><p>DeepSeek suggests ingredients and questions for you to review. It does not save meals. Catalog values are authoritative; optional AI estimates remain low-confidence ranges and require confirmation.</p></HelpPopover></div><Button className="mt-2 !min-h-11 !px-3 text-xs" disabled={analysisLoading} onClick={() => void analyzeMeal()}><Sparkles className="h-4 w-4" aria-hidden /> {analysisLoading ? "Analyzing…" : "Analyze this meal"}</Button></div> : null}
         {providerError || analysisError ? <div className="grid gap-1 text-[11px] font-bold text-coral-300" role="alert"><p>{providerError || analysisError}</p>{authenticationExpired ? <a className="w-fit underline underline-offset-2" href="/auth/sign-in?next=%2Fnutrition">Sign in again</a> : null}</div> : null}
         {localResults.length > 0 ? <ul className="grid gap-1">{localResults.map((food) => <li key={food.id}><button type="button" className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setQuantityFood(food); setQuantity("1"); setQuantityUnit(food.unit === "piece" ? "piece" : "serving"); }}><span>{food.name}<span className="block text-[11px] font-semibold text-muted">{food.servingLabel} · {food.calories} kcal · {food.valueSource === "trusted_catalog" ? "trusted catalog" : "development catalog"}</span></span><Plus className="h-4 w-4 text-muted" aria-hidden /></button></li>)}</ul> : null}
         {quantityFood ? <div className="grid gap-2 rounded-xl bg-white p-3" role="group" aria-label="Review food quantity"><p className="text-sm font-extrabold">Review {quantityFood.name}</p><div className="grid grid-cols-[1fr_1fr] gap-2"><input className="input" type="number" min="0.01" step="0.25" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-label="Quantity" /><select className="input" value={quantityUnit} onChange={(event) => setQuantityUnit(event.target.value)} aria-label="Serving unit"><option value="serving">serving</option><option value="g">grams</option><option value="piece">piece</option>{quantityFood.servingOptions?.map((option) => <option key={`${option.label}-${option.grams}`} value={option.unit}>{option.label}</option>)}</select></div><p className="text-[11px] font-semibold text-muted">{quantityFood.preparationBasis ?? "Preparation basis not specified"} · {quantityFood.valueSource === "trusted_catalog" ? "Trusted catalog nutrition" : "Development catalog estimate"} · {quantityFood.confidence} confidence</p>{quantityMacros ? <div className="grid grid-cols-4 gap-1 rounded-xl bg-cream px-2 py-2 text-center text-[11px] font-bold" aria-label="Nutrition preview"><span>{quantityMacros.calories} kcal</span><span>{quantityMacros.proteinG} g protein</span><span>{quantityMacros.carbsG} g carbs</span><span>{quantityMacros.fatG} g fat</span></div> : null}<div className="flex gap-2"><Button className="!min-h-11 !px-3 text-xs" disabled={!quantityServing} onClick={() => void confirmQuantity()}>Confirm food</Button><Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={() => setQuantityFood(null)}>Cancel</Button></div></div> : null}
         {providerResults.candidates.length > 0 ? <div className="rounded-xl bg-mint-100 p-2"><p className="text-[11px] font-extrabold uppercase tracking-wide">USDA FoodData Central</p><ul className="mt-1 grid gap-1">{providerResults.candidates.map((candidate) => { const food = providerFood(candidate); return <li key={candidate.fdcId}><button type="button" className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setQuantityFood(food); setQuantity("1"); setQuantityUnit("serving"); }}><span>{candidate.name}<span className="block text-[11px] font-semibold text-muted">{candidate.servingLabel} · {candidate.preparationBasis} · USDA {candidate.sourceVersion}</span></span><Check className="h-4 w-4" aria-hidden /></button></li>; })}</ul></div> : null}
         {ingredients.length > 0 ? (
           <div className="grid gap-2 rounded-2xl bg-lav-50 p-3" role="region" aria-label="Guided meal review">
+            <HelpHeading title="Meal review" as="h3" className="text-sm font-extrabold"><p>Catalog values are authoritative. User values are explicit. Optional AI estimates are approximate, low-confidence ranges and require confirmation.</p><p>Check preparation, quantities, and assumptions before saving.</p></HelpHeading>
             <div className="flex gap-2">
               <input className="input" value={mealName} onChange={(event) => setMealName(event.target.value)} aria-label="Meal name" placeholder="Meal name" />
               <span className="self-center text-xs font-bold text-muted">≈ {Math.round(totals.calories)} kcal</span>
@@ -775,14 +770,13 @@ export default function NutritionPage() {
                     <button type="button" className="min-h-11 rounded-full bg-cream px-3 text-[11px] font-bold underline" onClick={() => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, custom: { calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" } } : item))}>Enter custom values</button>
                   </div>
                 )}
-                {ingredient.assumptions.length > 0 ? <p className="text-[11px] font-semibold text-muted">{ingredient.assumptions.join(" ")}</p> : null}
+                {ingredient.assumptions.length > 0 ? <div className="flex items-center justify-end"><HelpPopover title={`${ingredient.name} assumptions`}><p>{ingredient.assumptions.join(" ")}</p></HelpPopover></div> : null}
               </div>
             ))}
             <div className="flex flex-wrap gap-2">
               <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={estimateLoading || !ingredients.some((ingredient) => ingredient.included && !ingredient.food && !ingredient.estimate && !ingredient.custom)} onClick={() => void estimateSelected()}>{estimateLoading ? "Estimating…" : "Estimate selected unresolved"}</Button>
               <Button className="!min-h-11 !px-3 text-xs" disabled={!ready} onClick={() => void confirmMeal()}>Confirm meal & save</Button>
             </div>
-            <p className="text-[11px] font-semibold text-muted">Catalog values are authoritative. User values are explicit. AI estimates are optional, approximate, low-confidence ranges, and require your confirmation.</p>
           </div>
         ) : null}
       </div>
@@ -1118,10 +1112,7 @@ export default function NutritionPage() {
             Nutrition values must be finite, non-negative numbers.
           </p>
         ) : null}
-        <p className="text-[11px] font-semibold text-muted">
-          Enter all four nutrition values. Custom entries are marked as your
-          values — distinct from catalog estimates.
-        </p>
+        <div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-ink-soft">Enter all four nutrition values.</p><HelpPopover title="Manual nutrition"><p>Custom entries are marked as your values, distinct from catalog estimates.</p></HelpPopover></div>
       </div>
     );
   }
@@ -1289,11 +1280,7 @@ export default function NutritionPage() {
             ))}
           </ul>
         ) : null}
-        <p className="text-[11px] font-semibold text-muted">
-          DeepSeek only extracts candidates. Catalog values are authoritative
-          whenever matched; unresolved ingredients may use only an explicit,
-          low-confidence, ranged AI estimate after review and confirmation.
-        </p>
+        <HelpPopover title="Nutrition sources"><p>DeepSeek only extracts candidates. Matched catalog values are authoritative. Unresolved ingredients may use explicit, low-confidence AI ranges after review and confirmation.</p></HelpPopover>
       </div>
     );
   }
@@ -1369,7 +1356,7 @@ function LoggedMealEditor({
         <input className="input" value={name} onChange={(event) => setName(event.target.value)} aria-label="Historical meal name" />
         <span className="text-[11px] font-semibold text-muted">Historical snapshot only</span>
       </div>
-      <p className="text-[11px] font-semibold text-muted">Change ingredients or quantities for this logged meal. The reusable recipe is not changed.</p>
+      <HelpHeading title="Edit logged meal" as="h3" className="text-sm font-extrabold"><p>Change ingredients or quantities for this logged meal. The reusable recipe stays unchanged.</p></HelpHeading>
       {items.map((item, index) => (
         <div key={item.id} className="grid gap-2 rounded-xl bg-cream p-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
           <select className="input !min-h-11 text-xs" value={item.foodId} onChange={(event) => setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, foodId: event.target.value } : candidate))} aria-label={`Historical ingredient ${index + 1}`}>
@@ -1442,7 +1429,7 @@ function NutritionEditForm({
   return (
     <div className="grid gap-2 rounded-xl bg-lav-50 p-3 sm:col-span-2" role="group" aria-label="Edit nutrition entry">
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <p className="text-xs font-extrabold">Edit saved entry{food ? ` · ${food.name}` : ""}</p>
+        <div className="flex items-center justify-between gap-2"><p className="text-xs font-extrabold">Edit saved entry{food ? ` · ${food.name}` : ""}</p><HelpPopover title="Saved entry corrections"><p>Catalog values are recalculated from the stored food record. Custom values remain explicitly user-provided. Corrections apply to this saved entry only.</p></HelpPopover></div>
         <input className="input !min-h-11" type="number" min="0.01" step="0.25" value={servings} onChange={(event) => setServings(event.target.value)} aria-label="Servings" />
       </div>
       {!food ? (
@@ -1458,7 +1445,6 @@ function NutritionEditForm({
           ))}
         </div>
       ) : null}
-      <p className="text-[11px] font-semibold text-muted">Catalog-backed values are recalculated from the stored food record; custom values remain explicitly user-provided.</p>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={onCancel}>Cancel</Button>
         <Button className="!min-h-11 !px-3 text-xs" disabled={saving} onClick={() => void submit()}>{saving ? "Saving…" : "Save correction"}</Button>
@@ -1583,7 +1569,7 @@ function PlannedMealEditor({
     <div className="mt-3 grid gap-2 rounded-2xl bg-lav-50 p-3" role="group" aria-label="Planned meal editor">
       {draftWasRestored ? <div className="flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-[11px] font-bold" role="status"><span>Meal draft restored.</span><button type="button" className="underline" onClick={() => { if (draftSnapshot.userId) void clearDraft(draftSnapshot.userId, draftType); setDraftWasRestored(false); }}>Discard draft</button></div> : null}
       {draftWriteUnavailable ? <p className="rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold" role="status">Draft recovery is unavailable on this device.</p> : null}
-      <p className="text-xs font-extrabold">Edit future meal</p>
+      <HelpHeading title="Edit future meal" as="h3" className="text-sm font-extrabold"><p>This creates a new future plan version. Logged nutrition history stays unchanged.</p></HelpHeading>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
         <select className="input" value={reference} onChange={(event) => setReference(event.target.value)} aria-label="Planned meal choice">
           <optgroup label="Saved meals">
@@ -1598,7 +1584,6 @@ function PlannedMealEditor({
         </select>
         <input className="input" type="number" min="0.25" step="0.25" value={servings} onChange={(event) => setServings(event.target.value)} aria-label="Planned meal servings" />
       </div>
-      <p className="text-[11px] font-semibold text-muted">This creates a new future plan version. Logged nutrition history is unchanged.</p>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={onCancel}>Cancel</Button>
         <Button className="!min-h-11 !px-3 text-xs" disabled={saving || !Number.isFinite(amount) || amount <= 0 || (!selectedMeal && !selectedFood)} onClick={() => void submit()}>
@@ -1686,6 +1671,7 @@ function RecipeEditor({
 
   return (
     <div className="mt-3 grid gap-2 rounded-2xl bg-lav-50 p-3" role="group" aria-label={meal ? "Edit saved meal" : "Create saved meal"}>
+      <HelpHeading title={meal ? "Edit recipe" : "Create recipe"} as="h3" className="text-sm font-extrabold"><p>Nutrition uses the catalog records selected for each ingredient. Editing a recipe does not rewrite existing logs.</p></HelpHeading>
       {draftWasRestored ? <div className="flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-[11px] font-bold" role="status"><span>Recipe draft restored.</span><button type="button" className="underline" onClick={() => { if (draftSnapshot.userId) void clearDraft(draftSnapshot.userId, draftType); setDraftWasRestored(false); }}>Discard draft</button></div> : null}
       {draftWriteUnavailable ? <p className="rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold" role="status">Draft recovery is unavailable on this device.</p> : null}
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -1710,7 +1696,6 @@ function RecipeEditor({
           <Button className="!min-h-11 !px-3 text-xs" disabled={saving || !name.trim() || !Number.isFinite(recipeServings) || recipeServings <= 0 || !validIngredients} onClick={() => void submit()}>{saving ? "Saving…" : "Save recipe"}</Button>
         </div>
       </div>
-      <p className="text-[11px] font-semibold text-muted">Nutrition is calculated from the trusted catalog. Editing a recipe does not rewrite existing logs.</p>
     </div>
   );
 }

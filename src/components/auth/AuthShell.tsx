@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { Dumbbell } from "lucide-react";
 import type { ReactNode } from "react";
+import { HelpPopover } from "@/components/ui/HelpPopover";
 
 export function AuthShell({
   eyebrow,
   title,
   description,
+  help,
   children,
   footer,
 }: {
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
+  help?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -27,8 +30,8 @@ export function AuthShell({
       </div>
       <section className="rounded-3xl bg-white p-6 shadow-card sm:p-8">
         <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-muted">{eyebrow}</p>
-        <h1 className="mt-2 text-2xl font-extrabold">{title}</h1>
-        <p className="mt-2 text-sm font-semibold leading-6 text-ink-soft">{description}</p>
+        <div className="mt-2 flex items-center justify-between gap-2"><h1 className="text-2xl font-extrabold">{title}</h1>{help ? <HelpPopover title={title}>{help}</HelpPopover> : null}</div>
+        {description ? <p className="mt-2 text-sm font-semibold leading-6 text-ink-soft">{description}</p> : null}
         <div className="mt-6">{children}</div>
       </section>
       {footer ? <div className="text-center text-sm font-semibold text-muted">{footer}</div> : null}

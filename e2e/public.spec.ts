@@ -15,7 +15,62 @@ test("serves the public sign-in surface without authenticated state", async ({ p
   await expect(page.getByRole("link", { name: "Cali - Exercise and Meal Planner" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in to your coach" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Email address" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+});
+
+test("account help supports hover and keyboard without losing form values", async ({ page }) => {
+  await page.goto("/auth/sign-up");
+  const email = page.getByRole("textbox", { name: "Email address" });
+  await email.fill("help-draft@example.test");
+  await expect(page.getByText("Use at least 8 characters.", { exact: true })).toBeVisible();
+  const help = page.getByRole("button", { name: "About Create your account", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Create your account", exact: true });
+  await help.hover();
+  await expect(dialog).toBeVisible();
+  await expect(email).toBeFocused();
+  await help.click();
+  await expect(dialog).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(help).toBeFocused();
+  await expect(dialog).toHaveCount(0);
+  await page.keyboard.press("Tab");
+  await expect(email).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(help).toBeFocused();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(dialog).toBeFocused();
+  await dialog.getByRole("button", { name: "Close Create your account help" }).click();
+  await expect(email).toHaveValue("help-draft@example.test");
+  await expect(page.locator("form").getByRole("alert")).toHaveCount(0);
+  await help.click();
+  await email.click({ position: { x: 8, y: 8 } });
+  await expect(email).toBeFocused();
+  await expect(dialog).toHaveCount(0);
+});
+
+test("account instructions and help remain available on sign-in, confirmation and password screens", async ({ page }) => {
+  const screens = [
+    { route: "/auth/sign-in", title: "Sign in to your coach", input: "Email address", value: "help-draft@example.test" },
+    { route: "/auth/check-email", title: "Check your email", input: "Signup email", value: "help-draft@example.test" },
+    { route: "/auth/update-password", title: "Choose a fresh password", input: "New password", value: "Draft-password-123" },
+  ];
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const screen of screens) {
+      await page.goto(screen.route);
+      const input = page.getByLabel(screen.input, { exact: true });
+      await input.fill(screen.value);
+      await page.getByRole("button", { name: `About ${screen.title}`, exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: screen.title, exact: true });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toBeFocused();
+      await dialog.getByRole("button", { name: `Close ${screen.title} help`, exact: true }).click();
+      await expect(input).toHaveValue(screen.value);
+      await expect(page.locator("form").getByRole("alert")).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
 });
 
 test("preserves signup values and shows accessible password mismatch errors", async ({ page }) => {

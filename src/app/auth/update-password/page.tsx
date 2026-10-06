@@ -16,7 +16,8 @@ export default function UpdatePasswordPage() {
     <AuthShell
       eyebrow="New password"
       title="Choose a fresh password"
-      description="Use a password you do not reuse elsewhere. After saving, you will continue to your account."
+      description="Choose a password you do not reuse elsewhere."
+      help="After saving, you will continue to your account."
     >
       <form action={formAction} className="grid gap-4">
         {state.error ? <AuthError>{state.error}</AuthError> : null}
