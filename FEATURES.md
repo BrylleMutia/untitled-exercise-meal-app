@@ -10,8 +10,10 @@ save/retry, fresh-browser account loading, manual steps and separate walking
 estimates, remaining-calorie rings, Pilates, custom routine/session versions,
 Low-carb/Keto-style planning, shared interaction feedback, and opt-in milestones.
 The feature contracts below describe implemented behavior. Local verification
-and the shared database rollout were recorded on 2026-10-01; hosted deployment,
-staging SMTP, and final release sign-off are pending. Device sync is deferred;
+and the shared database rollout were recorded on 2026-10-01. PR #3 merged MVP-3
+into `main` on 2026-10-04; candidate and resulting-main CI passed. Hosted
+deployment, hosted Auth configuration, staging SMTP, final hosted acceptance,
+and release sign-off remain pending. Device sync is deferred;
 named custom movements have no automatic progression, and walking estimates
 never increase the food target. See [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md) for
 the complete handover and [`MVP_Priority_Matrix.md`](./MVP_Priority_Matrix.md) for
@@ -403,9 +405,10 @@ remain resolvable. Recipe saves and active-plan grocery reconciliation use one
 authorized transaction. Custom-food persistence, multiple same-slot ordering,
 preference/cooking-time/budget-aware generation, and recipe-specific draft
 recovery are implemented in the MVP-1 pass. Local, browser, and authorized
-remote evidence is tracked in `MVP_Priority_Matrix.md`; the modular
-implementation commits and final candidate tag are the remaining repository
-release gate.
+remote evidence is tracked in `MVP_Priority_Matrix.md`. Implementation commits
+are now included in the merged MVP-3 candidate; the current hosted acceptance
+and release-packaging gates are tracked in
+[`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md#pending-release-work).
 
 ### 10. Grocery List
 
@@ -462,6 +465,10 @@ Progress calculations use different completeness rules for workouts and meals:
 - Calorie and protein averages are labeled with the number of logged days used;
   nutrition completeness is calculated separately across all calendar days.
 - Trends must show their date range, data count, and whether values are estimated.
+- Weight needs at least two entries for a change or trend line. With one entry,
+  show the dated observation and explain that another entry is needed; with no
+  entries, show an explicit empty state. Never describe a single entry as a
+  0.0 kg change.
 
 Allow users to record weight manually. Progress photos and body measurements
 can be added later.
@@ -494,10 +501,66 @@ unsaved changes; they must not be shown as completed server mutations.
 - Final onboarding shows a labeled saving state, prevents duplicate submits,
   retains a recoverable draft on failure, and navigates after a confirmed save.
   An existing account loads its saved data after sign-in in a fresh browser.
-- Home offers food, steps, and workout quick actions. `/activity` stores one
+- Home offers food, steps, and workout actions in its summary cards, with today's
+  local date in a white pill beside the meals-card help icon. `/activity` stores one
   manual step observation per local date, editable for the past year, with
   optional walking minutes. Zero steps is an observation; a deleted/missing
   entry is unlogged. Failed saves preserve drafts and require an explicit retry.
+- At 1024px and wider, Home stacks meals and today's workout in the left column,
+  with compact workout-progress and steps summaries in the right column and
+  shortcuts below both stacks. Cards have content-driven heights. Smaller-screen
+  order is meals, workout progress, steps, the compact full-width workout
+  summary, then shortcuts. The steps card reads only today's confirmed account entry, including
+  explicit zero and optional walking minutes. Its single current/target count
+  reads "2,000 / 10,000", announced as "2,000 of 10,000 steps"; an unset
+  target keeps "2,000" with "No daily target" and announces "2,000 steps".
+  The heading supplies the visible unit. Date/source explanations
+  stay in contextual help. Recorded minutes appear in a white clock pill beside
+  a matching white fire-icon pill for the approximate energy range, in a wrapping
+  detail row. Below 768px, the complete progress and steps summaries, including
+  steps actions and each wrapped detail row, are centered beneath their rings;
+  wider layouts retain left alignment. Missing
+  activity is "Not logged" with "No steps logged today" rather than zero;
+  missing minutes, zero minutes, and unsupported energy estimates retain
+  distinct visible messages. At/above target, the ring says "Target reached"
+  while the actual count remains unchanged. Workout-energy status messages
+  use a white fire-icon pill in Your progress with a 17px top margin. The walking
+  detail row has a 16px top margin at every screen size. The overlapping steps
+  plus is the single log/edit action, labeled for the current saved/unlogged
+  state; the target link remains beneath the details. The plus and help's
+  estimate-detail link open `/activity`; unfinished drafts and failed saves never replace the saved
+  Home value. Home and Activity share walking-estimate profile eligibility.
+  Overlapping plus actions on the Home rings open the Workouts tab directly
+  or open the daily-steps editor.
+- Daily step targets are optional, user-chosen profile preferences. Movement
+  onboarding starts blank, retains recoverable drafts, allows skipping, and
+  includes the choice or "Not set" in Review. `/settings#daily-step-target`
+  supports save, change, remove, explicit retry, and deliberate stale-draft
+  reapplication. Whole numbers 1–200,000 are the technical range; blank means
+  unset, while zero, fractions, non-finite, and out-of-range values are rejected.
+  Existing profiles remain unset. Target changes leave plans, nutrition targets,
+  and saved step observations unchanged.
+- Contextual help reduces persistent descriptions throughout Home, onboarding,
+  Settings, Activity, Nutrition, Workouts, Grocery, Progress, and account screens.
+  Circled question-mark buttons open grouped explanations through hover,
+  keyboard, or touch. Essential labels, values, unknown activity, uncertainty,
+  save/conflict/offline states, consent, and exercise safety remain visible.
+  Calculation/source and history/version explanations remain accessible in
+  help; opening help never saves a form or changes account data.
+- Home's daily ring shows a dash with no target or unlogged activity, explicit
+  0% for saved zero, proportional progress below target, and a full ring with
+  neutral "Target reached" copy at or above target. Only visual fill is clamped;
+  actual saved counts stay visible. Target and estimate links open Settings and
+  Activity respectively. There are no historical step-percentage charts.
+- Rollout status (2026-10-05): the target UI, authenticated RPC, nullable profile
+  column, and atomic onboarding/profile persistence are implemented. Local schema
+  equivalence was verified before creating the forward migration; clean reset,
+  database lint, and all 529 pgTAP assertions passed. Client saves check column
+  availability and retain drafts on an unmigrated backend. Following explicit owner
+  authorization, the linked database migration was applied on 2026-10-05. All 47
+  migration versions match, the final dry run has no pending changes, and the
+  deployed schema matches the verified local schema. Durable target saves are now
+  available; existing profiles remain unset until users save their chosen targets.
 - Walking energy is a broad derived estimate only with minutes, eligible profile
   weight, and ages 19–59 covered by the adult reference. It uses 2.8–3.8 MET and
   rounds the range outward to tens of kcal. It is separate from workout energy and never increases
