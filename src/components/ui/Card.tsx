@@ -13,13 +13,14 @@ const toneClasses: Record<CardTone, string> = {
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   tone?: CardTone;
+  padding?: "default" | "compact";
   children: ReactNode;
 }
 
-export function Card({ tone = "white", className = "", children, ...rest }: CardProps) {
+export function Card({ tone = "white", padding = "default", className = "", children, ...rest }: CardProps) {
   return (
     <div
-      className={`min-w-0 rounded-3xl p-5 shadow-card ${toneClasses[tone]} ${className}`}
+      className={`min-w-0 rounded-3xl ${padding === "compact" ? "p-4" : "p-5"} shadow-card ${toneClasses[tone]} ${className}`}
       {...rest}
     >
       {children}
