@@ -1,3 +1,5 @@
+import type { UserProfile } from "@/types/domain";
+
 /** 2024 Adult Compendium walking codes 17152 and 17190, level ground.
  * https://pacompendium.com/walking/ */
 const SLOW_WALK_MET = 2.8;
@@ -7,6 +9,14 @@ export interface WalkingEnergyEstimate {
   lowKcal: number;
   highKcal: number;
   assumption: string;
+}
+
+export function supportsWalkingEnergyEstimate(
+  profile: Pick<UserProfile, "age" | "weightKg" | "targetEligibility"> | null | undefined,
+): boolean {
+  return profile?.targetEligibility === "eligible" &&
+    profile.age >= 19 && profile.age <= 59 &&
+    Number.isFinite(profile.weightKg) && profile.weightKg > 0;
 }
 
 /**

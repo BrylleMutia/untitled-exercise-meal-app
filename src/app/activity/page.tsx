@@ -5,9 +5,10 @@ import { Footprints, LoaderCircle } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import { addDays, todayKey } from "@/utility/dates";
 import { validateDailySteps } from "@/utility/dailySteps";
-import { estimateWalkingEnergy } from "@/utility/walkingEnergy";
+import { estimateWalkingEnergy, supportsWalkingEnergyEstimate } from "@/utility/walkingEnergy";
 import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/services/draftStore";
 
 type StepDraft = { steps: string; minutes: string; revision: number };
@@ -16,8 +17,7 @@ export default function ActivityPage() {
   const [date, setDate] = useState(todayKey());
   return <div className="grid gap-4">
     <Card tone="mint">
-      <h2 className="flex items-center gap-2 text-xl font-extrabold"><Footprints aria-hidden className="h-5 w-5" /> Daily steps</h2>
-      <p className="mt-2 text-sm font-semibold text-ink-soft">Add a daily total from your phone, watch, or your own count. Automatic device sync is planned for later.</p>
+      <div className="flex items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-xl font-extrabold"><Footprints aria-hidden className="h-5 w-5" /> Daily steps</h2><HelpPopover title="Daily steps"><p>Add a daily total from your phone, watch, or your own count. Entries are manual; devices do not sync automatically.</p></HelpPopover></div>
       <label className="mt-4 grid gap-2 text-sm font-bold">Date<input type="date" className="input" value={date} min={addDays(todayKey(), -365)} max={todayKey()} onChange={(event) => { if (event.target.value) setDate(event.target.value); }} /></label>
     </Card>
     <StepEditor key={date} date={date} />
@@ -100,15 +100,14 @@ function StepEditor({ date }: { date: string }) {
     } finally { busy.current = false; setSaving(false); }
   }
 
-  const estimateSupported = snapshot.profile?.targetEligibility === "eligible" && snapshot.profile.age >= 19 && snapshot.profile.age <= 59;
+  const estimateSupported = supportsWalkingEnergyEstimate(snapshot.profile);
   const estimate = estimateSupported && snapshot.profile && entry
     ? estimateWalkingEnergy(snapshot.profile.weightKg, entry.walkingMinutes) : null;
   return <>
     <Card>
       <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-        <label className="grid gap-2 text-sm font-bold">Steps<input className="input" inputMode="numeric" value={draft.steps} onChange={(event) => change("steps", event.target.value)} disabled={saving} placeholder="e.g. 6500" /></label>
-        <label className="grid gap-2 text-sm font-bold">Walking minutes (optional)<input className="input" inputMode="numeric" value={draft.minutes} onChange={(event) => change("minutes", event.target.value)} disabled={saving} placeholder="Leave blank if unknown" /></label>
-        <p className="text-xs font-semibold text-muted">Use the time spent walking, excluding workouts. Steps alone cannot tell us walking speed or energy use.</p>
+        <label className="grid gap-2 text-sm font-bold">Steps<input className="input" inputMode="numeric" value={draft.steps} onChange={(event) => change("steps", event.target.value)} disabled={!ready || saving} placeholder="e.g. 6500" /></label>
+        <div className="grid gap-2"><div className="flex items-center justify-between gap-2"><label htmlFor="walking-minutes" className="text-sm font-bold">Walking minutes (optional)</label><HelpPopover title="Walking minutes"><p>Use time spent walking, excluding workouts. Steps alone cannot tell us walking speed or energy use. Leave blank if unknown; zero records no walking time.</p></HelpPopover></div><input id="walking-minutes" className="input" inputMode="numeric" value={draft.minutes} onChange={(event) => change("minutes", event.target.value)} disabled={!ready || saving} placeholder="Leave blank if unknown" /></div>
         {message ? <p role="status" className="text-sm font-semibold text-ink-soft">{message}</p> : null}
         {error?.code === "stale_version" ? <div role="alert" className="rounded-2xl bg-peach-100 p-3 text-sm font-semibold">
           <p>This date was changed elsewhere. Saved total: {entry ? `${entry.steps.toLocaleString()} steps` : "unlogged"}. Your draft is retained.</p>
@@ -122,9 +121,8 @@ function StepEditor({ date }: { date: string }) {
     </Card>
     <Card tone="mint">
       <h2 className="font-extrabold">{entry ? `${entry.steps.toLocaleString()} steps saved` : "No steps logged for this date"}</h2>
-      <p className="mt-2 text-xs font-semibold text-ink-soft">{estimate ? `Walking energy: roughly ${estimate.lowKcal}–${estimate.highKcal} kcal. ${estimate.assumption}` : !estimateSupported ? "Walking estimates use an adult reference for ages 19–59 and are unavailable for this profile. Your step observations can still be saved." : "Add walking minutes to see a rough energy range. Missing activity stays unknown."}</p>
-      {estimate ? <a href="https://pacompendium.com/walking/" target="_blank" rel="noreferrer" className="mt-2 inline-block min-h-11 py-3 text-xs font-bold underline">Walking estimate assumptions</a> : null}
-      <p className="mt-1 text-xs font-semibold text-ink-soft">Walking and workout estimates are separate. Your daily food target stays the same.</p>
+      <HelpHeading title="Walking energy"><p>{estimate?.assumption ?? "Walking energy uses walking time and profile weight, with an adult reference for ages 19–59."}</p><p>Walking and workout estimates are separate. Your daily food target stays the same.</p><a href="https://pacompendium.com/walking/" target="_blank" rel="noreferrer">Walking estimate source</a></HelpHeading>
+      <p className="text-xs font-semibold text-ink-soft">{estimate ? `Walking energy: roughly ${estimate.lowKcal}–${estimate.highKcal} kcal.` : !entry ? "Walking energy: not logged." : !estimateSupported ? "Walking energy estimate unavailable for this profile." : entry.walkingMinutes === 0 ? "Walking energy estimate unavailable for 0 walking minutes." : "Add walking minutes for an energy estimate."}</p>
     </Card>
   </>;
 }
