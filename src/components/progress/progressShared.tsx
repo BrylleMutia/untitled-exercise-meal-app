@@ -25,12 +25,13 @@ interface SparklineProps {
 export function Sparkline({ points, ariaLabel }: SparklineProps) {
   const width = 280;
   const height = 80;
+  const inset = 12;
   const min = Math.min(...points);
   const max = Math.max(...points);
-  const range = max - min || 1;
+  const range = max - min;
   const coords = points.map((p, i) => [
-    (i / Math.max(1, points.length - 1)) * width,
-    height - 12 - ((p - min) / range) * (height - 24),
+    points.length === 1 ? width / 2 : inset + (i / (points.length - 1)) * (width - inset * 2),
+    range === 0 ? height / 2 : height - inset - ((p - min) / range) * (height - inset * 2),
   ]);
   const path = coords
     .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`)
@@ -39,10 +40,9 @@ export function Sparkline({ points, ariaLabel }: SparklineProps) {
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="w-full"
+      className="mx-auto block w-full max-w-[420px]"
       role="img"
       aria-label={ariaLabel}
-      preserveAspectRatio="none"
     >
       <path d={path} fill="none" strokeWidth={4} strokeLinecap="round" className="stroke-lav-500" />
       {coords.map(([x, y], i) => (
