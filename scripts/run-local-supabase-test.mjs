@@ -41,11 +41,19 @@ function localSupabaseConfig() {
 }
 
 const config = localSupabaseConfig();
+const browserUrl = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3030";
+if (mode === "browser") {
+  const parsed = new URL(browserUrl);
+  if (parsed.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(parsed.hostname) || !parsed.port || parsed.port === "3000") {
+    throw new Error("Local browser tests require a separate localhost port, such as 3030; port 3000 belongs to the user's app.");
+  }
+}
 const env = {
   ...process.env,
   NEXT_PUBLIC_SUPABASE_URL: config.url,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: config.key,
-  NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
+  NEXT_PUBLIC_SITE_URL: mode === "browser" ? browserUrl : "http://localhost:3000",
+  ...(mode === "browser" ? { PLAYWRIGHT_BASE_URL: browserUrl, CALI_BROWSER_TEST: "1" } : {}),
   PLAYWRIGHT_LOCAL_TEST: "1",
 };
 const requestedProjects = extraArgs.filter((argument) => argument.startsWith("--project="));

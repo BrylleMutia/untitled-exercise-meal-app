@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
 
 const userAState = path.resolve("playwright/.auth/user-a.json");
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const serverPort = Number(new URL(baseURL).port || "3000");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -14,7 +16,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"], ["./scripts/playwright-no-skips-reporter.mjs"]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    baseURL,
     actionTimeout: 10_000,
     navigationTimeout: 20_000,
     serviceWorkers: "block",
@@ -23,9 +25,9 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --port 3000",
-    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev -- --port ${serverPort}`,
+    url: baseURL,
+    reuseExistingServer: !process.env.CI && process.env.PLAYWRIGHT_LOCAL_TEST !== "1",
     timeout: 120_000,
   },
   projects: [
@@ -47,7 +49,7 @@ export default defineConfig({
     },
     {
       name: "desktop",
-      testMatch: /mvp[13]-release\.spec\.ts/,
+      testMatch: /(?:mvp[13]-release|contextual-help)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -57,7 +59,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
-      testMatch: /mvp[13]-release\.spec\.ts/,
+      testMatch: /(?:mvp[13]-release|contextual-help)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Pixel 5"],
