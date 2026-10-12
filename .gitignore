@@ -37,3 +37,6 @@ next-env.d.ts
 
 # Generated product demo deliverables
 /demo-video/
+
+# Local downloads, generated previews, and verification evidence
+/output/
