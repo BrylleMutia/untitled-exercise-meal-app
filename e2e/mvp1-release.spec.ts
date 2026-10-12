@@ -1,4 +1,4 @@
-import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import fs from "node:fs";
 import { strFromU8, unzipSync } from "fflate";
 import {
@@ -11,6 +11,125 @@ import {
 const userAState = "playwright/.auth/user-a.json";
 const userBState = "playwright/.auth/user-b.json";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+
+async function fillRecipeSection(editor: Locator, section: "Details" | "Instructions", label: string, value: string) {
+  await editor.getByRole("tab", { name: section, exact: true }).click();
+  await editor.getByLabel(label).fill(value);
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+}
+
+async function openRecipe(page: Page) {
+  await openNutritionPage(page);
+  await clearBrowserDrafts(page);
+  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Create recipe", exact: true });
+  await editor.getByLabel("Complexity (required)", { exact: true }).selectOption("easy");
+  return editor;
+}
+
+test("predefined recipe catalog displays the replacement image, complete metadata and source", async ({ page }, info) => {
+  await openNutritionPage(page);
+  const saved = page.getByRole("region", { name: "Saved meals" });
+  const row = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true }) });
+  await expect(row).toBeVisible();
+  for (const name of ["Greek Yogurt Berry Bowl", "PB Banana Toast", "Chicken & Rice Plate", "Salmon & Sweet Potato", "Egg, Broccoli & Almond Plate", "Chicken & Broccoli Plate", "Tofu & Broccoli Plate", "Tofu, Broccoli & Almond Bowl"]) {
+    await expect(saved.getByRole("button", { name: `View recipe: ${name}`, exact: true })).toHaveCount(0);
+  }
+  const cover = row.locator("img");
+  await expect(cover).toHaveAttribute("src", "/images/recipes/creamy-lemon-chicken.png");
+  expect(await cover.evaluate(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(row.getByText("≈695 kcal", { exact: true })).toBeVisible();
+  await expect(row.getByText("30 mins total", { exact: true })).toBeVisible();
+  await expect(row.getByText("Easy", { exact: true })).toBeVisible();
+  await row.screenshot({ path: `output/recipe-catalog/card-${info.project.name}.png` });
+  await row.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true }).click();
+  const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+  await overview.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(overview.getByRole("link", { name: /7647909556240076033/ })).toBeVisible();
+  await expect(overview.getByRole("group", { name: "Recipe nutrition per serving" })).toBeVisible();
+  await overview.getByRole("tab", { name: "Instructions", exact: true }).click();
+  await expect(overview.getByText(/Seasonings are unmeasured and excluded/)).toBeVisible();
+  await overview.getByRole("button", { name: "Close", exact: true }).click();
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  if (info.project.name === "mobile") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);
+  expect(await row.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+});
+
+test("Korean Beef Bowl keeps provided macros and supports personal edit and archive", async ({ browser, page }, info) => {
+  const account = await createLocalAccount(`catalog-controls-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const recipePage = await context.newPage();
+  await recipePage.setViewportSize({ width: info.project.name === "mobile" ? 390 : 1440, height: 900 });
+  try {
+    await completeOnboarding(recipePage, "Recipe Controls");
+    await openNutritionPage(recipePage);
+    const saved = recipePage.getByRole("region", { name: "Saved meals" });
+    const card = (name: string) => saved.getByRole("listitem").filter({ has: recipePage.getByRole("button", { name: `View recipe: ${name}`, exact: true }) });
+    const original = card("Korean Beef Bowl");
+    await expect(original.getByText("≈560 kcal", { exact: true })).toBeVisible();
+    await expect(original.getByText("Not set", { exact: true })).toBeVisible();
+    await expect(original.locator("img")).toHaveAttribute("src", "/images/recipes/korean-beef-bowl.png");
+    await expect(original.getByRole("button", { name: "Edit Korean Beef Bowl", exact: true })).toBeEnabled();
+    await original.screenshot({ path: `output/korean-beef-bowl/card-${info.project.name}.png` });
+    await original.getByRole("button", { name: "Log", exact: true }).click();
+    await original.getByRole("combobox", { name: "Meal slot", exact: true }).selectOption("lunch");
+    let response = nextRpcResponse(recipePage, "save_reviewed_meal");
+    await original.getByRole("button", { name: "Confirm log", exact: true }).click();
+    expect((await response).ok()).toBe(true);
+    const logged = recipePage.getByRole("region", { name: "Planned" }).getByRole("listitem").filter({ has: recipePage.getByRole("button", { name: "Delete Korean Beef Bowl", exact: true }) });
+    await expect(logged.getByText("2240 kcal", { exact: true })).toBeVisible();
+    await original.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }).click();
+    const overview = recipePage.getByRole("dialog", { name: "Recipe overview", exact: true });
+    await expect(overview.getByRole("heading", { name: "Per serving · source-provided macros", exact: true })).toBeVisible();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    const editor = recipePage.getByRole("dialog", { name: "Edit recipe", exact: true });
+    await expect(editor.getByLabel("Provided calories (kcal)", { exact: true })).toHaveValue("560");
+    await editor.getByLabel("Provided calories (kcal)", { exact: true }).fill("");
+    await expect(editor.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+    await expect(editor.getByText("Check all four provided macro values.", { exact: true })).toBeVisible();
+    await editor.getByLabel("Provided calories (kcal)", { exact: true }).fill("560");
+    await editor.getByLabel("Recipe name", { exact: true }).fill("My Korean Beef Bowl");
+    await recipePage.route("**/rest/v1/rpc/save_recipe", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary failure" }) }));
+    response = nextRpcResponse(recipePage, "save_recipe");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await response).ok()).toBe(false);
+    await expect(editor.getByLabel("Recipe name", { exact: true })).toHaveValue("My Korean Beef Bowl");
+    await recipePage.unroute("**/rest/v1/rpc/save_recipe");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(editor.getByText("Recipe draft restored.", { exact: true })).toBeVisible();
+    await expect(editor.getByLabel("Provided calories (kcal)", { exact: true })).toHaveValue("560");
+    response = nextRpcResponse(recipePage, "save_recipe");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await response).ok()).toBe(true);
+    await overview.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(original).toHaveCount(0);
+    await expect(card("My Korean Beef Bowl").getByText("≈560 kcal", { exact: true })).toBeVisible();
+    await recipePage.reload();
+    await expect(card("My Korean Beef Bowl")).toBeVisible();
+    await expect(logged.getByText("2240 kcal", { exact: true })).toBeVisible();
+    response = nextRpcResponse(recipePage, "archive_saved_meal");
+    await card("Creamy Lemon Chicken").getByRole("button", { name: "Archive Creamy Lemon Chicken", exact: true }).click();
+    expect((await response).ok()).toBe(true);
+    await recipePage.reload();
+    await expect(card("Creamy Lemon Chicken")).toHaveCount(0);
+    await page.goto("/nutrition");
+    await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true })).toBeVisible();
+    await recipePage.emulateMedia({ reducedMotion: "reduce" });
+    if (info.project.name === "mobile") await recipePage.setViewportSize({ width: 320, height: 900 });
+    await recipePage.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await recipePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  } catch (error) {
+    await info.attach("recipe-controls-state", { body: await recipePage.locator("body").innerText(), contentType: "text/plain" });
+    throw error;
+  } finally {
+    await context.close();
+    await deleteLocalAccount(account);
+  }
+});
+
 
 test("loads an existing account immediately after signing in from a fresh browser", async ({ browser }) => {
   const accounts = JSON.parse(fs.readFileSync("playwright/.auth/test-accounts.json", "utf8")) as LocalAccount[];
@@ -57,7 +176,23 @@ async function clearBrowserDrafts(page: Page) {
 
 async function openNutritionSlot(page: Page, slot: "Breakfast" | "Lunch" | "Dinner" | "Snack" = "Breakfast") {
   await page.goto("/nutrition");
-  await page.getByRole("heading", { name: slot }).locator("..").getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("listitem").first()).toBeVisible();
+  const dayCard = page.getByRole("region", { name: "Planned" });
+  await dayCard.getByRole("button", { name: "Add to plan" }).click();
+  await dayCard.getByRole("group", { name: "Add meal" }).getByRole("combobox", { name: "Meal slot" }).selectOption(slot.toLowerCase());
+}
+
+async function openNutritionPage(page: Page) {
+  await page.goto("/nutrition");
+  await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("listitem").first()).toBeVisible();
+}
+
+async function changeDayAndReturn(page: Page) {
+  const dayButtons = page.getByRole("group", { name: "Choose a day" }).getByRole("button");
+  const selectedIndex = await dayButtons.evaluateAll((buttons) => buttons.findIndex((button) => button.getAttribute("aria-pressed") === "true"));
+  expect(selectedIndex).toBeGreaterThanOrEqual(0);
+  await dayButtons.nth(selectedIndex === 0 ? 1 : 0).click();
+  await dayButtons.nth(selectedIndex).click();
 }
 
 async function mockMealProvider(page: Page, options: { includeEstimate?: boolean } = {}) {
@@ -187,8 +322,9 @@ async function logEgg(page: Page) {
   await page.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
   await page.getByRole("button", { name: /^Egg/ }).first().click();
   await expect(page.getByRole("group", { name: "Review food quantity" })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm food" }).click();
-  await expect(page.locator("li").filter({ hasText: /Egg/ }).first()).toBeVisible();
+  await page.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Log meal" }).click();
+  await expect(page.getByRole("region", { name: "Breakfast" }).getByRole("listitem").filter({ hasText: /Egg/ }).first()).toBeVisible();
+  await expect(page.getByRole("group", { name: "Add meal" })).toHaveCount(0);
 }
 
 async function freshAccountJourney(browser: Browser, testInfo: import("@playwright/test").TestInfo) {
@@ -337,8 +473,9 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(field).toBeFocused();
     await page.getByRole("button", { name: /^Egg/ }).first().click();
     await expect(page.getByRole("group", { name: "Review food quantity" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Confirm food" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Log meal" })).toBeVisible();
   });
+
 
   test("does not call DeepSeek until analysis is explicitly selected", async ({ page }) => {
     await openNutritionSlot(page, "Lunch");
