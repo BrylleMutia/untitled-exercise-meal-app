@@ -261,13 +261,156 @@ Rules:
   trusted food/meal references and expected meal-plan/grocery versions, while
   the RPC recalculates persisted nutrition metadata and returns a refreshed
   snapshot. It never rewrites completed nutrition logs.
+- `addPlannedMeal` is a separate intent for a confirmed daily candidate. Its
+  `add_planned_meal` RPC checks the selected week, owned eligible target,
+  current plan version, and idempotency key; it can create a first weekly plan
+  or copy a plan into a new version. Any newly reviewed reusable food or recipe,
+  the planned row, and grocery reconciliation commit together. Eaten entries
+  continue through the nutrition-save RPC and never mutate that plan version.
+- Direct logging from a planned row uses the authenticated `log_planned_meal`
+  wrapper around the existing food or grouped-meal save path. The wrapper
+  checks the current owned plan version, date, slot, and reference, then stores
+  the stable planned-meal app ID on the saved history record in the same
+  transaction. The day view hides a planned item while any linked history
+  exists; deleting the last linked log reveals it without editing the plan or
+  groceries. Independent logs have no planned-meal link.
 - Saved-meal edits use `saveMeal`; when the active grocery read model is
   supplied, recipe persistence and grocery reconciliation commit in the same
   authorized transaction. `archiveMeal` soft-deletes owned recipes so
   historical planned references remain resolvable.
+- Recipe authoring uses the separate typed `saveRecipe` intent and authorized
+  `save_recipe` RPC. New custom/provider foods, recipe ingredients, instructions
+  (`Meal.notes`), optional `Meal.reference`/`Meal.totalTimeMinutes`, manual `Meal.complexity`, and grocery reconciliation commit
+  atomically. Ownership, expected revisions, explicit grants, and stable retry
+  keys remain authoritative. Ordinary `saveMeal`/logging compatibility keeps
+  instructions optional; recipe authoring requires nonblank instructions and
+  trusted or user-provided nutrition. References are nullable text, with legacy
+  source URLs copied by a forward migration. Drafts include units, review and
+  custom input, stable ingredient/recipe IDs, base revisions, and the pending
+  save key. Stale drafts require an explicit review/rebase before reapplication.
+  Recipe saves check reference, total-time, and complexity columns before calling the RPC, so an
+  older backend cannot silently drop authored details or pending ingredients.
+  Whole-recipe time maps to nullable `meals.total_time_minutes`: nonnegative
+  integers from 0 through 2147483647, independent of profile cooking preferences.
+  The authorized saved-meal wrapper validates and writes time in the existing
+  transaction. Omitted legacy payload fields preserve stored time; authored
+  saves serialize a blank field as explicit null to clear it. Snapshot mapping
+  preserves zero, duplication copies the domain field, and the existing row-based
+  account export includes the column. Recoverable drafts retain time as text,
+  including invalid input, and older drafts default to the saved time or blank.
+  Account deletion removes owned nutrition, planned/grocery, and recipe ingredient
+  references before the auth cascade deletes private foods, preserving restricted
+  foreign keys without leaving account cleanup dependent on cascade ordering.
+  Recipe covers map to nullable `meals.image`: `{ kind: "url", url }` or
+  `{ kind: "upload", path }`. Explicit null clears the cover; omission preserves
+  an older meal's image. The authenticated RPC validates ownership of an upload
+  registration and object presence in the same recipe transaction. Its stable
+  private path, rather than a signed URL, is persisted and exported.
+  `/api/recipe-images` verifies the authenticated user and upload origin, bounds
+  request size, decodes still JPEG/PNG/WebP with Sharp, strips metadata and
+  re-encodes to at most 1600px WebP. A checksum and client upload UUID make retry
+  registration stable; storage upload never overwrites an attached object.
+  The private `recipe-covers` bucket uses authorized registration/read/removal
+  helpers and Storage RLS. GET resolves an owner-scoped one-hour signed URL;
+  the cover refreshes it after 45 minutes or an explicit retry. External HTTPS
+  covers load directly without referrer information, avoiding a server URL proxy.
+  Unreferenced registrations older than eight days are claimed under the same
+  per-owner transaction lock as attachment, then removed through Storage API
+  during subsequent uploads. Referenced covers, including archived recipes,
+  cannot be expired. Client account-cleanup claims are prohibited.
+  An auth deletion trigger atomically queues paths in private deletion jobs,
+  releases this bucket's Storage ownership, and lets the existing account
+  cascade commit. A failed deletion rolls back both queue and ownership changes.
+  The server-only `recipe-image-cleanup` Edge Function drains up to 100 leased
+  jobs per invocation via Storage API; failures retain jobs for retry after a
+  ten-minute lease. No SQL deletion of Storage metadata is permitted. Its
+  service-role authorization and a recurring server invocation must be configured
+  and verified before uploaded covers are enabled in production.
+  Recipe-image migration/type regeneration and local pgTAP/Storage checks are
+  release gates. Older backends reject image saves
+  with draft-preserving guidance rather than dropping the image field silently.
 - Progress/history surfaces use bounded repository read models when available;
   the initial focused history query is limited to 366 days and 50/100-row
   cursors, while complete export remains a separate authoritative path.
+
+Recipe cards use a focused `RecipeCardReadModel` instead of loading historical
+usage into `AppSnapshot`. Context delegates `loadRecipeCardMetadata` and
+`setRecipeFavorite` to typed repository methods. `get_recipe_card_metadata`
+validates authenticated ownership and the requested local date, aggregates
+`logged_meals` groups over the inclusive 30-day window, and ranks at most five
+active recipes by count, latest date, then stable app ID. Counts exclude planned
+prescriptions and use one grouped row independent of ingredients/servings.
+
+Predefined recipe replacement uses a forward catalog-data migration. Retiring
+the eight old system recipes preserves their rows and ingredient/food identities;
+neither existing prescriptions nor saved nutrition are rewritten. The compact
+snapshot includes a retired recipe only when the current plan references it;
+Saved meals, selection controls and future generation exclude archived entries.
+New ingredient identities preserve older source values. Creamy Lemon Chicken
+uses six reviewed USDA SR Legacy ingredient records; Korean Beef Bowl adds ten
+and reuses the reviewed honey identity. Household/garnish weights are explicit
+assumptions. Bundled generated covers use `RecipeImage` kind `asset` with a
+registered ID, resolved to a same-origin public asset. Client parsing, the image
+constraint and authorized save transaction all accept only registered IDs;
+arbitrary relative paths remain rejected. Personal catalog edits retain that cover
+until changed/reset through existing image controls.
+
+`recipe_catalog_preferences` owns per-account catalog hiding, its concurrency
+revision, and an optional personal replacement identity. Owner-only RLS permits
+reads; direct writes and private helper execution are revoked. Authorized recipe
+saving atomically creates a new owned recipe and hides the catalog original.
+Archival stores only the caller's preference. Both paths check catalog and
+preference versions, serialize the user/recipe pair, and replay claimed intents.
+Snapshot mapping projects preferences without mutating catalog rows and retains
+hidden references needed by the current plan or recoverable editor. Card metadata
+excludes hidden originals. Export includes preferences; auth-user cascades delete
+them. The meal duplication editor workflow has been removed; previously created
+copies remain ordinary saved recipes with their existing identities and history.
+
+Nullable `meals.provided_nutrition` stores validated per-serving calories,
+protein, carbohydrates and fat as explicit provided values. `mealNutrition`
+prioritizes these values over ingredient estimates. Editor drafts preserve the
+manual values; authoring saves distinguish omission from explicit null. Provided
+recipe logging saves one labeled recipe portion through the existing grouped
+logging boundary, using stored macros on the server and the existing piece-based
+food unit. Actual servings scale the stored values; source, recipe revision and
+reference identify their provenance. Claims replay before mutable recipe metadata
+is consulted. Ingredients/groceries and historical logs retain their own values.
+Planned logging claims the original intent separately from the grouped logger's
+normalized ingredient payload, completes only after the plan link is stored, and
+replays completed requests before checking newer plan versions. Matching linked
+claims from older releases remain replayable. A changed request with a reused
+key is rejected; failed requests leave neither intake nor a completed claim.
+Unverified provided nutrition is ineligible for strict carbohydrate-limited plans.
+
+`recipe_favorites` has a unique user/meal pair, desired boolean state, revision,
+and timestamp. Retained false rows preserve concurrency versions after removal.
+RLS permits only owner reads; explicit grants deny direct writes. The public
+`set_recipe_favorite` wrapper delegates to a private authorized transaction,
+validates ownership/catalog eligibility, claims a stable mutation key, locks the
+user/recipe pair, compares the expected favorite revision, and returns the
+authoritative read model. Retried keys replay without another revision. Favorites
+do not mutate recipe revisions, plans, groceries, or historical nutrition.
+Background metadata reads are deferred during a favorite write and cannot
+suppress its success/error. Confirmed state updates both displays; failures retain
+the prior state and retry identity until a deliberate refresh/retry. No offline
+write queue is introduced. Account export includes favorites and deletion
+removes them through the existing auth cascade.
+
+`RecipeComplexity` is `easy | medium | hard`; the constrained, non-null meals
+column defaults to medium. A forward migration backfills only null values,
+including archived recipes, using existing revision/timestamp triggers. A private
+security-invoker trigger normalizes legacy null inserts to medium and null updates
+to the prior configured value. Supported choices, ownership/RLS, explicit grants,
+RPC validation and idempotency remain unchanged. Authoring requires a supported
+value in the client and RPC. Optional `Meal.complexity` remains compatible with old
+caches. Create/Edit drafts default missing or blank values to Medium, preserve
+supported selections and reject unsupported values; the default alone does not
+make a blank new draft recoverable. Duplicate paths and props are removed;
+obsolete duplicate draft keys are not reused and retain their seven-day expiry. Account
+export includes the meals column. Forward migrations preserve older wrappers,
+recipe revisions, planned values, and logged nutrition snapshots. Shared-database
+deployment remains separately authorized after migration comparison and dry run.
 
 ## Repository Boundary and Supabase Authority
 
@@ -593,6 +736,25 @@ semantic callbacks and do not import unrelated navigation or mutation logic.
 Avoid nested modal dialogs and preserve browser focus when dialogs open or
 close. Before executing a follow-up action, re-evaluate it against the latest
 snapshot when another mutation may have changed its validity.
+
+Saved-recipe authoring uses the shared presentation-only Floating UI `Modal`.
+The route owns the selected recipe, visibility, and originating focus target;
+`RecipeEditor` owns its draft, ingredient interactions, and existing save intent.
+Closing the modal leaves the editor mounted to preserve in-memory drafts in
+addition to the existing recoverable browser draft. Successful saves clear that
+draft before closing and releasing the editor. No modal state enters domain
+snapshots, repository payloads, or database contracts. Floating UI owns focus
+trapping, outside-element inertness, scroll locking, and return focus. A local
+floating tree includes portaled non-modal help so child dismissal does not also
+close the recipe. The modal header/footer remain visible around a scrolling
+body; save failures and stale-version recovery remain inside the foreground
+editor, and authoritative saving blocks dismissal.
+Food pickers share the pure typed `searchFoods` utility, whose result includes
+the food reference and presentation match category. It normalizes query text
+without changing stored names, ranks bounded suggestions, and has no persistence
+or provider effects. Fuzzy suggestions are never used for automatic AI matching.
+Recipe servings controls and empty-field method prefilling use pure editor
+utilities; their updates use the existing draft queue and calculation path.
 
 The initial App Router navigation model is onboarding followed by the product
 areas defined in `FEATURES.md`: Home, Workouts, Nutrition, Grocery, Progress,
