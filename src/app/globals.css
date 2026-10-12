@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+.recipe-card { animation: recipe-card-enter 240ms ease-out; }
+.recipe-heart-saved { display: inline-block; animation: recipe-heart-save 180ms ease-out; }
+@keyframes recipe-card-enter { from { transform: translateY(5px); opacity: .8; } to { transform: translateY(0); opacity: 1; } }
+@keyframes recipe-heart-save { 50% { transform: scale(1.12); } }
+@media (hover: hover) and (pointer: fine) {
+  .recipe-card { transition: transform 150ms ease-out; }
+  .recipe-card:hover { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recipe-card, .recipe-heart-saved { animation: none; transition: none; }
+  .recipe-card:hover { transform: none; }
+}
+
 @theme {
   --font-sans: ui-rounded, "Segoe UI", system-ui, sans-serif;
 
