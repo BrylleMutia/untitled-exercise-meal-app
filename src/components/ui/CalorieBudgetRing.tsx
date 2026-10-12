@@ -1,3 +1,4 @@
+import { nutritionMetricStyles } from "./nutritionMetrics";
 import { calorieBudgetState, type CalorieBudgetInput } from "@/utility/calorieBudget";
 
 type CalorieBudgetRingProps = CalorieBudgetInput & {
@@ -16,7 +17,7 @@ export function CalorieBudgetRing({ target, logged, status, estimated = false, s
         <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
           <circle cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} stroke="currentColor" fill="none" className="text-white/70" />
           {remaining !== null ? (
-            <circle cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} stroke="currentColor" fill="none" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - fraction)} className="text-lav-500 transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none" />
+            <circle cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} stroke="currentColor" fill="none" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - fraction)} className={`${nutritionMetricStyles.calories.ring} transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none`} />
           ) : null}
         </svg>
         <span className="absolute grid text-center">

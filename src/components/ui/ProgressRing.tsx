@@ -8,6 +8,7 @@ interface ProgressRingProps {
   label: string;
   centerLabel: string;
   centerSub?: string;
+  centerLabelClassName?: string;
 }
 
 /** Accessible circular progress with a text alternative via aria-label. */
@@ -21,6 +22,7 @@ export function ProgressRing({
   label,
   centerLabel,
   centerSub,
+  centerLabelClassName = "",
 }: ProgressRingProps) {
   const clamped = value === null ? 0 : Math.min(1, Math.max(0, value));
   const radius = (size - stroke) / 2;
@@ -56,7 +58,7 @@ export function ProgressRing({
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">
         <div>
-          <p className="text-lg font-extrabold tabular-nums leading-none">{centerLabel}</p>
+          <p className={`text-lg font-extrabold tabular-nums leading-none ${centerLabelClassName}`}>{centerLabel}</p>
           {centerSub ? (
             <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft">
               {centerSub}
