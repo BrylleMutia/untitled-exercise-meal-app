@@ -56,7 +56,7 @@ const NUMBER_WORDS: Record<string, number> = {
   five: 5,
 };
 
-function normalizedUnit(value: string): string {
+export function normalizeNutritionUnit(value: string): string {
   const key = value.trim().toLowerCase().replace(/[^a-z]/g, "");
   return UNIT_WORDS[key] ?? key;
 }
@@ -77,9 +77,9 @@ export function servingPlanForCandidate(
   requestedUnit: string,
 ): CandidateServingPlan | null {
   if (!Number.isFinite(quantity) || quantity <= 0 || !food.servingGrams || food.servingGrams <= 0) return null;
-  const unit = normalizedUnit(requestedUnit || "serving");
+  const unit = normalizeNutritionUnit(requestedUnit || "serving");
   const option = food.servingOptions?.find((candidate) =>
-    normalizedUnit(candidate.unit) === unit || labelContainsUnit(candidate.label, unit),
+    normalizeNutritionUnit(candidate.unit) === unit || labelContainsUnit(candidate.label, unit),
   );
 
   if (option) {
