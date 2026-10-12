@@ -98,6 +98,7 @@ type RpcName =
   | "finish_workout_session"
   | "abandon_workout_session"
   | "save_nutrition_log"
+  | "log_planned_meal"
   | "update_nutrition_log"
   | "save_food"
   | "log_saved_meal"
@@ -629,8 +630,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       valueSource: input.entry.valueSource ?? (food?.valueSource ?? "user_provided"),
     };
     return this.mutate(
-      "save_nutrition_log",
-      { entry, idempotencyKey: mutationKey },
+      entry.plannedMealId ? "log_planned_meal" : "save_nutrition_log",
+      { ...(entry.plannedMealId ? { kind: "food", plannedMealId: entry.plannedMealId, expectedMealPlanVersion: input.expectedMealPlanVersion } : {}), entry, idempotencyKey: mutationKey },
       [{ type: "nutrition-entry-saved", entryId: id }],
     );
   }
@@ -859,8 +860,9 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       valueSource: entry.valueSource,
     }));
     return this.mutate(
-      "save_reviewed_meal",
+      input.plannedMealId ? "log_planned_meal" : "save_reviewed_meal",
       {
+        ...(input.plannedMealId ? { kind: "meal", plannedMealId: input.plannedMealId, expectedMealPlanVersion: input.expectedMealPlanVersion } : {}),
         date: input.date,
         slot: input.slot,
         name: input.name,

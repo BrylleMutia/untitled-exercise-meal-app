@@ -81,7 +81,7 @@ export interface AppActions {
   saveSession(session: WorkoutSession): Promise<void>;
   finishSession(sessionId: string): Promise<boolean>;
   abandonSession(sessionId: string): Promise<boolean>;
-  logNutrition(input: Omit<NutritionLog, "id" | "createdAt">): Promise<boolean>;
+  logNutrition(input: Omit<NutritionLog, "id" | "createdAt">, fixedKey?: string): Promise<boolean>;
   updateNutrition(entry: NutritionLog): Promise<boolean>;
   saveFood(food: Omit<Food, "id"> & { id?: string }): Promise<boolean>;
   logSavedMeal(
@@ -89,8 +89,8 @@ export interface AppActions {
     slot: NutritionLog["slot"],
     entries: Array<Omit<NutritionLog, "id" | "createdAt">>,
     meal?: Meal,
-  ): Promise<void>;
-  saveReviewedMeal(input: Omit<SaveReviewedMealInput, "idempotencyKey">): Promise<boolean>;
+  ): Promise<boolean>;
+  saveReviewedMeal(input: Omit<SaveReviewedMealInput, "idempotencyKey">, fixedKey?: string): Promise<boolean>;
   updateLoggedMeal(loggedMeal: LoggedMeal, ingredients: Array<Omit<NutritionLog, "id" | "createdAt">>): Promise<boolean>;
   deleteLoggedMeal(loggedMealId: string): Promise<void>;
   deleteNutrition(id: string): Promise<void>;
@@ -568,7 +568,7 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async logNutrition(input) {
+      async logNutrition(input, fixedKey) {
         const numericValues = [
           input.servings,
           ...(input.servingQuantity === undefined ? [] : [input.servingQuantity]),
@@ -582,11 +582,15 @@ export function AppProvider({
           notify("Servings must be positive; nutrition values may be zero or higher.", "warn");
           return false;
         }
-        const outcome = await execute("save_nutrition_log", (_current, idempotencyKey) => repository!.saveNutrition({ entry: input, idempotencyKey }));
+        const outcome = await execute("save_nutrition_log", (current, idempotencyKey) => repository!.saveNutrition({
+          entry: input,
+          ...(input.plannedMealId ? { expectedMealPlanVersion: current.mealPlan?.version } : {}),
+          idempotencyKey,
+        }), fixedKey);
         return Boolean(outcome);
       },
 
-      async saveReviewedMeal(input) {
+      async saveReviewedMeal(input, fixedKey) {
         if (!input.name.trim() || input.ingredients.length === 0 || input.ingredients.length > 10) {
           notify("Add at least one reviewed ingredient before saving the meal.", "warn");
           return false;
@@ -596,7 +600,11 @@ export function AppProvider({
           notify("Review quantities and nutrition values before saving.", "warn");
           return false;
         }
-        const outcome = await execute("save_reviewed_meal", (_current, idempotencyKey) => repository!.saveReviewedMeal({ ...input, idempotencyKey }));
+        const outcome = await execute("save_reviewed_meal", (current, idempotencyKey) => repository!.saveReviewedMeal({
+          ...input,
+          ...(input.plannedMealId ? { expectedMealPlanVersion: current.mealPlan?.version } : {}),
+          idempotencyKey,
+        }), fixedKey);
         return Boolean(outcome);
       },
 
@@ -646,13 +654,14 @@ export function AppProvider({
       async logSavedMeal(date, slot, entries, meal) {
         if (entries.length === 0) {
           notify("This meal has no ingredients to log.", "info");
-          return;
+          return false;
         }
         if (entries.some((entry) => !Number.isFinite(entry.servings) || entry.servings <= 0 || [entry.calories, entry.proteinG, entry.carbsG, entry.fatG, ...(entry.fiberG === undefined ? [] : [entry.fiberG])].some((value) => !Number.isFinite(value) || value < 0))) {
           notify("This saved meal has invalid nutrition values.", "warn");
-          return;
+          return false;
         }
-        await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, meal, idempotencyKey }));
+        const outcome = await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, meal, idempotencyKey }));
+        return Boolean(outcome);
       },
 
       async updateLoggedMeal(loggedMeal, ingredients) {
