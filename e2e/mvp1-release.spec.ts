@@ -130,6 +130,152 @@ test("Korean Beef Bowl keeps provided macros and supports personal edit and arch
   }
 });
 
+test("recipe cards synchronize favorites, retain failed changes, and count eaten planned meals", async ({ page }, info) => {
+  await openNutritionPage(page);
+  const planned = page.getByRole("region", { name: "Planned" });
+  const recipeTitle = planned.getByRole("button", { name: /^View recipe: / }).first();
+  const name = (await recipeTitle.getAttribute("aria-label"))!.replace("View recipe: ", "");
+  const plannedCard = planned.getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${name}`, exact: true }) }).first();
+  const saved = page.getByRole("region", { name: "Saved meals" });
+  const savedCard = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${name}`, exact: true }) });
+  const heart = savedCard.getByRole("button", { name: `Add to favorites: ${name}`, exact: true });
+  await expect(heart).toBeEnabled();
+  const edit = plannedCard.getByRole("button", { name: "Edit", exact: true });
+  await edit.click();
+  await expect(plannedCard.getByRole("combobox", { name: "Planned meal choice", exact: true })).toBeFocused();
+  await plannedCard.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(edit).toBeFocused();
+  let started!: () => void;
+  const pending = new Promise<void>(resolve => { started = resolve; });
+  await page.route("**/rest/v1/rpc/set_recipe_favorite", async route => { started(); await new Promise(resolve => setTimeout(resolve, 300)); await route.continue(); });
+  let response = nextRpcResponse(page, "set_recipe_favorite");
+  await heart.click(); await pending;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  expect((await response).ok()).toBe(true);
+  await page.unroute("**/rest/v1/rpc/set_recipe_favorite");
+  const remove = savedCard.getByRole("button", { name: `Remove from favorites: ${name}`, exact: true });
+  await expect(remove).toHaveAttribute("aria-pressed", "true");
+  await expect(plannedCard.getByRole("button", { name: `Remove from favorites: ${name}`, exact: true })).toHaveAttribute("aria-pressed", "true");
+  await plannedCard.screenshot({ path: `output/recipe-cards/planned-${info.project.name}.png` });
+  await page.reload(); await expect(remove).toBeEnabled();
+  await page.route("**/rest/v1/rpc/set_recipe_favorite", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary failure" }) }));
+  response = nextRpcResponse(page, "set_recipe_favorite"); await remove.click(); expect((await response).ok()).toBe(false);
+  await expect(remove).toHaveAttribute("aria-pressed", "true");
+  await page.unroute("**/rest/v1/rpc/set_recipe_favorite");
+  await saved.getByRole("button", { name: "Refresh cards", exact: true }).click();
+  await expect(remove).toBeEnabled();
+  await plannedCard.getByRole("button", { name: "Log", exact: true }).click();
+  await plannedCard.getByRole("spinbutton", { name: "Actual servings", exact: true }).fill("1.5");
+  response = nextRpcResponse(page, "log_planned_meal");
+  await plannedCard.getByRole("button", { name: "Confirm log", exact: true }).click(); expect((await response).ok()).toBe(true);
+  await expect(savedCard.getByText("Popular", { exact: true })).toBeVisible();
+  await expect(remove).toHaveAttribute("aria-pressed", "true");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  if (info.project.name === "mobile") {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);
+    expect(await savedCard.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  }
+  await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+  await savedCard.scrollIntoViewIfNeeded();
+  await savedCard.screenshot({ path: `test-results/recipe-card-${info.project.name}.png` });
+  response = nextRpcResponse(page, "set_recipe_favorite"); await remove.click(); expect((await response).ok()).toBe(true);
+  await expect(heart).toHaveAttribute("aria-pressed", "false");
+  const eaten = planned.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${name}`, exact: true }) }).last();
+  response = nextRpcResponse(page, "delete_logged_meal");
+  await eaten.getByRole("button", { name: `Delete ${name}`, exact: true }).click();
+  expect((await response).ok()).toBe(true);
+  await expect(plannedCard.getByRole("button", { name: "Log", exact: true })).toBeVisible();
+});
+
+test("recipe card refinements preserve calorie basis, yield, icon controls and Medium defaults", async ({ page }, info) => {
+  await openNutritionPage(page); await clearBrowserDrafts(page);
+  const saved = page.getByRole("region", { name: "Saved meals" });
+  const row = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) });
+  await expect(row.getByText("≈560 kcal", { exact: true })).toBeVisible();
+  await expect(row.getByRole("img", { name: "Recipe yields 4 servings", exact: true })).toBeVisible();
+  await expect(row.getByRole("img", { name: "Approximately 560 calories per serving", exact: true })).toBeVisible();
+  await expect(saved.getByRole("button", { name: "Duplicate", exact: true })).toHaveCount(0);
+  const log = row.getByRole("button", { name: "Log", exact: true });
+  const edit = row.getByRole("button", { name: "Edit Korean Beef Bowl", exact: true });
+  const archive = row.getByRole("button", { name: "Archive Korean Beef Bowl", exact: true });
+  await log.focus(); await page.keyboard.press("Tab"); await expect(edit).toBeFocused();
+  await expect(row.getByRole("tooltip", { name: "Edit", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape"); await expect(row.getByRole("tooltip")).toHaveCount(0);
+  await page.keyboard.press("Tab"); await expect(archive).toBeFocused();
+  const editBox = await edit.boundingBox(); const archiveBox = await archive.boundingBox();
+  expect(editBox!.width).toBeGreaterThanOrEqual(48); expect(editBox!.height).toBeGreaterThanOrEqual(48);
+  expect(archiveBox!.width).toBeGreaterThanOrEqual(48);
+  await edit.click();
+  const editDialog = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+  await editDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(edit).toBeFocused();
+  await log.click(); await expect(row.getByRole("combobox", { name: "Meal slot", exact: true })).toBeFocused();
+  const confirmation = row.getByRole("group", { name: "Log Korean Beef Bowl", exact: true });
+  expect((await confirmation.boundingBox())!.y).toBeLessThan((await log.boundingBox())!.y);
+  await row.getByRole("button", { name: "Cancel", exact: true }).click();
+  const planned = page.getByRole("region", { name: "Planned" });
+  const initialPlannedRow = planned.getByRole("listitem").filter({ has: page.getByRole("button", { name: /^View recipe: / }) }).first();
+  const plannedLogId = await initialPlannedRow.getByRole("button", { name: "Log", exact: true }).getAttribute("id");
+  const plannedRow = planned.getByRole("listitem").filter({ has: page.locator(`[id="${plannedLogId}"]`) });
+  await plannedRow.getByRole("button", { name: "Edit", exact: true }).click();
+  const originalChoice = await plannedRow.getByRole("combobox", { name: "Planned meal choice", exact: true }).inputValue();
+  const originalServings = await plannedRow.getByRole("spinbutton", { name: "Planned meal servings", exact: true }).inputValue();
+  await plannedRow.getByRole("combobox", { name: "Planned meal choice", exact: true }).selectOption("meal:meal-korean-beef-bowl");
+  await plannedRow.getByRole("spinbutton", { name: "Planned meal servings", exact: true }).fill("0.5");
+  const planResponse = nextRpcResponse(page, "edit_meal_plan");
+  await plannedRow.getByRole("button", { name: "Save meal", exact: true }).click();
+  expect((await planResponse).ok()).toBe(true);
+  await expect(plannedRow.getByRole("img", { name: "Recipe yields 4 servings", exact: true })).toBeVisible();
+  await expect(plannedRow.getByText("≈560 kcal", { exact: true })).toBeVisible();
+  await expect(plannedRow.getByText(/0.5 servings/)).toBeVisible();
+  await plannedRow.getByRole("button", { name: "Log", exact: true }).click();
+  await plannedRow.getByRole("spinbutton", { name: "Actual servings", exact: true }).fill("1.5");
+  let plannedLogResponse = nextRpcResponse(page, "log_planned_meal");
+  await plannedRow.getByRole("button", { name: "Confirm log", exact: true }).click();
+  expect((await plannedLogResponse).ok()).toBe(true);
+  const eaten = planned.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Delete Korean Beef Bowl", exact: true }) }).last();
+  await expect(eaten.getByText("840 kcal", { exact: true })).toBeVisible();
+  plannedLogResponse = nextRpcResponse(page, "delete_logged_meal");
+  await eaten.getByRole("button", { name: "Delete Korean Beef Bowl", exact: true }).click();
+  expect((await plannedLogResponse).ok()).toBe(true);
+  await expect(plannedRow).toBeVisible();
+  await plannedRow.getByRole("button", { name: "Edit", exact: true }).click();
+  await plannedRow.getByRole("combobox", { name: "Planned meal choice", exact: true }).selectOption(originalChoice);
+  await plannedRow.getByRole("spinbutton", { name: "Planned meal servings", exact: true }).fill(originalServings);
+  const restoreResponse = nextRpcResponse(page, "edit_meal_plan");
+  await plannedRow.getByRole("button", { name: "Save meal", exact: true }).click();
+  expect((await restoreResponse).ok()).toBe(true);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect(await row.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+  await row.screenshot({ path: "output/recipe-card-refinements/card-" + info.project.name + ".png" });
+  await saved.getByRole("button", { name: "Create", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Create recipe", exact: true });
+  await expect(editor.getByLabel("Complexity (required)", { exact: true })).toHaveValue("medium");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.reload();
+  await saved.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(editor.getByText("Recipe draft restored.", { exact: true })).toHaveCount(0);
+  await editor.getByLabel("Recipe name", { exact: true }).fill("Default Medium " + info.project.name);
+  await editor.getByLabel("Recipe servings", { exact: true }).fill("2.5");
+  await editor.getByLabel("Ingredient search").fill("eggs");
+  await editor.getByRole("button", { name: /^Egg.*1 large egg/ }).click();
+  await editor.getByLabel("Egg quantity", { exact: true }).fill("1");
+  await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Prepare and serve.");
+  const saveResponse = nextRpcResponse(page, "save_recipe");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await saveResponse).ok()).toBe(true);
+  await page.reload();
+  const created = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Default Medium " + info.project.name, exact: true }) });
+  await expect(created.getByText("Medium", { exact: true })).toBeVisible();
+  await expect(created.getByRole("img", { name: "Recipe yields 2.5 servings", exact: true })).toBeVisible();
+});
 
 test("recipe controls step servings, suggest plural and close matches, and preserve method text", async ({ page }, info) => {
   const editor = await openRecipe(page);
@@ -852,6 +998,80 @@ test.describe("MVP-1 release browser gate", () => {
     await page.getByRole("button", { name: /^Egg/ }).first().click();
     await expect(page.getByRole("group", { name: "Review food quantity" })).toBeVisible();
     await expect(page.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Log meal" })).toBeVisible();
+  });
+
+  test("shows consistent nutrition pills with valid quantity and manual previews", async ({ page }, testInfo) => {
+    await openNutritionPage(page);
+    const card = page.getByRole("region", { name: "Planned" });
+    await card.getByRole("button", { name: "Add to plan", exact: true }).click();
+    await card.getByRole("combobox", { name: "Meal slot", exact: true }).selectOption("snack");
+    await card.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
+    await card.getByRole("button", { name: /^Egg/ }).first().click();
+    const review = card.getByRole("group", { name: "Review food quantity" });
+    const preview = review.getByRole("group", { name: "Nutrition preview", exact: true });
+    await expect(preview.locator("[data-nutrition-metric]")).toHaveCount(4);
+    await expect(preview).toContainText("72 kcal");
+    const expectedColors = { calories: "rgb(255, 171, 179)", proteinG: "rgb(170, 156, 224)", carbsG: "rgb(248, 211, 172)", fatG: "rgb(181, 226, 216)" };
+    for (const [metric, color] of Object.entries(expectedColors)) {
+      await expect(preview.locator(`[data-nutrition-metric="${metric}"]`)).toHaveCSS("background-color", color);
+    }
+    const initial = await preview.textContent();
+    await review.getByRole("spinbutton", { name: "Quantity" }).fill("0.5");
+    await expect(preview).toContainText("36 kcal");
+    await review.getByRole("spinbutton", { name: "Quantity" }).fill("");
+    await expect(preview).toHaveCount(0);
+    await review.getByRole("spinbutton", { name: "Quantity" }).fill("1");
+    await expect(preview).toHaveText(initial ?? "");
+    const trackerColors = await page.getByRole("progressbar").evaluateAll((bars) => bars.map((bar) => getComputedStyle(bar.firstElementChild!).backgroundColor));
+    expect(trackerColors).toEqual([expectedColors.proteinG, expectedColors.carbsG, expectedColors.fatG]);
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    for (const pill of await preview.locator("[data-nutrition-metric]").all()) {
+      expect(await pill.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    }
+    await review.getByRole("spinbutton", { name: "Quantity" }).press("Tab");
+    await expect(review.getByRole("combobox", { name: "Serving unit" })).toBeFocused();
+    await preview.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("nutrition-pills-large-text.png") });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "100%"; });
+    await preview.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("nutrition-pills.png") });
+    await review.getByRole("button", { name: "Cancel", exact: true }).click();
+    await card.getByRole("tab", { name: "Enter manually" }).click();
+    const manual = card.getByRole("group", { name: "Manual nutrition preview" });
+    for (const label of ["kcal", "P g", "C g", "F g"]) await card.getByRole("textbox", { name: label, exact: true }).fill("0");
+    await expect(manual).toContainText("0 kcal");
+    await expect(manual).toContainText("0 g protein");
+    await card.getByRole("textbox", { name: "P g", exact: true }).fill("");
+    await expect(manual).toHaveCount(0);
+  });
+
+  test("combines planned and logged meals while keeping their actions distinct", async ({ page }) => {
+    await page.goto("/nutrition");
+    const dayCard = page.getByRole("region", { name: "Planned" });
+    for (const slot of ["Breakfast", "Lunch", "Dinner", "Snack"]) {
+      await expect(dayCard.getByRole("region", { name: slot })).toBeVisible();
+    }
+    await dayCard.getByRole("button", { name: "Add to plan" }).click();
+    const logger = dayCard.getByRole("group", { name: "Add meal" });
+    await expect(logger.getByRole("textbox", { name: "Search for a food or describe a meal" })).toHaveCount(0);
+    await expect(logger.getByRole("combobox", { name: "Meal slot" })).toBeFocused();
+    await logger.getByRole("combobox", { name: "Meal slot" }).selectOption("lunch");
+    await expect(logger.getByRole("textbox", { name: "Search for a food or describe a meal" })).toBeVisible();
+    await logger.getByRole("button", { name: "Cancel" }).click();
+    await expect(dayCard.getByRole("button", { name: "Add to plan" })).toBeFocused();
+  });
+
+  test("keeps all meal slots usable at enlarged text", async ({ page }) => {
+    await page.goto("/nutrition");
+    await page.evaluate(() => { document.documentElement.style.fontSize = "32px"; });
+    const card = page.getByRole("region", { name: "Planned" });
+    for (const slot of ["Breakfast", "Lunch", "Dinner", "Snack"]) {
+      await expect(card.getByRole("region", { name: slot })).toBeVisible();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await card.getByRole("button", { name: "Add to plan" }).click();
+    await expect(card.getByRole("combobox", { name: "Meal slot" })).toBeFocused();
   });
 
 
