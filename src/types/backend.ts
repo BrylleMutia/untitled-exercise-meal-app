@@ -7,6 +7,7 @@ import type {
   NutritionLog,
   LoggedMeal,
   Meal,
+  PlannedMeal,
   UnitSystem,
   ProgressionAction,
   WeightEntry,
@@ -73,6 +74,25 @@ export type AccountExportValue =
 
 export type AccountExportRow = { [key: string]: AccountExportValue };
 
+export interface RecipeCardMetadata {
+  mealId: string;
+  favorite: boolean;
+  favoriteRevision: number;
+  popularRank?: number;
+  usageCount: number;
+}
+export interface RecipeCardReadModel {
+  asOfDate: string;
+  recipes: RecipeCardMetadata[];
+}
+export interface SetRecipeFavoriteInput {
+  mealId: string;
+  favorite: boolean;
+  expectedRevision: number;
+  asOfDate: string;
+  idempotencyKey: string;
+}
+
 /** The exact scalar and entity collections returned by export_account_data. */
 export type AccountExport = {
   exportedAt: string;
@@ -93,6 +113,8 @@ export type AccountExport = {
   groceryLists: AccountExportRow[];
   groceryItems: AccountExportRow[];
   savedMeals: AccountExportRow[];
+  recipeFavorites?: AccountExportRow[];
+  recipeCatalogPreferences?: AccountExportRow[];
   savedMealIngredients: AccountExportRow[];
   loggedMeals: AccountExportRow[];
   dailySteps: AccountExportRow[];
@@ -161,6 +183,7 @@ export type AbandonSessionInput = IdempotentInput & {
 };
 
 export type NutritionInput = IdempotentInput & {
+  expectedMealPlanVersion?: number;
   entry: Omit<NutritionLog, "id" | "createdAt"> & {
     servingQuantity?: number;
     servingUnit?: NutritionServingUnit;
@@ -220,6 +243,14 @@ export type SkipPlannedMealInput = IdempotentInput & {
 
 export type EditMealPlanInput = IdempotentInput & {
   mealPlan: MealPlan;
+  currentSnapshot: AppSnapshot;
+  expectedVersions?: ExpectedVersions;
+};
+
+export type AddPlannedMealInput = IdempotentInput & {
+  plannedMeal: PlannedMeal;
+  newFoods?: Food[];
+  newMeal?: Meal;
   currentSnapshot: AppSnapshot;
   expectedVersions?: ExpectedVersions;
 };
@@ -318,6 +349,9 @@ export type SaveMealInput = IdempotentInput & {
   expectedVersions?: ExpectedVersions;
 };
 
+export type CatalogRecipeEdit = { mealId: string; recordRevision: number; preferenceRevision: number };
+export type SaveRecipeInput = SaveMealInput & { newFoods: Food[]; catalog?: CatalogRecipeEdit };
+
 export type ArchiveMealInput = IdempotentInput & {
   mealId: string;
   currentSnapshot?: AppSnapshot;
@@ -329,6 +363,8 @@ export type ReviewedMealIngredientInput = Omit<NutritionLog, "id" | "createdAt" 
 };
 
 export type SaveReviewedMealInput = IdempotentInput & {
+  plannedMealId?: string;
+  expectedMealPlanVersion?: number;
   date: string;
   slot: NutritionLog["slot"];
   meal: Meal;

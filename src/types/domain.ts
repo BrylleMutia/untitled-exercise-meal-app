@@ -271,6 +271,7 @@ export interface NutritionLog {
   valueSource: NutritionValueSource;
   estimateRange?: MacroEstimateRange;
   loggedMealId?: string;
+  plannedMealId?: string;
   ingredientOrder?: number;
   revision?: number;
   createdAt: string;
@@ -299,19 +300,33 @@ export interface RecipeIngredient {
   servings: number;
 }
 
+export type RecipeImage = { kind: "url"; url: string } | { kind: "upload"; path: string }
+  | { kind: "asset"; id: "creamy-lemon-chicken" | "korean-beef-bowl" };
+
+export type RecipeComplexity = "easy" | "medium" | "hard";
+export type ProvidedRecipeNutrition = { calories: number; proteinG: number; carbsG: number; fatG: number };
+
 export interface Meal {
   id: string;
   name: string;
   servings: number;
   isSystem?: boolean;
   notes?: string;
+  reference?: string;
+  totalTimeMinutes?: number;
+  complexity?: RecipeComplexity;
+  image?: RecipeImage | null;
+  providedNutrition?: ProvidedRecipeNutrition | null;
   ingredients: RecipeIngredient[];
   revision?: number;
   archivedAt?: string;
+  catalogPreferenceRevision?: number;
+  catalogReplacementId?: string;
 }
 
 export interface LoggedMeal {
   id: string;
+  plannedMealId?: string;
   date: string;
   slot: MealSlot;
   name: string;
