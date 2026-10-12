@@ -1074,6 +1074,156 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(card.getByRole("combobox", { name: "Meal slot" })).toBeFocused();
   });
 
+  test("hides a logged planned breakfast and restores it after the last eaten entry is deleted", async ({ page }) => {
+    await openNutritionPage(page);
+    const breakfast = page.getByRole("region", { name: "Breakfast" });
+    const plannedBefore = await breakfast.getByText(/^Planned(?: ·|$)/).count();
+    const eatenBefore = await breakfast.getByText("Eaten", { exact: true }).count();
+    const card = page.getByRole("region", { name: "Planned" });
+    await card.getByRole("button", { name: "Add to plan" }).click();
+    await card.getByRole("group", { name: "Add meal" }).getByRole("combobox", { name: "Meal slot" }).selectOption("breakfast");
+    await card.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
+    await card.getByRole("button", { name: /^Egg/ }).first().click();
+    const saved = nextRpcResponse(page, "add_planned_meal");
+    await card.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Add to plan" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore + 1);
+    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore);
+    const newRow = breakfast.getByRole("list").first().getByRole("listitem").filter({ hasText: "Egg" }).last();
+    await newRow.getByRole("button", { name: "Log", exact: true }).click();
+    await newRow.getByRole("spinbutton", { name: "Actual servings" }).fill("2");
+    const logged = nextRpcResponse(page, "log_planned_meal");
+    await newRow.getByRole("button", { name: "Confirm log" }).click();
+    expect((await logged).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
+    const firstEaten = breakfast.getByRole("listitem").filter({ hasText: "Egg ×2" }).last();
+    await expect(firstEaten.getByRole("button", { name: "Log again" })).toBeFocused();
+    await firstEaten.getByRole("button", { name: "Log again" }).click();
+    await firstEaten.getByRole("spinbutton", { name: "Actual servings" }).fill("1.5");
+    const secondLog = nextRpcResponse(page, "log_planned_meal");
+    await firstEaten.getByRole("button", { name: "Confirm log" }).click();
+    expect((await secondLog).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 2);
+    const secondEaten = breakfast.getByRole("listitem").filter({ hasText: "Egg ×1.5" }).last();
+    const secondDeleted = nextRpcResponse(page, "delete_nutrition_log");
+    await secondEaten.getByRole("button", { name: "Delete Egg" }).click();
+    expect((await secondDeleted).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+    const firstDeleted = nextRpcResponse(page, "delete_nutrition_log");
+    await firstEaten.getByRole("button", { name: "Delete Egg" }).click();
+    expect((await firstDeleted).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore + 1);
+    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore);
+  });
+
+  test("hides a planned recipe after grouped logging and restores it on deletion", async ({ page }) => {
+    await openNutritionPage(page);
+    const lunch = page.getByRole("region", { name: "Lunch" });
+    const plannedBefore = await lunch.getByText(/^Planned(?: ·|$)/).count();
+    const eatenBefore = await lunch.getByText("Eaten", { exact: true }).count();
+    const recipeTitle = lunch.getByRole("button", { name: /^View recipe: / }).first();
+    const recipeName = (await recipeTitle.getAttribute("aria-label"))!.replace("View recipe: ", "");
+    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${recipeName}`, exact: true }) }).first();
+    await plannedRecipe.getByRole("button", { name: "Log", exact: true }).click();
+    await plannedRecipe.getByRole("spinbutton", { name: "Actual servings" }).fill("1.25");
+    const saved = nextRpcResponse(page, "log_planned_meal");
+    await plannedRecipe.getByRole("button", { name: "Confirm log" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore - 1);
+    await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
+    const eatenRecipe = lunch.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${recipeName}`, exact: true }) }).last();
+    await expect(eatenRecipe.getByRole("button", { name: "Log again" })).toBeVisible();
+    const deleted = nextRpcResponse(page, "delete_logged_meal");
+    await eatenRecipe.getByRole("button", { name: `Delete ${recipeName}`, exact: true }).click();
+    expect((await deleted).ok()).toBe(true);
+    await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+    await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore);
+  });
+
+  test("keeps a planned row when the same food is logged independently", async ({ page }) => {
+    await openNutritionPage(page);
+    const breakfast = page.getByRole("region", { name: "Breakfast" });
+    const card = page.getByRole("region", { name: "Planned" });
+    const plannedBefore = await breakfast.getByText(/^Planned(?: ·|$)/).count();
+    await card.getByRole("button", { name: "Add to plan" }).click();
+    await card.getByRole("group", { name: "Add meal" }).getByRole("combobox", { name: "Meal slot" }).selectOption("breakfast");
+    await card.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
+    await card.getByRole("button", { name: /^Egg/ }).first().click();
+    const planned = nextRpcResponse(page, "add_planned_meal");
+    await card.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Add to plan" }).click();
+    expect((await planned).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore + 1);
+    await card.getByRole("button", { name: "Add to plan" }).click();
+    await card.getByRole("group", { name: "Add meal" }).getByRole("combobox", { name: "Meal slot" }).selectOption("breakfast");
+    await card.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
+    await card.getByRole("button", { name: /^Egg/ }).first().click();
+    const logged = nextRpcResponse(page, "save_nutrition_log");
+    await card.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Log meal" }).click();
+    expect((await logged).ok()).toBe(true);
+    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore + 1);
+    const eatenEgg = breakfast.getByRole("listitem").filter({ hasText: "Egg ×1" }).last();
+    await expect(eatenEgg.getByRole("button", { name: "Log again" })).toHaveCount(0);
+  });
+
+  test("keeps the planned confirmation open after a failed log for retry", async ({ page }) => {
+    await openNutritionPage(page);
+    const lunch = page.getByRole("region", { name: "Lunch" });
+    const plannedBefore = await lunch.getByText(/^Planned(?: ·|$)/).count();
+    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).first();
+    await plannedRecipe.getByRole("button", { name: "Log", exact: true }).click();
+    await plannedRecipe.getByRole("spinbutton", { name: "Actual servings" }).fill("1.5");
+    await page.route("**/rest/v1/rpc/log_planned_meal", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary test failure" }) }));
+    const failed = nextRpcResponse(page, "log_planned_meal");
+    await plannedRecipe.getByRole("button", { name: "Confirm log" }).click();
+    expect((await failed).ok()).toBe(false);
+    await expect(plannedRecipe.getByRole("spinbutton", { name: "Actual servings" })).toHaveValue("1.5");
+    await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+    await page.unroute("**/rest/v1/rpc/log_planned_meal");
+    const saved = nextRpcResponse(page, "log_planned_meal");
+    await plannedRecipe.getByRole("button", { name: "Confirm log" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore - 1);
+    const eatenRecipe = lunch.getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).last();
+    const deleted = nextRpcResponse(page, "delete_logged_meal");
+    await eatenRecipe.getByRole("button", { name: "Delete Chicken & Rice Plate" }).click();
+    expect((await deleted).ok()).toBe(true);
+    await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+  });
+
+  test("replays a planned log when its saved response is lost", async ({ page }) => {
+    await openNutritionPage(page);
+    const lunch = page.getByRole("region", { name: "Lunch" });
+    const eatenBefore = await lunch.getByText("Eaten", { exact: true }).count();
+    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).first();
+    await plannedRecipe.getByRole("button", { name: "Log", exact: true }).click();
+    await plannedRecipe.getByRole("spinbutton", { name: "Actual servings" }).fill("1.5");
+    let serverSaved = false;
+    await page.route("**/rest/v1/rpc/log_planned_meal", async (route) => {
+      const response = await route.fetch();
+      serverSaved = response.ok();
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "response lost after commit" }) });
+    });
+    const failed = nextRpcResponse(page, "log_planned_meal");
+    await plannedRecipe.getByRole("button", { name: "Confirm log" }).click();
+    expect((await failed).ok()).toBe(false);
+    expect(serverSaved).toBe(true);
+    await expect(plannedRecipe.getByRole("spinbutton", { name: "Actual servings" })).toHaveValue("1.5");
+    await page.unroute("**/rest/v1/rpc/log_planned_meal");
+    const replay = nextRpcResponse(page, "log_planned_meal");
+    await plannedRecipe.getByRole("button", { name: "Confirm log" }).click();
+    const replayed = await replay;
+    expect(replayed.ok()).toBe(true);
+    expect((await replayed.json()).replayed).toBe(true);
+    await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
+    await expect(plannedRecipe.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
+    const eatenRecipe = lunch.getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).last();
+    const deleted = nextRpcResponse(page, "delete_logged_meal");
+    await eatenRecipe.getByRole("button", { name: "Delete Chicken & Rice Plate" }).click();
+    expect((await deleted).ok()).toBe(true);
+    await expect(plannedRecipe.getByRole("button", { name: "Log", exact: true })).toBeVisible();
+  });
 
   test("adds a manually entered food to the plan without logging intake", async ({ page }) => {
     await openNutritionSlot(page, "Lunch");
@@ -1132,6 +1282,52 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(card.getByRole("region", { name: "Breakfast" }).getByText("Two eggs", { exact: false })).toBeVisible();
   });
 
+  test("requires a slot before logging a saved meal", async ({ page }) => {
+    await page.goto("/nutrition");
+    const savedMeals = page.getByRole("region", { name: "Saved meals" });
+    await expect(savedMeals.getByRole("listitem").first()).toBeVisible();
+    const loggedDinnerMeals = page.getByRole("region", { name: "Dinner" }).getByRole("button", { name: /^Eaten Creamy Lemon Chicken/ });
+    const beforeCount = await loggedDinnerMeals.count();
+    const firstMeal = savedMeals.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true }) });
+    await firstMeal.getByRole("button", { name: "Log" }).click();
+    const picker = firstMeal.getByRole("group", { name: /^Log / });
+    await expect(picker.getByRole("button", { name: "Confirm log" })).toBeDisabled();
+    await picker.getByRole("combobox", { name: "Meal slot" }).selectOption("dinner");
+    const saved = nextRpcResponse(page, "save_reviewed_meal");
+    await picker.getByRole("button", { name: "Confirm log" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(picker).toHaveCount(0);
+    await expect(loggedDinnerMeals).toHaveCount(beforeCount + 1);
+    const loggedMeal = loggedDinnerMeals.last();
+    await loggedMeal.click();
+    await expect(loggedMeal).toHaveAttribute("aria-expanded", "true");
+    const loggedRow = loggedMeal.locator("xpath=ancestor::li[1]");
+    await loggedRow.getByRole("button", { name: "Edit Creamy Lemon Chicken" }).click();
+    await expect(loggedRow.getByRole("group", { name: "Edit logged meal history" })).toBeVisible();
+    await loggedRow.getByRole("button", { name: "Discard changes" }).click();
+    const deleted = nextRpcResponse(page, "delete_logged_meal");
+    await loggedRow.getByRole("button", { name: "Delete Creamy Lemon Chicken" }).click();
+    expect((await deleted).ok()).toBe(true);
+    await expect(loggedDinnerMeals).toHaveCount(beforeCount);
+  });
+
+  test("keeps logged food after a planned meal is skipped", async ({ page }) => {
+    await logEgg(page);
+    const dayCard = page.getByRole("region", { name: "Planned" });
+    const breakfast = dayCard.getByRole("region", { name: "Breakfast" });
+    const beforeCount = await breakfast.getByText("Eaten", { exact: true }).count();
+    const firstPlanned = breakfast.getByRole("listitem").filter({ hasText: "Planned" }).first();
+    const skip = firstPlanned.getByRole("button", { name: /^(Skip|Plan again)$/ });
+    const changed = nextRpcResponse(page, "skip_planned_meal");
+    await skip.click();
+    expect((await changed).ok()).toBe(true);
+    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(beforeCount);
+    const eggRow = breakfast.getByRole("listitem").filter({ hasText: "Egg" }).last();
+    await expect(eggRow).toBeVisible();
+    await eggRow.getByRole("button", { name: /^Edit Egg/ }).click();
+    await expect(eggRow.getByRole("group", { name: "Edit nutrition entry" })).toBeVisible();
+    await eggRow.getByRole("button", { name: "Cancel" }).click();
+  });
 
   test("keeps a manual meal draft after a failed save and day change", async ({ page }) => {
     await openNutritionSlot(page, "Snack");
