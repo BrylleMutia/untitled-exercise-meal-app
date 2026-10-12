@@ -1171,7 +1171,9 @@ test.describe("MVP-1 release browser gate", () => {
     await openNutritionPage(page);
     const lunch = page.getByRole("region", { name: "Lunch" });
     const plannedBefore = await lunch.getByText(/^Planned(?: ·|$)/).count();
-    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).first();
+    const recipeTitle = lunch.getByRole("button", { name: /^View recipe: / }).first();
+    const recipeName = (await recipeTitle.getAttribute("aria-label"))!.replace("View recipe: ", "");
+    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${recipeName}`, exact: true }) }).first();
     await plannedRecipe.getByRole("button", { name: "Log", exact: true }).click();
     await plannedRecipe.getByRole("spinbutton", { name: "Actual servings" }).fill("1.5");
     await page.route("**/rest/v1/rpc/log_planned_meal", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary test failure" }) }));
@@ -1185,9 +1187,9 @@ test.describe("MVP-1 release browser gate", () => {
     await plannedRecipe.getByRole("button", { name: "Confirm log" }).click();
     expect((await saved).ok()).toBe(true);
     await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore - 1);
-    const eatenRecipe = lunch.getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).last();
+    const eatenRecipe = lunch.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${recipeName}`, exact: true }) }).last();
     const deleted = nextRpcResponse(page, "delete_logged_meal");
-    await eatenRecipe.getByRole("button", { name: "Delete Chicken & Rice Plate" }).click();
+    await eatenRecipe.getByRole("button", { name: `Delete ${recipeName}`, exact: true }).click();
     expect((await deleted).ok()).toBe(true);
     await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
   });
@@ -1196,7 +1198,9 @@ test.describe("MVP-1 release browser gate", () => {
     await openNutritionPage(page);
     const lunch = page.getByRole("region", { name: "Lunch" });
     const eatenBefore = await lunch.getByText("Eaten", { exact: true }).count();
-    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).first();
+    const recipeTitle = lunch.getByRole("button", { name: /^View recipe: / }).first();
+    const recipeName = (await recipeTitle.getAttribute("aria-label"))!.replace("View recipe: ", "");
+    const plannedRecipe = lunch.getByRole("list").first().getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${recipeName}`, exact: true }) }).first();
     await plannedRecipe.getByRole("button", { name: "Log", exact: true }).click();
     await plannedRecipe.getByRole("spinbutton", { name: "Actual servings" }).fill("1.5");
     let serverSaved = false;
@@ -1218,9 +1222,9 @@ test.describe("MVP-1 release browser gate", () => {
     expect((await replayed.json()).replayed).toBe(true);
     await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
     await expect(plannedRecipe.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
-    const eatenRecipe = lunch.getByRole("listitem").filter({ hasText: "Chicken & Rice Plate" }).last();
+    const eatenRecipe = lunch.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${recipeName}`, exact: true }) }).last();
     const deleted = nextRpcResponse(page, "delete_logged_meal");
-    await eatenRecipe.getByRole("button", { name: "Delete Chicken & Rice Plate" }).click();
+    await eatenRecipe.getByRole("button", { name: `Delete ${recipeName}`, exact: true }).click();
     expect((await deleted).ok()).toBe(true);
     await expect(plannedRecipe.getByRole("button", { name: "Log", exact: true })).toBeVisible();
   });
