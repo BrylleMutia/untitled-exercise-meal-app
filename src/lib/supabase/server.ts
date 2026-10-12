@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { Database } from "@/types/database.generated";
+import type { RecipeImageDatabase } from "@/types/recipeImageDatabase";
 
 /** Request-scoped Supabase client for Server Components, Actions, and Routes. */
 export async function createClient() {
@@ -13,7 +13,7 @@ export async function createClient() {
   }
 
   const cookieStore = await cookies();
-  return createServerClient<Database>(url, key, {
+  return createServerClient<RecipeImageDatabase>(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
