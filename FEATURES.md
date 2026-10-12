@@ -300,6 +300,32 @@ Support these input methods in the MVP:
 - Add a saved meal or recipe
 - Enter a meal using plain text
 
+The Nutrition day view has a Planned card with Breakfast, Lunch, Dinner, and
+Snack groups. Each group may contain multiple planned rows and independently
+marked Eaten rows. Empty slots say intake is unknown. Add to plan is visible
+even before a weekly plan exists. It asks for a slot and opens the shared
+search, description, AI review, or manual-entry card. A confirmed candidate
+offers Add to plan and Log meal: the first versions the plan and reconciles
+groceries, while the second records actual intake without changing the plan.
+New plans use the active eligible target; without one, logging remains available
+and the card explains how to add a goal. AI-only estimates can be logged with
+uncertainty but must be matched or corrected before planning. Carb-limited plans
+require trusted eligible nutrition data.
+
+Every visible planned row offers Edit, Skip or Plan again, and Log. Log confirms
+the actual serving and nutrition before adding a linked Eaten row. The planned
+record remains in its versioned plan but is hidden in the day view while linked
+Eaten entries exist. A linked Eaten row offers Log again for another separately
+confirmed portion; deleting the last linked entry shows the Planned row again.
+Independent logs do not consume a plan item. Older logs are linked only when a
+same-date, same-slot food or meal reference yields one clear pair; ambiguous
+history remains unlinked. Unresolved plans explain why logging is disabled
+until edited. Eaten entries retain expand, edit, and delete controls, including
+grouped meals and entries without a plan.
+Closing or changing days leaves recoverable per-date, per-slot drafts. Saved
+meals' Log shortcut requires a slot choice and confirmation; a failed save
+retains that choice.
+
 For each food or meal, store:
 
 - Serving quantity and unit
@@ -330,6 +356,37 @@ The nutrition contract must define the canonical gram or milliliter basis,
 supported household-unit conversions, branded-food behavior, raw/cooked rules,
 restaurant and mixed-dish uncertainty, and the fallback when no trusted match
 exists. User-provided values must remain distinguishable from catalog estimates.
+
+The current predefined recipe catalog contains Creamy Lemon Chicken
+(Easy, 30 minutes, two servings) and Korean Beef Bowl (Easy, four servings,
+cooking time not supplied). All predefined recipes require measured
+ingredients, calories/protein/carbohydrate/fat, a generated recipe
+image, and visible serving/preparation assumptions. This recipe uses 400 g raw
+boneless skin-on chicken thighs, 30 g butter, 300 ml whole milk (approximately
+309 g), 8 g flour, 47 g lemon juice and 21 g honey. Its per-serving estimate is
+approximately 695 kcal, 39 g protein, 21 g carbohydrate and 50 g fat; all sauce
+and rendered fat are counted, unmeasured seasonings and sides are excluded.
+Ingredients use separately identified USDA SR Legacy records. Instructions retain
+the supplied TikTok reference and include honey in the sauce step.
+
+Korean Beef Bowl preserves the supplied macros per serving: approximately
+560 kcal, 45 g protein, 58 g carbohydrate and 16 g fat. When recipe macros are
+provided, use them without estimating replacements from the ingredients. Store
+them separately as source-provided recipe nutrition and scale them by actual
+servings for logging. Ingredient records and raw/uncooked quantities remain
+available for grocery calculations. Optional ginger is included in the grocery
+quantities; garnish weights are explicit assumptions (3 g sesame seeds, 15 g
+spring onion). Source-provided nutrition remains visible in the overview and
+editable in a personal version; ingredient edits do not silently recalculate it.
+Existing saved intake is never recalculated. Unverified provided macros cannot
+establish compliance with a strict carbohydrate-limited plan.
+
+The eight earlier predefined recipes are retired, retaining their original
+identities, ingredients, plans and saved nutrition history. Personal recipes are
+unaffected. New plans can select the replacement for lunch/dinner when compatible
+with restrictions and cooking time; breakfast remains unresolved unless an
+eligible personal recipe is available. The app must not substitute chicken into
+vegetarian/vegan plans or bypass milk/wheat restrictions.
 
 ### 8. AI-Assisted Nutrition Estimation
 
@@ -390,15 +447,112 @@ Users can create a reusable meal or recipe with:
 - Ingredients
 - Quantity for each ingredient
 - Number of servings
-- Preparation notes
+- Optional total preparation, cooking, and serving time in whole minutes
+- Editable Easy, Medium, or Hard complexity, defaulting to Medium and required for recipe-authoring saves
+- Required multiline instructions when authoring or editing a recipe
+- Optional reference link or citation
+- Optional recipe cover: default illustration, uploaded image, or HTTPS image URL
 - Calculated nutrition per serving
 
-Allow users to duplicate, edit, and log a saved meal. A social-media URL may be
+Allow users to create, edit, archive, and log saved meals. Meal duplication is
+removed from the available workflows. A social-media URL may be
 stored as a reference, but the user should enter or confirm the ingredients in
 the MVP.
 
-The current M1.2 implementation provides create, edit, duplicate, archive, and
-log controls for saved meals, plus replacement, serving, add, and skip/reapply
+Create and Edit open the approved Option 1 recipe modal. A centered cover sits
+above Name, Servings, and Time (mins.), without a visible Recipe basics heading.
+Details, Ingredients, and Instructions are persistent tabs; Ingredients opens
+first and changing tabs never clears input or review. These fields share a row when space permits
+and wrap in that order on narrow screens or enlarged text. Desktop uses a centered dialog; phones use a full-screen editor
+with a persistent header and Cancel/Save footer. The body scrolls while background
+interaction and scrolling are blocked. Closing returns focus to its originating
+control; Escape dismisses contextual help before the recipe editor. Close,
+Cancel, and a direct backdrop click retain the draft, while dismissal is disabled
+during saving or uploading a cover. The footer uses Save for creation and Save
+changes for editing. Clicking a saved meal opens a read-only overview with the
+same cover and tabs, plus Edit for owned and predefined recipes. First saving an
+edit to a predefined recipe creates a personal version and hides the original
+in that account's Saved meals; later edits target the personal version. Archive
+hides a predefined recipe for the current account. Shared catalog data, other
+accounts, current planned references and eaten history retain their original
+records. Recipes previously created as copies remain ordinary saved recipes.
+Canceling an edit returns to the overview and retains
+the draft; successful saving returns with refreshed authoritative recipe data.
+The editor starts with empty servings and ingredients. Ingredient
+search offers saved foods and trusted USDA matches; descriptions use an explicit
+AI analysis action followed by review. Possible hidden ingredients remain
+excluded until selected, and supported units must resolve without guessed
+conversions. Users may add a reusable custom ingredient with a labeled serving,
+gram basis, preparation, category, and user-provided nutrition. Recipe ingredient
+selectors include servings and piece/s by default, alongside the food's supported
+units. Piece counts require a canonical piece basis or an explicit serving weight;
+missing conversions remain unresolved in review. Pending foods and the recipe
+save together. AI-only macro estimates cannot be saved through recipe
+authoring. Valid ingredient/quantity/serving changes update per-serving nutrition
+pills immediately; incomplete input shows guidance rather than a partial total.
+References accept plain text or a complete HTTP(S) URL; no URL import occurs.
+Existing recipes remain loggable without instructions; the authoring editor
+requires instructions before saving changes. Instructions and references appear
+in the overview/editor tabs and are copied on duplication. Optional time
+describes the whole recipe, is copied on duplication and export, and appears
+as “X mins total” in details. New time fields start blank; blank remains unknown,
+while explicit zero is retained. Negative, fractional, invalid, and out-of-range
+time values prevent saving. Time is direct entry with a clock icon and no
+adjustment controls; it does not change nutrition or the profile cooking-time
+preference. Closing or a
+failed save retains the full recipe draft; explicit discard resets it.
+The default cover is a generic illustration. A user may choose a still JPEG,
+PNG, or WebP up to 5 MB (at most 25 million pixels), or a full HTTPS URL without
+credentials. Uploads are private and re-encoded as WebP with metadata removed;
+cover selection becomes part of the recipe only after Save succeeds. URL images
+load from their external host without a referrer and may become unavailable.
+Unavailable covers show the default and offer Retry image. Reset to default
+is retained in the recoverable draft, including after reload. Image URLs and
+private object paths copy with recipe duplication and appear in account export;
+expiring access URLs are never saved. These covers are separate from temporary
+meal-analysis images and are not used to infer nutrition.
+Recipe servings use minus/input/plus controls with direct fractional entry;
+blank and zero cannot be decremented, and zero remains invalid for saving or
+complete nutrition totals. Ingredient removal follows the unit control.
+Switching Search, Describe, and Custom prefills only a blank destination from
+the active text field and preserves existing input, nutrition, and review.
+Saved-food searches across recipes and logging rank exact phrases, plural-aware
+tokens, prefixes, then bounded spelling suggestions labeled “Close match”. Every
+query token must match; preparation terms remain distinct. Suggestions require
+explicit selection and do not authorize automatic nutrition or unit conversions.
+
+Saved and Planned displays share the approved pastel-banner card: cover, name,
+personal favorite heart, per-serving calories, whole-recipe yield, total time,
+editable complexity, and bottom actions. Calories omit the visible per-serving
+suffix but retain accessible labels and contextual help. A mint pie-icon yield
+pill is independent of planned portions. Missing time reads “Not set”; missing
+recipe complexity defaults to Medium. Descriptions stay off cards. Planned
+serving changes never change per-serving calorie values or whole-recipe yields.
+Food-only and unresolved entries omit recipe favorites and retain logging
+restrictions. Existing slot grouping, ordering, permissions, skip and log flows
+remain unchanged. Catalog recipes can be favorited by their stable identity.
+
+Popular means the user's top five non-archived recipes actually eaten during
+the last 30 local calendar days, including today. Planned-only meals do not
+count. Each grouped eaten record counts once regardless of ingredients or
+servings; retries do not add records. Positive counts rank by count, then latest
+eaten date, then stable recipe ID. Popular takes badge precedence over Favorite;
+the separate filled heart still indicates the user's favorite. Metadata refreshes
+after relevant logging/correction/deletion, archival, local-day changes, and
+reconnection. Favorites never edit recipes or regenerate plans/groceries.
+Failed changes retain the confirmed state with refresh/retry guidance.
+
+Existing recipes with missing complexity are backfilled to Medium, including
+archived and predefined records; configured values remain unchanged. New and
+legacy restored drafts start at Medium unless a supported choice is present.
+Complexity is an editable default, never inferred from time, ingredients, or AI.
+Cancellation and failed saving preserve Create/Edit input. Old duplicate drafts
+are not reused and remain subject to their existing seven-day expiry.
+
+Saved cards provide Log with a trailing plus, followed by edit and archive icon
+buttons; these use descriptive accessible names and hover/focus tooltips. The
+current M1.2 implementation provides create, edit, archive, and log controls for
+saved meals, plus replacement, serving, add, and skip/reapply
 controls for the active planned meal. Plan edits create a new future snapshot;
 recipe archive is a soft-delete so historical planned meals and nutrition logs
 remain resolvable. Recipe saves and active-plan grocery reconciliation use one
@@ -519,9 +673,12 @@ unsaved changes; they must not be shown as completed server mutations.
   a matching white fire-icon pill for the approximate energy range, in a wrapping
   detail row. Below 768px, the complete progress and steps summaries, including
   steps actions and each wrapped detail row, are centered beneath their rings;
-  wider layouts retain left alignment. Missing
-  activity is "Not logged" with "No steps logged today" rather than zero;
-  missing minutes, zero minutes, and unsupported energy estimates retain
+  wider layouts retain left alignment. When today's entry is missing, the
+  count shows "0 / 10,000" (or "0" without a target) and white clock/fire
+  pills show "0 walking minutes" and "0 kcal" as visual placeholders. The
+  visible "Not logged" label and unavailable ring distinguish this from a
+  saved zero; assistive text also identifies the placeholders. Missing minutes
+  on a saved entry, saved zero minutes, and unsupported energy estimates retain
   distinct visible messages. At/above target, the ring says "Target reached"
   while the actual count remains unchanged. Workout-energy status messages
   use a white fire-icon pill in Your progress with a 17px top margin. The walking
