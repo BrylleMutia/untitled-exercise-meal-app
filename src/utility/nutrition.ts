@@ -104,6 +104,13 @@ export function foodMacros(food: Food, servings: number): DayTotals {
 }
 
 export function mealNutrition(meal: Meal, foods: Food[]): DayTotals & { perServing: DayTotals } {
+  if (meal.providedNutrition) return {
+    calories: meal.providedNutrition.calories * meal.servings,
+    proteinG: meal.providedNutrition.proteinG * meal.servings,
+    carbsG: meal.providedNutrition.carbsG * meal.servings,
+    fatG: meal.providedNutrition.fatG * meal.servings,
+    perServing: { ...meal.providedNutrition },
+  };
   const total = meal.ingredients.reduce<DayTotals>(
     (acc, ing) => {
       const food = foods.find((f) => f.id === ing.foodId);
