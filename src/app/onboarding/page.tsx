@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronLeft, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
+import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { Button } from "@/components/ui/Button";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import {
@@ -714,21 +715,21 @@ export default function OnboardingPage() {
 
       {step === 4 && preview ? (
         <div className="grid gap-4">
-          <Card tone="blush">
+          <Card tone={nutritionMetricStyles.calories.tone}>
             <HelpHeading title="Your estimated daily food target"><p>A starting point based on your answers. You can adjust your goal later.</p></HelpHeading>
             <p className="mt-2 text-3xl font-extrabold tabular-nums">≈{preview.calories} kcal</p>
           </Card>
           <Card tone="white">
             <HelpHeading title="Macro targets (estimates)"><p>{HEALTH_DISCLAIMER}</p><p>Formula: Mifflin-St Jeor · activity factor {preview.activityFactor} from training days · effective {todayKey()}. Historical plans retain their original target version.</p><p>Energy at rest (BMR): {preview.bmr} kcal. Daily energy use (TDEE): {preview.tdee} kcal. Both are estimates.</p><p>BMI: {preview.bmi}. It compares weight with height and is information only, not a diagnosis.</p></HelpHeading>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="mt-3 grid gap-2 text-center sm:grid-cols-3">
               {[
-                { label: "Protein", value: preview.proteinG },
-                { label: "Carbs", value: preview.carbsG },
-                { label: "Fat", value: preview.fatG },
+                { label: "Protein", value: preview.proteinG, metric: "proteinG" as const },
+                { label: "Carbs", value: preview.carbsG, metric: "carbsG" as const },
+                { label: "Fat", value: preview.fatG, metric: "fatG" as const },
               ].map((m) => (
-                <div key={m.label} className="rounded-2xl bg-lav-50 p-3">
+                <div key={m.label} className={`rounded-2xl ${nutritionMetricStyles[m.metric].surface} p-3`}>
                   <p className="text-xl font-extrabold tabular-nums">{m.value}g</p>
-                  <p className="text-[11px] font-bold text-muted">{m.label}</p>
+                  <p className="text-xs font-bold text-ink-soft">{m.label}</p>
                 </div>
               ))}
             </div>

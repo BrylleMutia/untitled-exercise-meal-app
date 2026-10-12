@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Footprints, LoaderCircle } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
+import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { Button } from "@/components/ui/Button";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import { addDays, todayKey } from "@/utility/dates";
@@ -122,7 +123,7 @@ function StepEditor({ date }: { date: string }) {
     <Card tone="mint">
       <h2 className="font-extrabold">{entry ? `${entry.steps.toLocaleString()} steps saved` : "No steps logged for this date"}</h2>
       <HelpHeading title="Walking energy"><p>{estimate?.assumption ?? "Walking energy uses walking time and profile weight, with an adult reference for ages 19–59."}</p><p>Walking and workout estimates are separate. Your daily food target stays the same.</p><a href="https://pacompendium.com/walking/" target="_blank" rel="noreferrer">Walking estimate source</a></HelpHeading>
-      <p className="text-xs font-semibold text-ink-soft">{estimate ? `Walking energy: roughly ${estimate.lowKcal}–${estimate.highKcal} kcal.` : !entry ? "Walking energy: not logged." : !estimateSupported ? "Walking energy estimate unavailable for this profile." : entry.walkingMinutes === 0 ? "Walking energy estimate unavailable for 0 walking minutes." : "Add walking minutes for an energy estimate."}</p>
+      <p className={`w-fit max-w-full text-xs font-semibold text-ink ${estimate ? `rounded-full px-3 py-1 ${nutritionMetricStyles.calories.pill}` : ""}`}>{estimate ? `Walking energy: roughly ${estimate.lowKcal}–${estimate.highKcal} kcal.` : !entry ? "Walking energy: not logged." : !estimateSupported ? "Walking energy estimate unavailable for this profile." : entry.walkingMinutes === 0 ? "Walking energy estimate unavailable for 0 walking minutes." : "Add walking minutes for an energy estimate."}</p>
     </Card>
   </>;
 }
