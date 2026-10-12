@@ -5,13 +5,14 @@ import { SAVED_MEALS } from "@/constants/meals";
 import { generateGroceryList, mergeGroceryLists } from "@/utility/grocery";
 import { buildDailyTarget } from "@/utility/health";
 import { generateMealPlan } from "@/utility/mealPlan";
+import { targetForDate } from "@/utility/targetHistory";
 import { generateWorkoutPlan } from "@/utility/plan";
 import { validateDailySteps, validateDailyStepTarget } from "@/utility/dailySteps";
 import { validateCustomWorkout } from "@/utility/customWorkouts";
 import { validRecipeTimeMinutes } from "@/utility/recipeTime";
 import { parseRecipeImage } from "@/utility/recipeImage";
 import { isRecipeComplexity } from "@/utility/recipeCard";
-import { startOfWeek, todayKey } from "@/utility/dates";
+import { startOfWeek, todayKey, weekDates } from "@/utility/dates";
 import type {
   AppSnapshot,
   Food,
@@ -29,6 +30,7 @@ import type {
   DeleteAccountInput,
   DeleteNutritionInput,
   EditMealPlanInput,
+  AddPlannedMealInput,
   ExportInput,
   ExportOutcome,
   FinishSessionInput,
@@ -87,6 +89,7 @@ type RpcName =
   | "reset_plan"
   | "skip_planned_meal"
   | "edit_meal_plan"
+  | "add_planned_meal"
   | "start_workout_session"
   | "save_workout_session"
   | "finish_workout_session"
@@ -921,6 +924,41 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         { type: "grocery-list-updated", listId: grocery.id },
       ],
     );
+  }
+
+  async addPlannedMeal(input: AddPlannedMealInput): Promise<MutationOutcome> {
+    const { plannedMeal, currentSnapshot } = input;
+    const weekOf = startOfWeek(plannedMeal.date);
+    const currentPlan = currentSnapshot.mealPlan?.weekOf === weekOf ? currentSnapshot.mealPlan : null;
+    const target = targetForDate(currentSnapshot.nutritionWeekTargets, plannedMeal.date)
+      ?? (currentSnapshot.target?.effectiveDate && currentSnapshot.target.effectiveDate <= plannedMeal.date ? currentSnapshot.target : null);
+    if (!currentPlan && (!target || target.safetyOutcome === "unsupported_population")) {
+      throw repositoryException(toRepositoryError("validation_failed: Set an eligible daily goal before adding a planned meal. Logging remains available."));
+    }
+    if (!weekDates(weekOf).includes(plannedMeal.date) || !["breakfast", "lunch", "dinner", "snack"].includes(plannedMeal.slot)) {
+      throw repositoryException(toRepositoryError("validation_failed: choose a valid day and meal slot"));
+    }
+    const mealPlan: MealPlan = currentPlan
+      ? { ...currentPlan, meals: [...currentPlan.meals, plannedMeal] }
+      : { id: `mp-${weekOf}`, version: 1, weekOf, targetId: target!.id, meals: [plannedMeal] };
+    const foods = [...FOODS, ...currentSnapshot.foods, ...(input.newFoods ?? [])];
+    const meals = [...SAVED_MEALS, ...currentSnapshot.savedMeals, ...(input.newMeal ? [input.newMeal] : [])];
+    const generatedGrocery = generateGroceryList(mealPlan, meals, foods, weekOf);
+    const existingGrocery = currentSnapshot.grocery?.weekOf === weekOf ? currentSnapshot.grocery : null;
+    const grocery = existingGrocery ? mergeGroceryLists(existingGrocery, generatedGrocery) : generatedGrocery;
+    return this.mutate("add_planned_meal", {
+      mealPlan, plannedMeal, grocery,
+      newFoods: input.newFoods ?? [],
+      ...(input.newMeal ? { newMeal: input.newMeal } : {}),
+      expectedVersions: input.expectedVersions ?? {
+        ...(currentPlan ? { mealPlanVersion: currentPlan.version } : { mealPlanVersion: 0 }),
+        ...(existingGrocery ? { groceryRevision: existingGrocery.revision } : {}),
+      },
+      idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+    }, [
+      { type: "plan-edited", planId: mealPlan.id },
+      { type: "grocery-list-updated", listId: grocery.id },
+    ]);
   }
 
   async applyWorkoutOverride(input: WorkoutPlanOverrideInput): Promise<MutationOutcome> {

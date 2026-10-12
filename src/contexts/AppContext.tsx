@@ -30,6 +30,7 @@ import type {
   AppSnapshot,
   Meal,
   MealPlan,
+  PlannedMeal,
   NutritionLog,
   Food,
   SemanticEvent,
@@ -97,6 +98,7 @@ export interface AppActions {
   regenerateGrocery(): Promise<void>;
   skipPlannedMeal(id: string): Promise<void>;
   editMealPlan(mealPlan: MealPlan): Promise<boolean>;
+  addPlannedMeal(plannedMeal: PlannedMeal, newFoods?: Food[], newMeal?: Meal): Promise<boolean>;
   resetPlan(): Promise<void>;
   applyWorkoutOverride(input: Omit<WorkoutPlanOverrideInput, "currentSnapshot">): Promise<void>;
   removeWorkoutOverride(input: Omit<RemoveWorkoutOverrideInput, "currentSnapshot">): Promise<void>;
@@ -738,6 +740,13 @@ export function AppProvider({
       async editMealPlan(mealPlan) {
         const outcome = await execute("edit_meal_plan", (current, idempotencyKey) =>
           repository!.editMealPlan({ mealPlan, currentSnapshot: current, idempotencyKey }),
+        );
+        return Boolean(outcome);
+      },
+
+      async addPlannedMeal(plannedMeal, newFoods, newMeal) {
+        const outcome = await execute("add_planned_meal", (current, idempotencyKey) =>
+          repository!.addPlannedMeal({ plannedMeal, newFoods, newMeal, currentSnapshot: current, idempotencyKey }),
         );
         return Boolean(outcome);
       },
