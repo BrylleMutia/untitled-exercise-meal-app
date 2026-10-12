@@ -32,7 +32,8 @@ function localSupabaseConfig() {
   } catch {
     throw new Error("The pinned local Supabase CLI did not return its expected status data.");
   }
-  const url = status.API_URL ?? status.api_url;
+  // CLI 2.118 may omit API_URL; its storage URL still identifies the local API.
+  const url = status.API_URL ?? status.api_url ?? (status.STORAGE_S3_URL ? new URL(status.STORAGE_S3_URL).origin : undefined);
   const key = status.PUBLISHABLE_KEY ?? status.publishable_key ?? status.ANON_KEY ?? status.anon_key;
   if (url !== localUrl || typeof key !== "string" || key.length < 20) {
     throw new Error(`Refusing to run the release tests unless Supabase is local at ${localUrl}.`);
