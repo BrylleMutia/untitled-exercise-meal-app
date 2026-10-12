@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { CalorieBudgetRing } from "@/components/ui/CalorieBudgetRing";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import { dayStatus, entriesForDate, totalsForDate } from "@/utility/nutrition";
 import { suggestProgression, type ProgressionSuggestion } from "@/utility/progression";
@@ -31,6 +32,14 @@ import { targetForDate } from "@/utility/targetHistory";
 
 const dashboardRingSize = 116;
 const summaryPillClassName = "inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-ink-soft";
+function formatWalkingTime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  const minuteLabel = `${remainingMinutes} ${remainingMinutes === 1 ? "min" : "mins"}`;
+  if (hours === 0) return minuteLabel;
+  const hourLabel = `${hours} ${hours === 1 ? "hr" : "hrs"}`;
+  return remainingMinutes === 0 ? hourLabel : `${hourLabel} ${minuteLabel}`;
+}
 const ringActionClassName = "absolute -right-1 -top-1 z-10 grid h-11 w-11 place-items-center rounded-full bg-white/70 text-ink shadow-chip hover:bg-white";
 
 const quickLinks = [
@@ -121,10 +130,10 @@ export default function HomePage() {
   const status = dayStatus(snapshot.nutritionLogs, today);
   const milestones = snapshot.profile?.celebrationsEnabled ? participationMilestones(snapshot, today) : [];
   const nutritionTargets = [
-    { label: "Calories", value: status === "unlogged" ? null : totals.calories, target: target?.calories ?? 0, unit: " kcal", barClassName: "bg-blush-300" },
-    { label: "Protein", value: status === "unlogged" ? null : totals.proteinG, target: target?.proteinG ?? 0, unit: " g", barClassName: "bg-lav-300" },
-    { label: "Carbs", value: status === "unlogged" ? null : totals.carbsG, target: target?.carbsG ?? 0, unit: " g", barClassName: "bg-peach-200" },
-    { label: "Fat", value: status === "unlogged" ? null : totals.fatG, target: target?.fatG ?? 0, unit: " g", barClassName: "bg-mint-200" },
+    { label: "Calories", value: status === "unlogged" ? null : totals.calories, target: target?.calories ?? 0, unit: " kcal", barClassName: nutritionMetricStyles.calories.bar },
+    { label: "Protein", value: status === "unlogged" ? null : totals.proteinG, target: target?.proteinG ?? 0, unit: " g", barClassName: nutritionMetricStyles.proteinG.bar },
+    { label: "Carbs", value: status === "unlogged" ? null : totals.carbsG, target: target?.carbsG ?? 0, unit: " g", barClassName: nutritionMetricStyles.carbsG.bar },
+    { label: "Fat", value: status === "unlogged" ? null : totals.fatG, target: target?.fatG ?? 0, unit: " g", barClassName: nutritionMetricStyles.fatG.bar },
   ];
 
   const todayDow = new Date().getDay();
@@ -257,6 +266,7 @@ export default function HomePage() {
             label="Workouts completed this week"
             centerLabel={workoutEnergyEstimateKcal === null ? "—" : `≈${workoutEnergyEstimateKcal}`}
             centerSub="kcal est."
+            centerLabelClassName={workoutEnergyEstimateKcal === null ? "" : `${nutritionMetricStyles.calories.pill} rounded-full px-2 py-1`}
             barClassName="text-ink"
           />
             <Link href="/workouts" aria-label="Open workouts" className={ringActionClassName}>
@@ -270,10 +280,11 @@ export default function HomePage() {
             <p className="mt-1 text-xs font-bold text-ink-soft">
               {completedThisWeek} of {scheduledThisWeek} workouts this week
             </p>
-            {workoutEnergyStatus ? <p className={`mt-[17px] ${summaryPillClassName}`}>
+            <p className={`mt-[17px] ${summaryPillClassName}`}>
               <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="min-w-0">{workoutEnergyStatus}</span>
-            </p> : null}
+              <span aria-hidden className="min-w-0 font-extrabold tabular-nums">{workoutEnergyEstimateKcal ?? 0} kcal</span>
+              {workoutEnergyStatus ? <span className="sr-only">{workoutEnergyStatus} Zero shown as a placeholder.</span> : null}
+            </p>
           </div>
           <p className="sr-only">
             Estimated workout energy this week: {workoutEnergyEstimateKcal === null
@@ -282,7 +293,7 @@ export default function HomePage() {
           </p>
         </Card>
 
-        <Card tone="mint" padding="compact" className="md:px-[23px] md:py-[26px]" role="region" aria-labelledby="home-steps-heading">
+        <Card tone="mint" padding="compact" className="animate-fade-up md:px-[23px] md:py-[26px]" role="region" aria-labelledby="home-steps-heading">
           <div className="grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_116px]">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 md:col-start-1 md:row-start-1">
               <div className="flex items-center gap-2">
@@ -305,30 +316,39 @@ export default function HomePage() {
             </div>
             <div className="min-w-0 text-center md:col-start-1 md:row-start-2 md:text-left">
               <p className="text-2xl font-extrabold tabular-nums">
-                {stepsEntry && dailyStepTarget !== undefined ? <>
-                  <span aria-hidden>{`${stepsEntry.steps.toLocaleString()} / ${dailyStepTarget.toLocaleString()}`}</span>
-                  <span className="sr-only">{`${stepsEntry.steps.toLocaleString()} of ${dailyStepTarget.toLocaleString()} steps`}</span>
-                </> : stepsEntry ? <>
-                  <span aria-hidden>{stepsEntry.steps.toLocaleString()}</span>
-                  <span className="sr-only">{`${stepsEntry.steps.toLocaleString()} steps`}</span>
-                </> : "Not logged"}
+                {dailyStepTarget !== undefined ? <>
+                  <span aria-hidden>{`${(stepsEntry?.steps ?? 0).toLocaleString()} / ${dailyStepTarget.toLocaleString()}`}</span>
+                  <span className="sr-only">{stepsEntry
+                    ? `${stepsEntry.steps.toLocaleString()} of ${dailyStepTarget.toLocaleString()} steps`
+                    : `No steps logged today; 0 of ${dailyStepTarget.toLocaleString()} steps shown as a placeholder`}</span>
+                </> : <>
+                  <span aria-hidden>{(stepsEntry?.steps ?? 0).toLocaleString()}</span>
+                  <span className="sr-only">{stepsEntry
+                    ? `${stepsEntry.steps.toLocaleString()} steps`
+                    : "No steps logged today; 0 steps shown as a placeholder"}</span>
+                </>}
               </p>
-              {!stepsEntry ? <p className="mt-1 text-xs font-bold text-ink-soft">No steps logged today</p> : null}
-              {dailyStepTarget === undefined || !stepsEntry ? <p className="mt-1 text-xs font-bold text-ink-soft">
-                {dailyStepTarget === undefined ? "No daily target" : `Daily target: ${dailyStepTarget.toLocaleString()} steps`}
-              </p> : null}
+              {!stepsEntry ? <p className="mt-1 text-xs font-bold text-ink-soft">Not logged</p> : null}
+              {dailyStepTarget === undefined ? <p className="mt-1 text-xs font-bold text-ink-soft">No daily target</p> : null}
               <div className="mt-[16px] flex min-w-0 flex-wrap items-center justify-center gap-3 md:justify-start">
-                {stepsEntry?.walkingMinutes !== undefined ? <p className={summaryPillClassName}>
+                {!stepsEntry ? <p className={summaryPillClassName}>
                   <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span className="min-w-0 tabular-nums">{`${stepsEntry.walkingMinutes.toLocaleString()} walking minutes`}</span>
-                </p> : stepsEntry ? <p className="text-xs font-semibold text-ink-soft">Walking time not logged</p> : null}
-                <p className={walkingEstimate ? summaryPillClassName : "min-w-0 text-xs font-semibold text-ink-soft"}>
-                  {walkingEstimate ? <>
+                  <span aria-hidden className="min-w-0 tabular-nums">0 mins</span>
+                  <span className="sr-only">Walking time not logged; zero shown as a placeholder</span>
+                </p> : stepsEntry.walkingMinutes !== undefined ? <p className={summaryPillClassName}>
+                  <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="min-w-0 tabular-nums">{formatWalkingTime(stepsEntry.walkingMinutes)}</span>
+                </p> : <p className="text-xs font-semibold text-ink-soft">Walking time not logged</p>}
+                <p className={walkingEstimate || !stepsEntry ? summaryPillClassName : "min-w-0 text-xs font-semibold text-ink-soft"}>
+                  {!stepsEntry ? <>
+                    <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span aria-hidden className="font-extrabold tabular-nums">0 kcal</span>
+                    <span className="sr-only">Walking energy not logged; zero shown as a placeholder</span>
+                  </> : walkingEstimate ? <>
                     <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     <span aria-hidden className="font-extrabold tabular-nums">{`≈${walkingEstimate.lowKcal}–${walkingEstimate.highKcal} kcal`}</span>
                     <span className="sr-only">{`Estimated walking energy: approximately ${walkingEstimate.lowKcal} to ${walkingEstimate.highKcal} kilocalories`}</span>
-                  </> : !stepsEntry ? "Energy not logged"
-                    : !walkingEstimateSupported ? "Energy unavailable for this profile"
+                  </> : !walkingEstimateSupported ? "Energy unavailable for this profile"
                     : stepsEntry.walkingMinutes === 0 ? "Energy unavailable for 0 minutes"
                     : "Add walking minutes for an estimate"}
                 </p>

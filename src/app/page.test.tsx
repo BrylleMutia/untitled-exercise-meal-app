@@ -49,6 +49,9 @@ describe("Home saved steps summary", () => {
     const html = renderHome();
     expect(html).toContain('aria-label="No steps logged today; daily target 8,000 steps"');
     expect(html).not.toContain('aria-label="Daily step target progress: 0%"');
+    expect(html).toContain('<span aria-hidden="true">0 / 8,000</span>');
+    expect(html).toContain("No steps logged today; 0 of 8,000 steps shown as a placeholder");
+    expect(html).toContain("Not logged");
     expect(html).toContain("Edit target");
   });
 
@@ -81,7 +84,14 @@ describe("Home saved steps summary", () => {
     const html = renderHome();
     expect(html).toContain("Not logged");
     expect(html).toContain("No steps logged today");
-    expect(html).toContain("Energy not logged");
+    expect(html).toContain('<span aria-hidden="true">0</span>');
+    expect(html).toContain("0 mins");
+    expect(html).toContain("0 kcal");
+    expect(html).toContain("Walking time not logged; zero shown as a placeholder");
+    expect(html).toContain("Walking energy not logged; zero shown as a placeholder");
+    expect(html).toContain('class="lucide lucide-clock');
+    expect(html).toContain('class="lucide lucide-flame');
+    expect(html).toContain("bg-white px-3 py-1");
     expect(html).not.toContain("1,234 steps");
     expect(html).not.toContain("Manual entry");
     expect(html).not.toContain("Edit steps");
@@ -109,7 +119,7 @@ describe("Home saved steps summary", () => {
     const html = renderHome();
     expect(html).toContain('<span aria-hidden="true">6,500</span>');
     expect(html).toContain('<span class="sr-only">6,500 steps</span>');
-    expect(html).toContain("35 walking minutes");
+    expect(html).toContain("35 mins");
     expect(html).toContain("≈110–160 kcal");
     expect(html).toContain("Estimated walking energy: approximately 110 to 160 kilocalories");
     expect(html).toContain('class="lucide lucide-clock');
@@ -124,7 +134,7 @@ describe("Home saved steps summary", () => {
   it("keeps zero walking minutes explicit without a calorie estimate", () => {
     snapshot.dailySteps = [step({ walkingMinutes: 0 })];
     const html = renderHome();
-    expect(html).toContain("0 walking minutes");
+    expect(html).toContain("0 mins");
     expect(html).toContain("Energy unavailable for 0 minutes");
     expect(html).not.toContain("Estimate details");
     expect(html).not.toContain("Walking energy: roughly");
@@ -136,7 +146,7 @@ describe("Home saved steps summary", () => {
     const html = renderHome();
     expect(html).toContain('<span aria-hidden="true">6,500</span>');
     expect(html).toContain('<span class="sr-only">6,500 steps</span>');
-    expect(html).toContain("35 walking minutes");
+    expect(html).toContain("35 mins");
     expect(html).toContain("Energy unavailable for this profile");
     expect(html).not.toContain("Walking energy: roughly");
   });
@@ -161,20 +171,23 @@ describe("Home workout energy status", () => {
   it.each([
     ["eligible", "Energy estimate: not logged."],
     ["unsupported", "Energy estimate unavailable for this profile."],
-  ] as const)("shows the %s status in a white fire-icon pill", (targetEligibility, message) => {
+  ] as const)("shows a calorie placeholder with an accessible %s status", (targetEligibility, message) => {
     snapshot.profile = { ...profile, targetEligibility };
     const html = renderHome();
     const pill = html.match(/<p class="mt-\[17px\] inline-flex[^]*?<\/p>/)?.[0];
     expect(pill).toContain("bg-white px-3 py-1");
     expect(pill).toContain("lucide-flame");
-    expect(pill).toContain(`<span class="min-w-0">${message}</span>`);
+    expect(pill).toContain("0 kcal");
+    expect(pill).toContain(`<span class="sr-only">${message} Zero shown as a placeholder.</span>`);
   });
 
-  it("does not render an empty status pill when workout energy is available", () => {
+  it("shows the numeric estimate in a white pill when workout energy is available", () => {
     snapshot.sessions = [{ id: "session", plannedWorkoutId: "workout", date: "2026-10-05", startedAt: "2026-10-05T08:00:00Z", finishedAt: "2026-10-05T08:30:00Z", status: "completed", logs: [] }];
     const html = renderHome();
     expect(html).not.toContain("Energy estimate: not logged.");
-    expect(html).not.toContain('mt-[17px] inline-flex max-w-full items-center gap-1.5 rounded-full bg-white');
+    const pill = html.match(/<p class="mt-\[17px\] inline-flex[^]*?<\/p>/)?.[0];
+    expect(pill).toContain("bg-white");
+    expect(pill).toContain(">130 kcal</span>");
   });
 });
 
