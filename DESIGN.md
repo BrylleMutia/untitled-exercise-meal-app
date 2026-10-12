@@ -150,20 +150,31 @@ tints and rounded corners; screens are stat-focused and mobile-first.
   using the meals card's pale surface and chip shadow. Workout plus opens
   `/workouts` directly; steps plus opens `/activity` as the sole log/edit steps
   action, with an accessible label reflecting whether today's entry exists.
+- The workout progress summary always has a white fire-icon pill showing the
+  numeric energy count (for example, "0 kcal" or "140 kcal"). When the estimate
+  is unavailable, zero is a visual placeholder with an assistive explanation;
+  the ring keeps its unavailable dash and "kcal est." label. Available values
+  retain the existing rough weekly estimate and its help/assistive context.
 - Steps shows one bold, tabular confirmed count: "2,000 / 10,000" when a
   target exists, or "2,000" with "No daily target" when unset. The heading
   supplies the visible unit; assistive text announces "steps" and reads the
   slash as "of" once. The date and manual-source explanation
-  stay in help. Missing entries say "Not logged" and "No steps logged today",
-  with the chosen target when present; saved zero remains an observation.
-  Recorded walking minutes, including zero, use a white clock-icon pill matching
+  stay in help. A missing entry displays "0 / 10,000" when a target is set,
+  or "0" without one, with a visible "Not logged" status and an unavailable
+  ring. The zero is a visual placeholder, not a saved observation; assistive
+  text says no steps were logged. Saved zero remains an observation.
+  Recorded walking time uses compact units ("0 mins", "35 mins", "1 hr", or
+  "1 hr 30 mins") in a white clock-icon pill matching
   the meals date pill. The approximate calorie range ("≈110–160 kcal") uses
   a matching white pill with a decorative fire icon on the left. These
   informational pills share a wrapping row with a 12px gap and a fixed 16px
   top margin at every breakpoint.
-  Missing walking time stays explicitly "Walking time not logged"; energy states
-  distinguish unlogged activity, missing minutes, zero minutes, and unsupported
-  profiles. The ring sits to the right of the summary and its target action.
+  For unlogged activity, matching clock and fire pills show "0 mins"
+  and "0 kcal" as placeholders, with the visible "Not logged" status and
+  assistive descriptions preserving their meaning. For a saved entry, missing
+  walking time stays explicitly "Walking time not logged"; energy states
+  distinguish missing minutes, zero minutes, and unsupported profiles. The ring
+  sits to the right of the summary and its target action.
   The duplicate log/edit steps button is omitted; the overlapping plus action
   serves both states. Estimate details open from the card's help panel. Below
   768px, workout and steps headings precede their horizontally centered rings;
@@ -172,7 +183,7 @@ tints and rounded corners; screens are stat-focused and mobile-first.
   including percentages, counts, supporting states, pills, each wrapped detail
   row, and steps actions. At 768px and wider, summaries and action rows remain
   left-aligned beside the rings. Headings and help controls keep their positions.
-  Missing/unavailable walking energy remains plain supporting text. Their
+  Missing/unavailable walking energy on saved entries remains plain supporting text. Their
   summaries and actions wrap to preserve readable enlarged text. Shortcut headings
   and icons wrap as well. All actions remain at least 44px tall.
   No target shows an empty track and dash with "No daily target"; a chosen
@@ -225,13 +236,29 @@ names directly (for example `bg-cream`, `text-ink`, `bg-lav-100`).
 
 - **Card tones** map to `50`–`100` tints (`Card.tsx`): white, blush, lavender,
   peach, mint, coral.
-- **Progress bars** use stronger tints for legibility: calories `bg-blush-300`,
-  protein `bg-lav-300`, carbs `bg-peach-200`, fat `bg-mint-200`.
+- **Nutrition metrics** use shared semantic aliases and the presentation mapping
+  in `nutritionMetrics.ts`: calories pastel red (`coral-200`), protein lavender
+  (`lav-300`), carbs peach (`peach-200`), and fat mint (`mint-200`). Progress bars
+  and nutrition pills use these same fills. Larger metric surfaces use the
+  corresponding `100` tint; calorie rings use `coral-300`. Home, Nutrition,
+  onboarding, Settings, Progress, and activity energy share this mapping. The
+  Home steps summary is an explicit exception: its clock and walking-calorie
+  pills both use white backgrounds.
+- **Nutrition summaries** use separate rounded pills in Calories → Protein →
+  Carbs → Fat order, with dark ink text, explicit units and macro labels, and
+  tabular numerals. They wrap naturally at narrow widths and enlarged text.
+  Food previews, reviewed meals, serving confirmations, Eaten entries, ingredient
+  summaries, and calorie-only history summaries use the shared `NutritionPills`
+  renderer. Inputs remain editable with metric-colored visible labels. Invalid
+  or blank drafts do not show a zero preview; missing intake remains unlogged.
+  Source, confidence, preparation assumptions, and ranges remain separate.
 - **Confidence chips** in nutrition use tone by confidence: high `mint-100`,
   medium `peach-100`, low `coral-100`.
-- **`lav-500`** is the accent for focus outlines and interactive progress rings.
-- **`coral`** is reserved for warnings, errors, destructive actions, and danger
-  states (never used to imply a passing state).
+- **`lav-500`** is the accent for focus outlines and generic progress rings.
+- **`coral`** identifies calories as a neutral metric category, and also retains
+  existing warning, error, and destructive-action uses. Explicit labels and
+  context distinguish these meanings; calorie color never judges intake or
+  marks an over-target value as failure.
 - **`mint`** implies calm, complete, or success; it is never the sole signal
   for status (always paired with text/aria).
 
@@ -321,6 +348,64 @@ focused onboarding/account rechecks using isolated local accounts and port 3030.
   (`bg-white`, `bg-blush-100`, `bg-lav-100`, `bg-peach-100`, `bg-mint-100`,
   `bg-coral-100`). Cards render `rounded-3xl p-5 shadow-card` by default.
 - **Empty state:** a dashed lavender-bordered, `white/50` rounded panel.
+
+### Shared card composition
+
+Use the sectioned recipe editor (Option C) as the composition reference for
+new or reused task cards. Inherit the existing tone, typography, and metric
+tokens rather than copying the recipe's content or adding sections to simple
+cards that do not need them.
+
+- **Anatomy:** an optional heading/action row, a body grouped by related tasks,
+  and an optional action footer. Give each substantial section a descriptive
+  heading; keep sections expanded unless the feature calls for an expander.
+- **Hierarchy:** headings use Nunito `font-extrabold`, visible field labels and
+  actions use `font-bold`, and supporting source/assumption text uses
+  `text-ink-soft`. Task-card titles use `text-lg`; modal titles use
+  `text-xl sm:text-2xl`. Keep numbers tabular and units explicit.
+- **Spacing:** retain `Card`'s `p-5` default and `p-4` compact padding. Use
+  `gap-2`/`gap-3` within related rows and `gap-6` between substantial sections.
+  Where a separator helps, use `border-t border-lav-100 pt-6`. Place more space
+  between sections than between a heading and its content.
+- **Surfaces:** white is the primary editor surface; light pastel tints group
+  related rows and editing areas. Use `rounded-3xl shadow-card` on the outer
+  card and `rounded-2xl` on inner rows, inputs, and controls. Prefer open sections
+  with subtle rules to repeated nested cards and shadows. Existing colored
+  dashboard cards retain their established tones.
+- **Controls:** persistent labels accompany placeholders; use shared button
+  variants and descriptive 44px remove icons. Put the primary action at the
+  end of the reading order and recovery actions beside the relevant message.
+  Keep nutrition pills informational, wrapping, and separate from source,
+  confidence, assumptions, and errors.
+  For recipe servings, use a labeled numeric field between 44px minus/plus
+  buttons, retaining direct fractional input and hiding native spinner arrows.
+  Give the servings controls a pale lavender backing so their soft white circular
+  buttons have the same visible treatment as ingredient removal controls.
+  Keep row removal at the trailing edge after the measurement selector, bottom
+  aligned with its input. When controls wrap, keep measurement and removal together.
+- **Responsive layout:** use `min-w-0`, wrapping actions and pills, and stacked
+  fields where space is tight. Long names and instructions must wrap; numeric
+  inputs retain readable width. Verify 320px layouts and 200% text enlargement.
+
+### Task modals
+
+The shared `Modal` is a presentation-only Floating UI dialog. At 640px and above,
+it is centered with `max-w-3xl` (48rem), 24px viewport clearance, rounded corners,
+and the existing card shadow. Below 640px it fills the available viewport and
+respects safe areas. A dim ink backdrop isolates the task; the header and footer
+use `lav-50`, and the white body scrolls independently. Header and footer stay
+visible, with Cancel left and the primary action right; phone actions use two
+columns. Exceptionally tall headers or recovery messages can scroll within
+their own bounded area so enlarged text and short viewports remain usable.
+
+Opening traps focus and makes the background unavailable to interaction and
+scrolling. Closing returns focus to the originating control. The close icon,
+Cancel, Escape, and a direct backdrop click dismiss a recoverable editor;
+authoritative saving disables dismissal. Contextual help is a nested non-modal
+surface whose Escape and outside interactions do not also dismiss its parent.
+Use one brief `animate-pop` entrance and honor reduced motion. Required fields,
+operational errors, provider disclosure, draft recovery, and retry controls stay
+visible within the modal rather than relying on background toasts.
 
 ## Layout and Navigation
 
@@ -419,6 +504,141 @@ The active tab uses `bg-lav-100 text-ink`; inactive uses `text-muted`. All
 tabs set `aria-current="page"` when active. Settings is reachable from the
 header and the avatar, not from the bottom nav.
 
+### Nutrition day card
+
+A single Planned card follows the daily summary for every selected day. Its
+Add to plan control opens the existing inline search, description, AI review,
+and manual card after a required meal-slot selection. Each completed entry
+offers separate Add to plan and Log meal actions. Cancel returns focus to Add
+to plan; per-date, per-slot drafts remain recoverable. If no eligible goal is
+available, the card explains the prerequisite while logging stays available.
+
+Four Breakfast, Lunch, Dinner, and Snack groups contain multiple planned and
+Eaten rows. These labels distinguish prescription from intake without a
+separate Logged section. An empty group states that intake is unknown. Planned
+rows retain Edit and Skip/Plan again and add Log, which opens an in-place
+actual-serving confirmation. A successful linked log hides its Planned row to
+avoid repetition while keeping the plan snapshot intact. Linked Eaten rows
+offer Log again with the same confirmation; deleting the last linked Eaten row
+reveals Planned again. Eaten rows retain expand, edit, and delete.
+Saved meals use Log with a required slot and confirmation. Actions have
+44px or larger touch targets and wrap on narrow screens; keyboard focus moves
+to the slot selector when the card opens and back to Add to plan when it closes.
+
+### Saved-recipe authoring
+
+Saved and Planned meals use the approved Option 1 pastel-banner `RecipeCard`.
+Saved banners are lavender; Planned banners are blush. The shared cover places
+a rounded image toward the left and falls back to the existing default bowl.
+The upper-right badge is Popular for the five most eaten recipes in the last
+30 local days, or Favorite when favorited outside that group. The wrapping name
+and separate 44px heart occupy the next row. Image and name open the overview;
+the heart only changes the personal favorite and reflects server confirmation.
+Coral calories remain per serving, with an accessible basis label and contextual
+help rather than a visible suffix. A mint pie-icon pill shows the whole recipe
+yield, separately from Planned quantities. Lavender time means whole-recipe
+minutes; missing time reads “Not set” and explicit zero remains valid. Peach
+complexity shows Easy, Medium, or Hard, defaulting missing recipe values to Medium.
+Food-only and unresolved entries omit recipe-yield and complexity pills.
+Descriptions are omitted. Slot, planned quantity, skipped and unresolved context
+remain visible. Food-only entries use the shell without a favorite control.
+
+Saved footers place flexible Log with a trailing plus beside 48px Pencil/Edit
+and Archive icon buttons with contextual accessible labels and dismissible
+hover/focus tooltips. They wrap with Log first and secondary controls together.
+Meal duplication is removed; ordinary Create and Edit draft recovery remains.
+Planned footers retain Edit, Skip/Plan again, and Log. Expanded editors and
+confirmations precede the footer. Opening Planned Edit focuses its choice field
+after draft recovery; cancellation or successful saving returns to Edit.
+Lists preserve slot grouping and ordering, using one column on phones and up to
+two where space permits. Pills/actions wrap at enlarged text sizes. Fine-pointer
+hover lifts the card slightly, entry fades briefly, and confirmed hearts pulse;
+reduced motion disables these effects.
+
+Card padding and the 44px heart retain physical sizing when text is enlarged,
+leaving room for wrapping names and metadata. Page headings, shell controls and
+grouped eaten-meal actions wrap as well, so the surrounding page stays within
+the actual 320px screen at 200% text. Recipe overlays use dynamic viewport width,
+square covers that shrink to available space, and zero-minimum grid columns to
+prevent native input widths from expanding the phone layout.
+
+Create and Edit preserve the Option C authoring controls within the approved
+Option 1 composition. The first field group contains name/servings/time/complexity with
+no visible Recipe basics heading. Ingredients contains entry methods, included
+rows, and review; Details contains per-serving nutrition and optional Reference;
+Instructions contains the required multiline method. Save actions stay in
+the modal footer. Persistent numeric
+labels accompany “Servings” and “Quantity” placeholders; new fields start blank.
+The approved Option 1 extends this editor with a centered square cover in a
+lavender surface above the existing name/servings/time fields. The shared
+`RecipeCover`, `RecipeImagePicker`, and `RecipeTabs` components keep creation,
+editing, overview, and saved-meal thumbnails consistent. The generated generic
+rice-and-vegetable bowl is decorative fallback media, not a depiction of the
+saved ingredients. “Change image” expands Upload, Use image URL, and Reset to
+default actions without introducing another dialog.
+
+Details, Ingredients, and Instructions use a pill-shaped tab bar. Ingredients
+opens first; recipe name, servings, and time remain above every panel. Panel
+buttons wrap into readable rows when enlarged text exceeds the available width.
+Panel changes retain all entered values and review results. Arrow keys and Home/End
+move tab focus; only the active panel enters the accessibility tree. A footer
+message identifies missing required input and offers a link to the relevant
+inactive panel. New recipes use “Save”; editing uses “Save changes”.
+
+Clicking a saved-meal name or thumbnail opens a read-only “Recipe overview”
+using the same cover and tabs. Its footer offers Close and Edit for owned and
+predefined recipes. The predefined editor explains that saving creates a
+personal version and retains existing planned/logged references. Saved cards
+offer Edit and Archive for predefined recipes as well as personal recipes.
+Ingredients show whole-recipe quantities, source and preparation
+basis, with nutrition labeled as per-serving estimates. Missing instructions
+stay visibly unspecified. Edit returns to the overview after successful saving
+or cancellation. Nutrition, references, and instructions remain in the overview
+and editor. Meal logging actions remain available in the card footer.
+
+The recipe-name placeholder is “What should we call this recipe?”. Servings
+buttons change the count by one, clamp at zero/10000, and cannot decrement blank
+or zero values. Zero remains editable but does not produce a nutrition preview
+or enable saving. Invalid nonblank values disable both adjustment buttons.
+Servings icon buttons keep 44px sizing and their 10px outer spacing when text
+is enlarged, leaving the numeric field readable at 320px instead of scaling
+both buttons with the font size.
+Name, Servings, and Time (mins.) share a row when their content fits and wrap
+in DOM order at narrow widths or enlarged text. Time uses the normal input
+surface with a decorative clock at the left, padded text, and “e.g. 30” as its
+placeholder. Persistent labeling and helper text explain that time is optional
+total preparation/cooking/serving time for the entire recipe. There are no
+time stepper buttons or visible native spinner arrows. Blank means unknown;
+zero is a valid explicit value. Invalid whole-minute input shows labeled inline
+guidance and disables Save, without changing the nutrition preview.
+Saved recipe details show a clock and “X mins total” only when time is known.
+Search ingredients, Describe ingredients, and Add custom ingredient offer
+trusted autofill, explicit AI review, and labeled manual values. Review appends
+confirmed ingredients without replacing the existing list. Sources, preparation,
+serving bases, and assumptions remain visible. Trash icon buttons have descriptive
+labels and at least 44px targets, including when removing the final ingredient.
+Per-serving pills use the shared calorie/protein/carbs/fat palette and wrap on
+narrow screens and enlarged text. Incomplete inputs show guidance instead of
+zero or partial totals. Instructions are a multiline field; References accept
+links or citations and appear in the Details tab. Instructions appear in their
+own tab. Complexity is a required labeled select beside the basic fields with
+Easy, Medium, and Hard options, initially Medium. Existing supported values remain
+selected; missing/blank restored values default to Medium. Merely opening a blank
+editor does not create a draft because of the default. Legacy recipe records are
+backfilled to Medium and the overview uses the same fallback without changing tabs.
+Pending save, provider failure, restored draft, unavailable draft storage, and
+stale-version guidance stay within the editor.
+Closing keeps the editor's draft state alive for reopening and retains the
+existing recoverable browser draft. Successful saving clears the draft and
+closes only after authoritative state and draft cleanup complete. Discard resets
+the form explicitly. The name field receives focus after draft restoration;
+ingredient selection moves focus to the new quantity field.
+Switching entry methods prefills only an empty destination from the active
+search text, description, or custom name. Existing destination input and review
+remain intact; changing methods triggers no provider action. These fields remain
+recoverable drafts. Saved-food pickers share plural-aware, token-based ranking;
+bounded spelling suggestions show “Close match” and require explicit selection.
+
 ### Grocery custom-item form
 
 The weekly list explains that the form adds items outside the meal plan. On
@@ -438,11 +658,13 @@ components in `src/components/`.
 | Component | File | Conventions |
 |-----------|------|-------------|
 | `Card` | `ui/Card.tsx` | `CardTone` union → tint background; `rounded-3xl p-5 shadow-card`; no default padding override unless `className` adds `p-4` (as `StatTile` does). |
+| `Modal` | `ui/Modal.tsx` | Named modal dialog; centered `max-w-3xl` desktop/full-screen phone; fixed header/footer and scrolling body; focus trap/return, background isolation, contextual help tree, dismissal protection, and safe-area padding. |
 | `Button` | `ui/Button.tsx` | Variants `primary` (`bg-ink text-white`), `soft` (`bg-white/70`), `ghost`, `danger` (`bg-coral-200`). `min-h-12` (3rem = 44px+) target, `rounded-2xl px-5 text-sm font-bold`, disabled = `opacity-50` + `cursor-not-allowed`. |
 | `Chip` | `ui/Chip.tsx` | Round frosted icon chip, `h-11 w-11` (44px target), `bg-white/70 shadow-chip`, required `label` → `aria-label` + `title`. |
 | `HelpPopover` / `HelpHeading` | `ui/HelpPopover.tsx` | Grouped circled-question-mark help; 44px trigger; hover/focus preview and click/tap pinning; named non-modal dialog, source links, viewport-aware portal, and deliberate focus return. |
 | `ProgressRing` | `ui/ProgressRing.tsx` | Accessible circular progress; `role="img"` + `aria-label` percentage; `tabular-nums` center value. |
 | `ProgressBar` | `ui/ProgressBar.tsx` | `role="progressbar"` with `aria-valuenow/min/max` for logged values and text for unlogged values; `tabular-nums` value/target; compact styling and bar color overridable. |
+| `NutritionPills` / `NutritionFieldLabel` | `ui/NutritionPills.tsx` | Read-only wrapping metric pills and colored form labels; shared metric palette, explicit units, missing/invalid values, and optional estimate markers. |
 | `StatTile` | `ui/StatTile.tsx` | `Card`-based, `p-4`, `tabular-nums` value, optional sub-line. |
 | `ToastHost` | `ui/Toast.tsx` | `aria-live="polite"` host; `animate-pop` ink toasts; tone icon per `ok/info/warn`. |
 | `DayStrip` | `components/DayStrip.tsx` | Horizontal week selector (`role="group"`, `aria-pressed` per day); 44px minimum day controls with compact gaps, today highlighted with a lavender badge. |
@@ -507,10 +729,22 @@ The design follows the accessibility and motion guidance in `ARCHITECTURE.md`.
 - **Food catalog:** `src/constants/foods.ts` exports a curated starter catalog
   (`FOODS`) with per-serving values, `source`, `sourceVersion`, `estimated`,
   `confidence`, `servingGrams`, and `category`. Source is "Starter Food Catalog"
-  version `2026.09`; every record is `estimated: true` until a trusted production
-  database is selected.
+  version `2026.09` remains on legacy development estimates. Reviewed foods use
+  individually identified USDA FoodData Central SR Legacy records, including
+  the six new recipe ingredients; their version and preparation basis remain
+  visible separately from recipe-level portion/cooking uncertainty.
 - **Saved meals:** `src/constants/meals.ts` exports `SAVED_MEALS` (recipes
-  referencing catalog food IDs with per-serving quantities).
+  referencing catalog food IDs with whole-recipe quantities and a serving count).
+  Creamy Lemon Chicken is an active predefined recipe: Easy, 30 minutes,
+  two servings, measured USDA ingredient records, a reference, full instructions,
+  and a generated cover. Korean Beef Bowl adds four Easy servings, a generated
+  cover, and supplied macros of 560 kcal, 45 g protein, 58 g carbs and 16 g fat
+  per serving; its cooking time is unset. Every predefined recipe must supply
+  macros and its own generated image. Use provided macros when present; only
+  estimate when none are supplied. The editor shows provided macro fields per
+  serving with explicit labels and supports switching to ingredient calculation.
+  Retired recipes remain resolvable for old
+  plans/history but disappear from Saved meals and future selection.
 - **Visibility:** source, version, confidence, estimated/user-provided flags,
   value provenance, estimate ranges, and serving basis are shown on nutrition
   entries and the unified meal review. Composite confirmations render one
