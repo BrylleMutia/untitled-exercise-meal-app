@@ -97,7 +97,7 @@ export default function GroceryPage() {
             suppressDraftWriteRef.current = false;
             setName(e.target.value);
           }}
-          placeholder="Item name"
+          placeholder="Item"
           className="input min-w-0 basis-full sm:basis-0 sm:flex-1"
           aria-label="Extra grocery item name"
         />

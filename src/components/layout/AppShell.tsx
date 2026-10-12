@@ -97,7 +97,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh">
       <header className="mx-auto w-full max-w-3xl px-4 pt-6 lg:max-w-5xl">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/settings"

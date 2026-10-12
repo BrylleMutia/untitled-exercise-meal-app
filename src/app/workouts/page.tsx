@@ -63,7 +63,7 @@ export default function WorkoutsPage() {
             <option value="calisthenics">Calisthenics</option><option value="pilates">Pilates foundations</option>
           </select>
         <Button className="mt-3" disabled={Boolean(pendingMutation) || program === (snapshot.profile?.trainingProgram ?? "calisthenics")} onClick={() => void actions.selectTrainingProgram(program)}>Save program choice</Button>
-        <Link href="/workouts/custom" className="mt-3 block min-h-11 py-3 text-sm font-extrabold underline">Create or log your own routine</Link>
+        <Link href="/workouts/custom" className="mt-3 block min-h-11 py-3 text-sm font-extrabold underline">Customize</Link>
       </Card>
       <div className="flex items-end justify-between">
         <div>
