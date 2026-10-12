@@ -25,6 +25,8 @@ import type {
   HistoryReadModel,
   SaveReviewedMealInput,
   SaveRecipeInput,
+  RecipeCardReadModel,
+  SetRecipeFavoriteInput,
 } from "@/types/backend";
 import type {
   AppSnapshot,
@@ -49,6 +51,8 @@ import { suggestProgression, type ProgressionSuggestion } from "@/utility/progre
 import { todayKey } from "@/utility/dates";
 
 export interface AppActions {
+  loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel>;
+  setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel>;
   saveCustomWorkout(id: string, expectedVersion: number, definition: CustomWorkoutDefinition): Promise<boolean>;
   startCustomWorkout(workoutId: string, expectedVersion: number): Promise<boolean>;
   saveCustomSession(session: CustomWorkoutSession): Promise<boolean>;
@@ -408,6 +412,14 @@ export function AppProvider({
   const actions = useMemo<AppActions>(
     () => ({
       notify,
+      async loadRecipeCardMetadata(asOfDate) {
+        if (!repository) throw new Error("Sign in to load favorites.");
+        return repository.loadRecipeCardMetadata(asOfDate);
+      },
+      async setRecipeFavorite(input) {
+        if (!repository) throw new Error("Sign in to change favorites.");
+        return repository.setRecipeFavorite(input);
+      },
       clearError() {
         setError(null);
       },

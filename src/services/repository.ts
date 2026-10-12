@@ -36,6 +36,8 @@ import type {
   ProgressionDecisionInput,
   HistoryQuery,
   HistoryReadModel,
+  RecipeCardReadModel,
+  SetRecipeFavoriteInput,
   WeightInput,
   SaveDailyStepsInput,
   DeleteDailyStepsInput,
@@ -48,6 +50,8 @@ import type {
 } from "@/types/backend";
 
 export interface SnapshotRepository {
+  loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel>;
+  setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel>;
   saveCustomWorkout(input: SaveCustomWorkoutInput): Promise<MutationOutcome>;
   startCustomWorkout(input: StartCustomWorkoutInput): Promise<MutationOutcome>;
   saveCustomSession(input: SaveCustomSessionInput): Promise<MutationOutcome>;

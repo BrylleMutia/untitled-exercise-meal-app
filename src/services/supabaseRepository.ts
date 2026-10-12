@@ -12,6 +12,7 @@ import { validateCustomWorkout } from "@/utility/customWorkouts";
 import { validRecipeTimeMinutes } from "@/utility/recipeTime";
 import { parseRecipeImage } from "@/utility/recipeImage";
 import { isRecipeComplexity } from "@/utility/recipeCard";
+import { loadRecipeCardMetadata, setRecipeFavorite } from "./recipeCardMetadata";
 import { startOfWeek, todayKey, weekDates } from "@/utility/dates";
 import type {
   AppSnapshot,
@@ -62,6 +63,8 @@ import type {
   ProgressionDecisionInput,
   HistoryQuery,
   HistoryReadModel,
+  RecipeCardReadModel,
+  SetRecipeFavoriteInput,
   SaveDailyStepsInput,
   DeleteDailyStepsInput,
   CelebrationsPreferenceInput,
@@ -412,6 +415,14 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     } catch (reason: unknown) {
       throw repositoryException(toRepositoryError(reason instanceof Error ? `validation_failed: ${reason.message}` : "retryable: history could not be loaded"));
     }
+  }
+
+  loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel> {
+    return loadRecipeCardMetadata(this.client, asOfDate);
+  }
+
+  setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel> {
+    return setRecipeFavorite(this.client, input);
   }
 
   private async mutate(
