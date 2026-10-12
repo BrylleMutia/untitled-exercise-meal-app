@@ -27,6 +27,16 @@
   --color-coral-200: #ffabb3;
   --color-coral-300: #ff8d98;
 
+  --color-nutrition-calories: var(--color-coral-200);
+  --color-nutrition-calories-soft: var(--color-coral-100);
+  --color-nutrition-calories-strong: var(--color-coral-300);
+  --color-nutrition-protein: var(--color-lav-300);
+  --color-nutrition-protein-soft: var(--color-lav-100);
+  --color-nutrition-carbs: var(--color-peach-200);
+  --color-nutrition-carbs-soft: var(--color-peach-100);
+  --color-nutrition-fat: var(--color-mint-200);
+  --color-nutrition-fat-soft: var(--color-mint-100);
+
   --shadow-card: 0 12px 32px -12px rgb(38 40 54 / 0.12);
   --shadow-chip: 0 4px 12px -4px rgb(38 40 54 / 0.15);
 
