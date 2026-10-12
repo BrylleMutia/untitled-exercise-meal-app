@@ -27,18 +27,18 @@ select has_table('public', 'mutation_idempotency', 'idempotency table exists');
 select has_table('public', 'progression_decisions', 'progression decisions table exists');
 
 select is((select count(*)::int from public.exercises where is_system), 21, 'starter exercise count');
-select is((select count(*)::int from public.foods where is_system), 28, 'starter and reviewed MVP-3 food count');
-select is((select count(*)::int from public.meals where is_system), 8, 'starter and MVP-3 meal count');
-select is((select count(*)::int from public.meal_ingredients), 28, 'catalog meal ingredient count');
+select is((select count(*)::int from public.foods where is_system), 44, 'starter and reviewed MVP-3 food count');
+select is((select count(*)::int from public.meals where is_system), 10, 'starter and MVP-3 meal count');
+select is((select count(*)::int from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.is_system), 45, 'catalog meal ingredient count');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 27, 'every public application table has RLS enabled');
+), 29, 'every public application table has RLS enabled');
 
-select is((select count(*)::int from pg_policies where schemaname = 'public'), 26, 'owner/catalog policies are present');
+select is((select count(*)::int from pg_policies where schemaname = 'public'), 28, 'owner/catalog policies are present');
 
 select is((
   select count(*)::int
@@ -58,7 +58,7 @@ select is((
   select count(*)::int
   from information_schema.role_table_grants
   where table_schema = 'public' and grantee = 'authenticated' and privilege_type = 'SELECT'
-), 27, 'authenticated reads are granted');
+), 29, 'authenticated reads are granted');
 
 select is((
   select count(*)::int

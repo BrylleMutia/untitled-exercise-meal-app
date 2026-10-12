@@ -32,14 +32,14 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r'
-), 27, 'the public application schema contains exactly 27 tables');
+), 29, 'the public application schema contains exactly 29 tables');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 27, 'every public application table has RLS enabled');
+), 29, 'every public application table has RLS enabled');
 
 select ok((
   select count(*) = 10
@@ -128,9 +128,9 @@ select is((
 ), 0, 'every public foreign key has a leftmost B-tree index');
 
 select is((select count(*)::int from public.exercises where is_system), 21, 'starter exercise count');
-select is((select count(*)::int from public.foods where is_system), 28, 'starter and reviewed food count');
-select is((select count(*)::int from public.meals where is_system), 8, 'starter and reviewed meal count');
-select is((select count(*)::int from public.meal_ingredients), 28, 'catalog meal ingredient count');
+select is((select count(*)::int from public.foods where is_system), 44, 'starter and reviewed food count');
+select is((select count(*)::int from public.meals where is_system), 10, 'starter and reviewed meal count');
+select is((select count(*)::int from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.is_system), 45, 'catalog meal ingredient count');
 
 select ok((
   exists (select 1 from public.exercises where app_id = 'ex-knee-push-up' and slug = 'knee-push-up')
