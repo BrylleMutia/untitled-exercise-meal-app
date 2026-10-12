@@ -3,8 +3,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { CircleHelp, X } from "lucide-react";
 import {
-  autoUpdate, flip, FloatingFocusManager, FloatingPortal, offset, safePolygon,
-  shift, size, useDismiss, useFloating, useFocus, useHover, useInteractions, useRole,
+  autoUpdate, flip, FloatingFocusManager, FloatingNode, FloatingPortal, offset, safePolygon,
+  shift, size, useDismiss, useFloating, useFloatingNodeId, useFocus, useHover, useInteractions, useRole,
 } from "@floating-ui/react";
 
 type HelpMode = "closed" | "preview" | "pinned";
@@ -16,6 +16,7 @@ export function HelpPopover({ title, children, label }: {
   label?: string;
 }) {
   const id = useId();
+  const nodeId = useFloatingNodeId();
   const headingId = `${id}-heading`;
   const [mode, setMode] = useState<HelpMode>("closed");
   const blocked = useRef({ hover: false, focus: false });
@@ -45,6 +46,7 @@ export function HelpPopover({ title, children, label }: {
   }, [id, mode]);
 
   const { refs, floatingStyles, context } = useFloating({
+    nodeId,
     open: mode !== "closed",
     onOpenChange(next, _event, reason) {
       if (next) {
@@ -67,11 +69,11 @@ export function HelpPopover({ title, children, label }: {
   });
   const hover = useHover(context, { enabled: mode !== "pinned", mouseOnly: true, delay: { open: 300, close: 150 }, handleClose: safePolygon({ blockPointerEvents: false }) });
   const focus = useFocus(context);
-  const dismiss = useDismiss(context);
+  const dismiss = useDismiss(context, { bubbles: { escapeKey: false, outsidePress: false } });
   const role = useRole(context, { role: "dialog" });
   const { getReferenceProps, getFloatingProps } = useInteractions([hover, focus, dismiss, role]);
 
-  return <>
+  return <FloatingNode id={nodeId}>
     <button type="button" ref={(node) => { trigger.current = node; refs.setReference(node); }}
       className="inline-grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-soft transition-colors hover:bg-white/70 hover:text-ink motion-reduce:transition-none"
       {...getReferenceProps({
@@ -90,7 +92,7 @@ export function HelpPopover({ title, children, label }: {
       <FloatingFocusManager context={context} modal={false} disabled={mode !== "pinned"} initialFocus={panel} returnFocus={false}>
         <div ref={(node) => { panel.current = node; refs.setFloating(node); }} id={id} tabIndex={-1}
           style={floatingStyles}
-          className="z-50 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 text-sm font-semibold leading-relaxed text-ink shadow-card"
+          className="z-70 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 text-sm font-semibold leading-relaxed text-ink shadow-card"
           {...getFloatingProps({ id, "aria-labelledby": headingId })}>
           <div className="flex items-start justify-between gap-2">
             <h3 id={headingId} className="min-w-0 self-center font-extrabold">{title}</h3>
@@ -102,7 +104,7 @@ export function HelpPopover({ title, children, label }: {
         </div>
       </FloatingFocusManager>
     </FloatingPortal> : null}
-  </>;
+  </FloatingNode>;
 }
 
 export function HelpHeading({ title, children, as: Tag = "h2", className = "font-extrabold" }: {
