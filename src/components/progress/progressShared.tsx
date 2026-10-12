@@ -3,6 +3,7 @@
 import { Check, Dumbbell, Scale, UtensilsCrossed } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
 import { FOODS } from "@/constants/foods";
+import { NutritionPills } from "@/components/ui/NutritionPills";
 import type { HistoryReadModel } from "@/types/backend";
 
 export type Tone = "lav" | "mint" | "peach";
@@ -82,7 +83,7 @@ export function HistoryList({ history }: { history?: HistoryReadModel | null }) 
       date: n.date,
       icon: <UtensilsCrossed className="h-4 w-4" aria-hidden />,
       label: `Nutrition — ${n.slot}`,
-      detail: `${getNutritionHistoryLabel(n.foodId, n.customName)} · ${Math.round(n.calories)} kcal`,
+      detail: <span className="flex items-center gap-2"><span>{getNutritionHistoryLabel(n.foodId, n.customName)} · </span><NutritionPills values={{ calories: n.calories }} precision={0} /></span>,
     })),
     ...(history?.weights ?? app.snapshot.weights).map((w) => ({
       date: w.date,
@@ -123,7 +124,7 @@ export function HistoryList({ history }: { history?: HistoryReadModel | null }) 
                 {row.label}
                 <span className="font-semibold text-muted"> · {row.date}</span>
               </p>
-              <p className="whitespace-nowrap text-[11px] font-semibold text-muted">{row.detail}</p>
+              <div className="whitespace-nowrap text-[11px] font-semibold text-muted">{row.detail}</div>
             </div>
             <Check className="h-4 w-4 shrink-0 text-mint-200" aria-hidden />
           </div>

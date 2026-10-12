@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
+import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { Button } from "@/components/ui/Button";
 import { HEALTH_DISCLAIMER, kgToLb, lbToKg } from "@/utility/health";
 import { signOutAction } from "@/app/auth/actions";
@@ -164,7 +165,7 @@ export default function SettingsPage() {
       <Card>
         <HelpHeading title="Your targets"><p>{HEALTH_DISCLAIMER}</p><p>Formula: {target?.formula ?? "Not set"} · activity factor {target?.activityFactor ?? "Not set"} · effective {target?.effectiveDate ?? "Not set"} · version {target?.version ?? "Not set"}.</p></HelpHeading>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-2xl bg-blush-100 p-3">
+          <div className={`rounded-2xl ${nutritionMetricStyles.calories.surface} p-3`}>
             <div className="grid grid-cols-[minmax(0,1fr)_44px]"><p className="pt-3 text-xs font-bold leading-4 text-ink-soft">BMR</p><HelpPopover title="BMR"><p>Basal metabolic rate estimates energy used at rest. It is calculated from your profile, not a measured calorie requirement.</p></HelpPopover></div>
             <p className="font-extrabold tabular-nums">{target?.bmr} kcal</p>
           </div>
@@ -172,11 +173,11 @@ export default function SettingsPage() {
             <div className="grid grid-cols-[minmax(0,1fr)_44px]"><p className="pt-3 text-xs font-bold leading-4 text-ink-soft">BMI</p><HelpPopover title="BMI"><p>Body mass index compares weight with height. It is information only, not a diagnosis or a measure of body composition.</p></HelpPopover></div>
             <p className="font-extrabold tabular-nums">{target?.bmi}</p>
           </div>
-          <div className="rounded-2xl bg-mint-100 p-3">
+          <div className={`rounded-2xl ${nutritionMetricStyles.calories.surface} p-3`}>
             <div className="grid grid-cols-[minmax(0,1fr)_44px]"><p className="pt-3 text-xs font-bold leading-4 text-ink-soft">TDEE</p><HelpPopover title="TDEE"><p>Total daily energy expenditure estimates daily energy use from BMR and an activity factor. Your actual needs can vary.</p></HelpPopover></div>
             <p className="font-extrabold tabular-nums">{target?.tdee} kcal</p>
           </div>
-          <div className="rounded-2xl bg-peach-100 p-3">
+          <div className={`rounded-2xl ${nutritionMetricStyles.calories.surface} p-3`}>
             <div className="grid grid-cols-[minmax(0,1fr)_44px]"><p className="pt-3 text-xs font-bold leading-4 text-ink-soft">Daily target</p><HelpPopover title="Daily target"><p>This is an estimated daily calorie target based on your saved profile and goal. It can change when you update those inputs.</p></HelpPopover></div>
             <p className="font-extrabold tabular-nums">{target?.calories} kcal</p>
           </div>

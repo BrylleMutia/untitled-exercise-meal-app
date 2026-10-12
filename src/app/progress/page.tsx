@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
+import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { Button } from "@/components/ui/Button";
 import { HelpHeading } from "@/components/ui/HelpPopover";
 import { averages, dayStatus } from "@/utility/nutrition";
@@ -93,13 +94,13 @@ export default function ProgressPage() {
       {/* Trends */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          tone="lavender"
+          tone={nutritionMetricStyles.calories.tone}
           label="Avg daily calories"
           value={avgs.loggedDays > 0 ? String(avgs.avgCalories) : "—"}
           sub={`over ${avgs.loggedDays} logged days (estimates)`}
         />
         <StatTile
-          tone="peach"
+          tone={nutritionMetricStyles.proteinG.tone}
           label="Avg protein"
           value={avgs.loggedDays > 0 ? `${avgs.avgProteinG}g` : "—"}
           sub={`over ${avgs.loggedDays} logged days (estimates)`}
