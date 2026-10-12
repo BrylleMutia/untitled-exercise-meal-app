@@ -1,0 +1,127 @@
+{
+  "source": "USDA FoodData Central",
+  "downloadUrl": "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_sr_legacy_food_csv_2018-04.zip",
+  "reviewedAt": "2026-10-12",
+  "foods": [
+    {
+      "fdcId": 171790,
+      "description": "Beef, ground, 95% lean meat / 5% fat, raw",
+      "url": "https://fdc.nal.usda.gov/food-details/171790/nutrients",
+      "nutrientsPer100g": {
+        "proteinG": 21.41,
+        "fiberG": 0,
+        "fatG": 5,
+        "carbsG": 0,
+        "calories": 137
+      }
+    },
+    {
+      "fdcId": 168877,
+      "description": "Rice, white, long-grain, regular, raw, enriched",
+      "url": "https://fdc.nal.usda.gov/food-details/168877/nutrients",
+      "nutrientsPer100g": {
+        "fatG": 0.66,
+        "carbsG": 79.95,
+        "calories": 365,
+        "proteinG": 7.13,
+        "fiberG": 1.3
+      }
+    },
+    {
+      "fdcId": 174277,
+      "description": "Soy sauce made from soy and wheat (shoyu)",
+      "url": "https://fdc.nal.usda.gov/food-details/174277/nutrients",
+      "nutrientsPer100g": {
+        "fatG": 0.57,
+        "carbsG": 4.93,
+        "proteinG": 8.14,
+        "calories": 53,
+        "fiberG": 0.8
+      }
+    },
+    {
+      "fdcId": 171016,
+      "description": "Oil, sesame, salad or cooking",
+      "url": "https://fdc.nal.usda.gov/food-details/171016/nutrients",
+      "nutrientsPer100g": {
+        "proteinG": 0,
+        "fiberG": 0,
+        "fatG": 100,
+        "carbsG": 0,
+        "calories": 884
+      }
+    },
+    {
+      "fdcId": 169230,
+      "description": "Garlic, raw",
+      "url": "https://fdc.nal.usda.gov/food-details/169230/nutrients",
+      "nutrientsPer100g": {
+        "carbsG": 33.06,
+        "calories": 149,
+        "fiberG": 2.1,
+        "proteinG": 6.36,
+        "fatG": 0.5
+      }
+    },
+    {
+      "fdcId": 169231,
+      "description": "Ginger root, raw",
+      "url": "https://fdc.nal.usda.gov/food-details/169231/nutrients",
+      "nutrientsPer100g": {
+        "fatG": 0.75,
+        "proteinG": 1.82,
+        "carbsG": 17.77,
+        "calories": 80,
+        "fiberG": 2
+      }
+    },
+    {
+      "fdcId": 170393,
+      "description": "Carrots, raw",
+      "url": "https://fdc.nal.usda.gov/food-details/170393/nutrients",
+      "nutrientsPer100g": {
+        "proteinG": 0.93,
+        "fatG": 0.24,
+        "carbsG": 9.58,
+        "calories": 41,
+        "fiberG": 2.8
+      }
+    },
+    {
+      "fdcId": 168409,
+      "description": "Cucumber, with peel, raw",
+      "url": "https://fdc.nal.usda.gov/food-details/168409/nutrients",
+      "nutrientsPer100g": {
+        "carbsG": 3.63,
+        "calories": 15,
+        "fatG": 0.11,
+        "fiberG": 0.5,
+        "proteinG": 0.65
+      }
+    },
+    {
+      "fdcId": 170150,
+      "description": "Seeds, sesame seeds, whole, dried",
+      "url": "https://fdc.nal.usda.gov/food-details/170150/nutrients",
+      "nutrientsPer100g": {
+        "proteinG": 17.73,
+        "fiberG": 11.8,
+        "fatG": 49.67,
+        "carbsG": 23.45,
+        "calories": 573
+      }
+    },
+    {
+      "fdcId": 170005,
+      "description": "Onions, spring or scallions (includes tops and bulb), raw",
+      "url": "https://fdc.nal.usda.gov/food-details/170005/nutrients",
+      "nutrientsPer100g": {
+        "calories": 32,
+        "fatG": 0.19,
+        "proteinG": 1.83,
+        "fiberG": 2.6,
+        "carbsG": 7.34
+      }
+    }
+  ]
+}

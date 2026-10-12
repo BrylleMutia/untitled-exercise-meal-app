@@ -1,8 +1,10 @@
 import type { Meal } from "@/types/domain";
 import { MVP3_MEALS } from "./mvp3Catalog";
+import { CREAMY_LEMON_CHICKEN } from "./creamyLemonChicken";
+import { KOREAN_BEEF_BOWL } from "./koreanBeefBowl";
 
 /** Reusable saved meals; ingredient quantities are in food-catalog servings. */
-export const SAVED_MEALS: Meal[] = [
+const legacyMeals: Meal[] = [
   ...MVP3_MEALS,
   {
     id: "meal-yogurt-bowl",
@@ -52,6 +54,10 @@ export const SAVED_MEALS: Meal[] = [
   },
 ];
 
+/** Retain old identities and ingredients for existing plans and history. */
+export const RETIRED_SAVED_MEALS: Meal[] = legacyMeals.map(meal => ({ ...meal, complexity: meal.complexity ?? "medium", isSystem: true, archivedAt: "2026-10-12T00:00:00.000Z" }));
+export const SAVED_MEALS: Meal[] = [CREAMY_LEMON_CHICKEN, KOREAN_BEEF_BOWL];
+
 export function mealById(id: string): Meal | undefined {
-  return SAVED_MEALS.find((m) => m.id === id);
+  return [...SAVED_MEALS, ...RETIRED_SAVED_MEALS].find((m) => m.id === id);
 }

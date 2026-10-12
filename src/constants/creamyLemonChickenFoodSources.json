@@ -1,0 +1,80 @@
+{
+  "source": "USDA FoodData Central",
+  "retrievedOn": "2026-10-12",
+  "foods": [
+    {
+      "fdcId": 172385,
+      "description": "Chicken, broilers or fryers, thigh, meat and skin, raw",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "fatG": 16.61,
+        "proteinG": 16.52,
+        "calories": 221.0,
+        "carbsG": 0.25,
+        "fiberG": 0.0
+      }
+    },
+    {
+      "fdcId": 173410,
+      "description": "Butter, salted",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "fatG": 81.11,
+        "proteinG": 0.85,
+        "calories": 717.0,
+        "carbsG": 0.06,
+        "fiberG": 0.0
+      }
+    },
+    {
+      "fdcId": 171265,
+      "description": "Milk, whole, 3.25% milkfat, with added vitamin D",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "fatG": 3.25,
+        "proteinG": 3.15,
+        "calories": 61.0,
+        "carbsG": 4.8,
+        "fiberG": 0.0
+      }
+    },
+    {
+      "fdcId": 169761,
+      "description": "Wheat flour, white, all-purpose, unenriched",
+      "recordType": "SR Legacy",
+      "publicationDate": "4/1/2019",
+      "nutrientsPer100g": {
+        "fatG": 0.98,
+        "proteinG": 10.33,
+        "calories": 364.0,
+        "carbsG": 76.31,
+        "fiberG": 2.7
+      }
+    },
+    {
+      "fdcId": 169640,
+      "description": "Honey",
+      "recordType": "SR Legacy",
+      "nutrientsPer100g": {
+        "calories": 304,
+        "proteinG": 0.3,
+        "carbsG": 82.4,
+        "fatG": 0
+      }
+    },
+    {
+      "fdcId": 167747,
+      "description": "Lemon juice, raw",
+      "recordType": "SR Legacy",
+      "nutrientsPer100g": {
+        "calories": 22,
+        "proteinG": 0.35,
+        "carbsG": 6.9,
+        "fatG": 0.24
+      }
+    }
+  ]
+}

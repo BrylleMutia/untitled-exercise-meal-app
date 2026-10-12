@@ -56,9 +56,9 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
   };
 }
 
-const BREAKFAST_ROTATION = ["meal-yogurt-bowl", "meal-pb-toast"];
-const LUNCH_ROTATION = ["meal-chicken-rice", "meal-salmon-potato"];
-const DINNER_ROTATION = ["meal-salmon-potato", "meal-chicken-rice"];
+const BREAKFAST_ROTATION: string[] = [];
+const LUNCH_ROTATION = ["meal-creamy-lemon-chicken", "meal-korean-beef-bowl"];
+const DINNER_ROTATION = ["meal-korean-beef-bowl", "meal-creamy-lemon-chicken"];
 const SNACK_ROTATION = ["food-apple", "food-almonds", "food-banana"];
 
 /** Deterministic weekly meal plan built from saved meals and the food catalog. */
@@ -68,7 +68,7 @@ export function generateMealPlan(
   constraints?: Pick<UserProfile, "dietaryPattern" | "allergies" | "foodPreferences" | "cookingTimeMinutes" | "mealBudget">,
   catalog: MealPlanCatalog = {},
 ): MealPlan {
-  const savedMeals = catalog.savedMeals ?? SAVED_MEALS;
+  const savedMeals = (catalog.savedMeals ?? SAVED_MEALS).filter(meal => !meal.archivedAt);
   const foods = catalog.foods ?? FOODS;
   const carbLimit = totalCarbLimit(constraints?.dietaryPattern ?? "");
   const portion = (mealId: string | undefined, foodId: string | undefined, calorieShare: number) => {
@@ -98,15 +98,15 @@ export function generateMealPlan(
   const meals: PlannedMeal[] = [];
   weekDates(weekOf).forEach((date, i) => {
     let remainingCarbs = carbLimit ?? Number.POSITIVE_INFINITY;
-    const breakfastId = chooseMeal(carbLimit === null ? BREAKFAST_ROTATION : ["meal-mvp3-eggs", "meal-mvp3-tofu-almonds", "meal-mvp3-tofu"], i, remainingCarbs, 0.25);
+    const breakfastId = chooseMeal(BREAKFAST_ROTATION, i, remainingCarbs, 0.25);
     const breakfastServings = portion(breakfastId, undefined, 0.25) ?? 1;
     const breakfast = plannedMealMetadata(breakfastId, undefined, breakfastServings, savedMeals, foods);
     if (breakfastId) remainingCarbs -= breakfast.expectedCarbsG;
-    const lunchId = chooseMeal(carbLimit === null ? LUNCH_ROTATION : ["meal-mvp3-chicken", "meal-mvp3-tofu", "meal-mvp3-tofu-almonds"], i, remainingCarbs, 0.3);
+    const lunchId = chooseMeal(LUNCH_ROTATION, i, remainingCarbs, 0.3);
     const lunchServings = portion(lunchId, undefined, 0.3) ?? 1;
     const lunch = plannedMealMetadata(lunchId, undefined, lunchServings, savedMeals, foods);
     if (lunchId) remainingCarbs -= lunch.expectedCarbsG;
-    const dinnerId = chooseMeal(carbLimit === null ? DINNER_ROTATION : ["meal-mvp3-tofu", "meal-mvp3-chicken", "meal-mvp3-tofu-almonds"], i, remainingCarbs, 0.3);
+    const dinnerId = chooseMeal(DINNER_ROTATION, i, remainingCarbs, 0.3);
     const dinnerServings = portion(dinnerId, undefined, 0.3) ?? 1;
     const dinner = plannedMealMetadata(dinnerId, undefined, dinnerServings, savedMeals, foods);
     if (dinnerId) remainingCarbs -= dinner.expectedCarbsG;
@@ -168,6 +168,7 @@ function mealAllowed(
 ): boolean {
   const meal = savedMeals.find((candidate) => candidate.id === mealId);
   if (!meal) return false;
+  if (meal.providedNutrition && totalCarbLimit(constraints?.dietaryPattern ?? "") !== null) return false;
   if (!Number.isFinite(meal.servings) || meal.servings <= 0 || meal.ingredients.some((ingredient) => !Number.isFinite(ingredient.servings) || ingredient.servings <= 0)) return false;
   const foods = meal.ingredients
     .map((ingredient) => catalogFoods.find((food) => food.id === ingredient.foodId))
@@ -186,8 +187,9 @@ function mealAllowed(
     "food-honey",
     "food-mvp3-173424",
     "food-mvp3-171477",
+    "food-lemon-chicken-172385", "food-lemon-chicken-173410", "food-lemon-chicken-171265", "food-lemon-chicken-169640", "food-korean-beef-171790",
   ]);
-  const vegetarianForbidden = new Set(["food-chicken", "food-salmon", "food-mvp3-171477"]);
+  const vegetarianForbidden = new Set(["food-chicken", "food-salmon", "food-mvp3-171477", "food-lemon-chicken-172385", "food-korean-beef-171790"]);
   const forbidden = pattern.includes("vegan")
     ? veganForbidden
     : pattern.includes("vegetarian")
@@ -226,6 +228,8 @@ function chooseFood(
  * relative score rather than a currency claim. A low budget keeps the plan
  * on lower-cost catalog staples; users can still edit every slot. */
 const MEAL_COST_UNITS: Record<string, number> = {
+  "meal-creamy-lemon-chicken": 7,
+  "meal-korean-beef-bowl": 7,
   ...MVP3_MEAL_COST,
   "meal-yogurt-bowl": 6,
   "meal-pb-toast": 4,
@@ -234,6 +238,7 @@ const MEAL_COST_UNITS: Record<string, number> = {
 };
 
 const MEAL_PREP_MINUTES: Record<string, number> = {
+  "meal-creamy-lemon-chicken": 30,
   ...MVP3_MEAL_PREP,
   "meal-yogurt-bowl": 5,
   "meal-pb-toast": 8,

@@ -52,7 +52,8 @@ describe("meal plan generation", () => {
     });
 
     expect(plan.meals).toHaveLength(28);
-    expect(new Set(plan.meals.map((meal) => meal.preparationBasis))).toEqual(new Set(["as_labeled"]));
+    expect(plan.meals.filter(meal => meal.mealId || meal.foodId).every(meal => meal.preparationBasis === "as_labeled")).toBe(true);
+    expect(plan.meals.filter(meal => !meal.mealId && !meal.foodId).every(meal => meal.preparationBasis === "unknown")).toBe(true);
   });
 
   it("keeps slots unresolved instead of violating time or budget constraints", () => {
