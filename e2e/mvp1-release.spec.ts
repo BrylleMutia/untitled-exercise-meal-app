@@ -1075,6 +1075,92 @@ test.describe("MVP-1 release browser gate", () => {
   });
 
 
+  test("adds a manually entered food to the plan without logging intake", async ({ page }) => {
+    await openNutritionSlot(page, "Lunch");
+    const lunch = page.getByRole("region", { name: "Lunch" });
+    const eatenBefore = await lunch.getByText("Eaten", { exact: true }).count();
+    const card = page.getByRole("group", { name: "Add meal" });
+    await card.getByRole("tab", { name: "Enter manually" }).click();
+    await card.getByRole("textbox", { name: "Custom food name" }).fill("Test lentil bowl");
+    await card.getByRole("textbox", { name: "kcal" }).fill("240");
+    await card.getByRole("textbox", { name: "P g" }).fill("14");
+    await card.getByRole("textbox", { name: "C g" }).fill("32");
+    await card.getByRole("textbox", { name: "F g" }).fill("6");
+    const saved = nextRpcResponse(page, "add_planned_meal");
+    await card.getByRole("button", { name: "Add to plan" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(lunch.getByText("Test lentil bowl", { exact: false })).toBeVisible();
+    await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore);
+  });
+
+  test("retains a plan candidate after a failed save and day change", async ({ page }) => {
+    await openNutritionSlot(page, "Breakfast");
+    const card = page.getByRole("region", { name: "Planned" });
+    await card.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg");
+    await card.getByRole("button", { name: /^Egg/ }).first().click();
+    await card.getByRole("group", { name: "Review food quantity" }).getByRole("spinbutton", { name: "Quantity" }).fill("2");
+    await page.route("**/rest/v1/rpc/add_planned_meal", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary test failure" }) }));
+    const failed = nextRpcResponse(page, "add_planned_meal");
+    await card.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Add to plan" }).click();
+    expect((await failed).ok()).toBe(false);
+    await expect(card.getByRole("group", { name: "Review food quantity" }).getByRole("spinbutton", { name: "Quantity" })).toHaveValue("2");
+    await changeDayAndReturn(page);
+    await card.getByRole("button", { name: "Add to plan" }).click();
+    await card.getByRole("group", { name: "Add meal" }).getByRole("combobox", { name: "Meal slot" }).selectOption("breakfast");
+    await expect(card.getByRole("group", { name: "Review food quantity" }).getByRole("spinbutton", { name: "Quantity" })).toHaveValue("2");
+    await page.unroute("**/rest/v1/rpc/add_planned_meal");
+    const saved = nextRpcResponse(page, "add_planned_meal");
+    await card.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Add to plan" }).click();
+    expect((await saved).ok()).toBe(true);
+  });
+
+  test("plans a reviewed description with a catalog match", async ({ page }) => {
+    await openNutritionSlot(page, "Breakfast");
+    await page.route("**/functions/v1/nutrition-text-parse", (route) => route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ suggestedMealName: "Two eggs", candidates: [{ name: "egg", quantity: 2, unit: "piece", preparation: "cooked", assumptions: [], confidence: "medium", presence: "stated" }], questions: [] }),
+    }));
+    await page.route("**/functions/v1/nutrition-meal-match", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ matches: [] }) }));
+    const card = page.getByRole("region", { name: "Planned" });
+    await card.getByRole("textbox", { name: "Search for a food or describe a meal" }).fill("egg with egg");
+    await card.getByRole("button", { name: "Analyze this meal" }).click();
+    const review = card.getByRole("region", { name: "Guided meal review" });
+    await expect(review.getByRole("button", { name: "Add to plan" })).toBeEnabled();
+    const saved = nextRpcResponse(page, "add_planned_meal");
+    await review.getByRole("button", { name: "Add to plan" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(card.getByRole("region", { name: "Breakfast" }).getByText("Two eggs", { exact: false })).toBeVisible();
+  });
+
+
+  test("keeps a manual meal draft after a failed save and day change", async ({ page }) => {
+    await openNutritionSlot(page, "Snack");
+    const dayCard = page.getByRole("region", { name: "Planned" });
+    let logger = dayCard.getByRole("group", { name: "Add meal" });
+    await logger.getByRole("tab", { name: "Enter manually" }).click();
+    await logger.getByRole("textbox", { name: "Custom food name" }).fill("Manual retry meal");
+    await logger.getByRole("textbox", { name: "kcal" }).fill("180");
+    await logger.getByRole("textbox", { name: "P g" }).fill("10");
+    await logger.getByRole("textbox", { name: "C g" }).fill("20");
+    await logger.getByRole("textbox", { name: "F g" }).fill("5");
+    await page.route("**/rest/v1/rpc/save_nutrition_log", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary test failure" }) }));
+    const failed = nextRpcResponse(page, "save_nutrition_log");
+    await logger.getByRole("button", { name: "Log meal" }).click();
+    expect((await failed).ok()).toBe(false);
+    await expect(logger.getByRole("textbox", { name: "Custom food name" })).toHaveValue("Manual retry meal");
+    await changeDayAndReturn(page);
+    await dayCard.getByRole("button", { name: "Add to plan" }).click();
+    logger = dayCard.getByRole("group", { name: "Add meal" });
+    await logger.getByRole("combobox", { name: "Meal slot" }).selectOption("snack");
+    await logger.getByRole("tab", { name: "Enter manually" }).click();
+    await expect(logger.getByRole("textbox", { name: "Custom food name" })).toHaveValue("Manual retry meal");
+    await page.unroute("**/rest/v1/rpc/save_nutrition_log");
+    const saved = nextRpcResponse(page, "save_nutrition_log");
+    await logger.getByRole("button", { name: "Log meal" }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(dayCard.getByRole("region", { name: "Snack" }).getByText("Manual retry meal")).toBeVisible();
+  });
+
   test("does not call DeepSeek until analysis is explicitly selected", async ({ page }) => {
     await openNutritionSlot(page, "Lunch");
     let extractionCalls = 0;
