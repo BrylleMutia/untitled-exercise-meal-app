@@ -21,6 +21,7 @@ import type {
   RepositoryError,
   ResetPlanInput,
   SaveMealInput,
+  SaveRecipeInput,
   SaveSessionInput,
   SavedMealLogInput,
   SaveReviewedMealInput,
@@ -83,6 +84,7 @@ export interface SnapshotRepository {
   removeWorkoutOverride(input: RemoveWorkoutOverrideInput): Promise<MutationOutcome>;
   applyProgressionDecision(input: ProgressionDecisionInput): Promise<MutationOutcome>;
   saveMeal(input: SaveMealInput): Promise<MutationOutcome>;
+  saveRecipe(input: SaveRecipeInput): Promise<MutationOutcome>;
   archiveMeal(input: ArchiveMealInput): Promise<MutationOutcome>;
   exportData(input?: ExportInput): Promise<ExportOutcome>;
   deleteAccount(input: DeleteAccountInput): Promise<MutationOutcome>;

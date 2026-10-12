@@ -24,6 +24,7 @@ import type {
   HistoryQuery,
   HistoryReadModel,
   SaveReviewedMealInput,
+  SaveRecipeInput,
 } from "@/types/backend";
 import type {
   AppSnapshot,
@@ -101,6 +102,7 @@ export interface AppActions {
   removeWorkoutOverride(input: Omit<RemoveWorkoutOverrideInput, "currentSnapshot">): Promise<void>;
   applyProgressionDecision(input: Omit<ProgressionDecisionInput, "currentSnapshot">): Promise<boolean>;
   saveMeal(meal: Meal): Promise<boolean>;
+  saveRecipe(input: Omit<SaveRecipeInput, "currentSnapshot">): Promise<boolean>;
   duplicateMeal(mealId: string): Promise<boolean>;
   archiveMeal(mealId: string): Promise<boolean>;
   exportData(): Promise<AccountExport | null>;
@@ -762,6 +764,12 @@ export function AppProvider({
         const outcome = await execute("apply_progression_decision", (current, idempotencyKey) =>
           repository!.applyProgressionDecision({ ...input, currentSnapshot: current, idempotencyKey }),
         );
+        return Boolean(outcome);
+      },
+
+      async saveRecipe(input) {
+        if (!input.meal.notes?.trim()) { notify("Add instructions before saving this recipe.", "warn"); return false; }
+        const outcome = await execute("save_recipe", (current, key) => repository!.saveRecipe({ ...input, currentSnapshot: current, idempotencyKey: key }), input.idempotencyKey);
         return Boolean(outcome);
       },
 

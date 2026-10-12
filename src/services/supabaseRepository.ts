@@ -1,3 +1,4 @@
+import { parseProvidedRecipeNutrition } from "@/utility/providedRecipeNutrition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FOODS, foodById } from "@/constants/foods";
 import { SAVED_MEALS } from "@/constants/meals";
@@ -7,6 +8,9 @@ import { generateMealPlan } from "@/utility/mealPlan";
 import { generateWorkoutPlan } from "@/utility/plan";
 import { validateDailySteps, validateDailyStepTarget } from "@/utility/dailySteps";
 import { validateCustomWorkout } from "@/utility/customWorkouts";
+import { validRecipeTimeMinutes } from "@/utility/recipeTime";
+import { parseRecipeImage } from "@/utility/recipeImage";
+import { isRecipeComplexity } from "@/utility/recipeCard";
 import { startOfWeek, todayKey } from "@/utility/dates";
 import type {
   AppSnapshot,
@@ -45,6 +49,7 @@ import type {
   RepositoryError,
   ResetPlanInput,
   SaveMealInput,
+  SaveRecipeInput,
   SaveSessionInput,
   SkipPlannedMealInput,
   StartSessionInput,
@@ -987,9 +992,65 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     };
   }
 
+  async saveRecipe(input: SaveRecipeInput): Promise<MutationOutcome> {
+    if (input.meal.providedNutrition) {
+      if (!parseProvidedRecipeNutrition(input.meal.providedNutrition)) throw repositoryException(toRepositoryError("validation_failed: Enter valid provided recipe macros."));
+      const { error, status } = await this.client.from("meals").select("provided_nutrition").limit(0);
+      if (error) throw repositoryException(toRepositoryError(error.code === "42703" || error.code === "PGRST204"
+        ? "validation_failed: Provided recipe macros need the database update. Your draft is retained; retry after the update is applied."
+        : error.message, status, error.details));
+    }
+    if (!isRecipeComplexity(input.meal.complexity)) throw repositoryException(toRepositoryError("validation_failed: Choose Easy, Medium, or Hard complexity."));
+    if (!input.meal.notes?.trim()) throw repositoryException(toRepositoryError("validation_failed: Instructions are required."));
+    if (input.meal.totalTimeMinutes !== undefined && !validRecipeTimeMinutes(input.meal.totalTimeMinutes)) {
+      throw repositoryException(toRepositoryError("validation_failed: Recipe time must be nonnegative whole minutes."));
+    }
+    const { error, status } = await this.client.from("meals").select("reference,total_time_minutes,complexity").limit(0);
+    if (error) {
+      const missingColumn = error.code === "42703" || error.code === "PGRST204";
+      throw repositoryException(toRepositoryError(missingColumn
+        ? "validation_failed: Recipe saving needs the database update. Your draft is retained; try again after the update is applied."
+        : error.message, status, error.details));
+    }
+    if (input.catalog) await this.requireCatalogControls();
+    return this.persistMeal(input, "save_recipe", input.newFoods);
+  }
+
   async saveMeal(input: SaveMealInput): Promise<MutationOutcome> {
+    return this.persistMeal(input, "save_saved_meal");
+  }
+
+  private async requireCatalogControls(): Promise<void> {
+    const { error, status } = await this.client.from("recipe_catalog_preferences").select("revision").limit(0);
+    if (error) throw repositoryException(toRepositoryError(error.code === "42P01" || error.code === "PGRST205"
+      ? "validation_failed: Predefined recipe controls need the database update. Your draft is retained; retry after the update is applied."
+      : error.message, status, error.details));
+  }
+
+  private async persistMeal(input: SaveMealInput | SaveRecipeInput, operation: "save_recipe" | "save_saved_meal", newFoods: Food[] = []): Promise<MutationOutcome> {
+    if (input.meal.complexity !== undefined && !isRecipeComplexity(input.meal.complexity)) {
+      throw repositoryException(toRepositoryError("validation_failed: Choose a supported recipe complexity."));
+    }
+    if (input.meal.image !== undefined && input.meal.image !== null && !parseRecipeImage(input.meal.image)) {
+      throw repositoryException(toRepositoryError("validation_failed: Choose a valid recipe image or reset to the default."));
+    }
+    if (input.meal.image !== undefined) {
+      const { error, status } = await this.client.from("meals").select("image").limit(0);
+      if (error) throw repositoryException(toRepositoryError(error.code === "42703" || error.code === "PGRST204"
+        ? "validation_failed: Recipe images need the database update. Your draft is retained; retry after the update is applied."
+        : error.message, status, error.details));
+    }
+    if (input.meal.totalTimeMinutes !== undefined && !validRecipeTimeMinutes(input.meal.totalTimeMinutes)) {
+      throw repositoryException(toRepositoryError("validation_failed: Recipe time must be nonnegative whole minutes."));
+    }
+    if (operation === "save_saved_meal" && input.meal.complexity !== undefined) {
+      const { error, status } = await this.client.from("meals").select("complexity").limit(0);
+      if (error) throw repositoryException(toRepositoryError(error.code === "42703" || error.code === "PGRST204"
+        ? "validation_failed: Recipe complexity needs the database update. Your draft is retained; retry after the update is applied."
+        : error.message, status, error.details));
+    }
     const savedMeals = [...input.currentSnapshot.savedMeals.filter((meal) => meal.id !== input.meal.id), input.meal];
-    const foods = [...new Map([...FOODS, ...input.currentSnapshot.foods].map((food) => [food.id, food])).values()];
+    const foods = [...new Map([...FOODS, ...input.currentSnapshot.foods, ...newFoods].map((food) => [food.id, food])).values()];
     const grocery = input.currentSnapshot.mealPlan
       ? mergeGroceryLists(
           input.currentSnapshot.grocery ?? generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, foods, input.currentSnapshot.mealPlan.weekOf),
@@ -997,9 +1058,13 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         )
       : input.currentSnapshot.grocery;
     return this.mutate(
-      "save_saved_meal",
+      operation,
       {
-        meal: input.meal,
+        meal: operation === "save_recipe"
+          ? { ...input.meal, totalTimeMinutes: input.meal.totalTimeMinutes ?? null }
+          : input.meal,
+        ...(operation === "save_recipe" ? { newFoods } : {}),
+        ...("catalog" in input && input.catalog ? { catalog: input.catalog } : {}),
         grocery,
         expectedVersions: input.expectedVersions ?? {
           recordRevision: input.meal.revision,
@@ -1015,10 +1080,13 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async archiveMeal(input: ArchiveMealInput): Promise<MutationOutcome> {
+    const meal = input.currentSnapshot?.savedMeals.find(meal => meal.id === input.mealId);
+    if (meal?.isSystem) await this.requireCatalogControls();
     return this.mutate(
       "archive_saved_meal",
       {
         mealId: input.mealId,
+        ...(meal?.isSystem ? { catalogPreferenceRevision: meal.catalogPreferenceRevision ?? 0 } : {}),
         expectedVersions: input.expectedVersions ?? {
           recordRevision: input.currentSnapshot?.savedMeals.find((meal) => meal.id === input.mealId)?.revision,
         },
@@ -1049,9 +1117,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const result = await this.client.rpc("delete_account", {
       p_payload: { idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
     });
-    if (result.error) {
-      throw repositoryException(toRepositoryError(result.error.message));
-    }
+    if (result.error) throw repositoryException(toRepositoryError(result.error.message));
     return {
       snapshot: {
         schemaVersion: 1,
