@@ -1,18 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import { Archive, Check, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { CalorieBudgetRing } from "@/components/ui/CalorieBudgetRing";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { DayStrip } from "@/components/DayStrip";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { NutritionPills, NutritionFieldLabel } from "@/components/ui/NutritionPills";
+import { nutritionMetricStyles, type NutritionMetric } from "@/components/ui/nutritionMetrics";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
+import { RecipeEditor } from "@/components/nutrition/RecipeEditor";
+import { RecipeOverview } from "@/components/nutrition/RecipeOverview";
+import { RecipeCard } from "@/components/nutrition/RecipeCard";
+import { useRecipeCardMetadata } from "@/components/nutrition/useRecipeCardMetadata";
+import { recipeCardCalories } from "@/utility/recipeCard";
+import { searchFoods } from "@/utility/foodSearch";
 import { FOODS } from "@/constants/foods";
 import { parseMealText, servingPlanForCandidate, type CandidateServingPlan, type ParsedCandidate } from "@/utility/textMeal";
+import { providedRecipeLogEntry } from "@/utility/providedRecipeNutrition";
 import { dayStatus, entriesForDate, totalsForDate, foodMacros, mealNutrition } from "@/utility/nutrition";
-import { todayKey } from "@/utility/dates";
+import { startOfWeek, todayKey } from "@/utility/dates";
 import { totalCarbLimit } from "@/utility/health";
 import { targetForDate } from "@/utility/targetHistory";
 import type { Confidence, Food, LoggedMeal, Meal, MealSlot, NutritionLog, PlannedMeal, RecipeIngredient } from "@/types/domain";
@@ -74,22 +84,67 @@ function nutritionProviderMessage(error: unknown, fallback: string): string {
 }
 
 export default function NutritionPage() {
-  const { snapshot, actions } = useApp();
+  const { snapshot, actions, pendingMutation } = useApp();
+  const recipeMetadata = useRecipeCardMetadata();
   const [selected, setSelected] = useState(todayKey());
-  const [openSlot, setOpenSlot] = useState<MealSlot | null>(null);
+  const [loggingOpen, setLoggingOpen] = useState(false);
+  const [logSlot, setLogSlot] = useState<MealSlot | null>(null);
   const [mode, setMode] = useState<Mode>("search");
+  const [savedMealToLog, setSavedMealToLog] = useState<string | null>(null);
+  const [savedMealSlot, setSavedMealSlot] = useState<MealSlot | null>(null);
+  const [savingSavedMeal, setSavingSavedMeal] = useState(false);
   const [editingPlannedMealId, setEditingPlannedMealId] = useState<string | null>(null);
+  const plannedEditReturnFocus = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (editingPlannedMealId === null) plannedEditReturnFocus.current?.focus();
+  }, [editingPlannedMealId]);
+  const [plannedMealToLog, setPlannedMealToLog] = useState<string | null>(null);
+  const [actualServings, setActualServings] = useState("1");
+  const [plannedLogKey, setPlannedLogKey] = useState("");
+  const [savingPlannedLog, setSavingPlannedLog] = useState(false);
+  const plannedLogFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (plannedMealToLog !== null || !plannedLogFocusRef.current) return;
+    const linkedAction = [...document.querySelectorAll<HTMLButtonElement>("button[data-planned-meal-id]")]
+      .find((button) => button.dataset.plannedMealId === plannedLogFocusRef.current);
+    if (linkedAction) {
+      linkedAction.focus();
+      plannedLogFocusRef.current = null;
+    }
+  }, [snapshot.nutritionLogs, snapshot.loggedMeals, plannedMealToLog]);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [editingNutritionId, setEditingNutritionId] = useState<string | null>(null);
   const [editingLoggedMealId, setEditingLoggedMealId] = useState<string | null>(null);
   const [expandedLoggedMealId, setExpandedLoggedMealId] = useState<string | null>(null);
   const [showNewRecipe, setShowNewRecipe] = useState(false);
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
+  const [viewingRecipeId, setViewingRecipeId] = useState<string | null>(null);
+  const [returnToRecipeOverview, setReturnToRecipeOverview] = useState<string | null>(null);
+  const recipeReturnFocus = useRef<HTMLElement | null>(null);
+  function openRecipe(meal: Meal, trigger: HTMLElement) {
+    recipeReturnFocus.current = trigger; setRecipeModalOpen(false); setViewingRecipeId(meal.id);
+  }
+
+  useEffect(() => {
+    if (loggingOpen && !logSlot) document.getElementById("log-meal-slot")?.focus();
+  }, [loggingOpen, logSlot]);
+
+  useEffect(() => {
+    if (savedMealToLog) document.getElementById(`saved-meal-slot-${savedMealToLog}`)?.focus();
+  }, [savedMealToLog]);
+
+  useEffect(() => {
+    if (plannedMealToLog) document.getElementById(`actual-servings-${plannedMealToLog}`)?.focus();
+  }, [plannedMealToLog]);
 
   const isToday = selected === todayKey();
   const totals = totalsForDate(snapshot.nutritionLogs, selected);
   const entries = entriesForDate(snapshot.nutritionLogs, selected);
   const status = dayStatus(snapshot.nutritionLogs, selected);
-  const target = targetForDate(snapshot.nutritionWeekTargets, selected);
+  const target = targetForDate(snapshot.nutritionWeekTargets, selected)
+    ?? (snapshot.target?.effectiveDate && snapshot.target.effectiveDate <= selected ? snapshot.target : null);
+  const existingPlanForDay = snapshot.mealPlan?.weekOf === startOfWeek(selected) ? snapshot.mealPlan : null;
+  const canAddPlan = Boolean(existingPlanForDay || (target && target.safetyOutcome !== "unsupported_population"));
   const carbLimit = totalCarbLimit(snapshot.profile?.dietaryPattern ?? "");
   const foods = useMemo(
     () => snapshot.foods.length > 0
@@ -102,6 +157,10 @@ export default function NutritionPage() {
     () => snapshot.mealPlan?.meals.filter((m) => m.date === selected) ?? [],
     [snapshot.mealPlan, selected],
   );
+  const loggedPlannedIds = useMemo(() => new Set([
+    ...snapshot.nutritionLogs.filter((entry) => entry.date === selected && !entry.loggedMealId && entry.plannedMealId).map((entry) => entry.plannedMealId!),
+    ...snapshot.loggedMeals.filter((entry) => entry.date === selected && entry.plannedMealId).map((entry) => entry.plannedMealId!),
+  ]), [selected, snapshot.loggedMeals, snapshot.nutritionLogs]);
 
   // Kept as a compatibility fallback for drafts created by the pre-unified
   // editor; new entries always use GuidedSearchPicker above.
@@ -117,13 +176,158 @@ export default function NutritionPage() {
     return saved;
   }
 
+  async function addToPlan(slot: MealSlot, choice: { food?: Food; meal?: Meal; servings: number; newFoods?: Food[] }) {
+    if (!canAddPlan) return false;
+    const { food, meal, servings } = choice;
+    if ((!food && !meal) || (food && meal)) return false;
+    const nextOrder = Math.max(0, ...todaysPlan.filter((entry) => entry.slot === slot).map((entry) => entry.sortOrder ?? 0)) + 1;
+    return actions.addPlannedMeal({
+      id: clientId("planned-meal"),
+      date: selected,
+      slot,
+      slotKey: `date:${selected}:slot:${slot}:order:${nextOrder}`,
+      sortOrder: nextOrder,
+      ...(food ? { foodId: food.id } : { mealId: meal!.id }),
+      label: food?.name ?? meal!.name,
+      servings,
+    }, choice.newFoods, meal && !snapshot.savedMeals.some((entry) => entry.id === meal.id) ? meal : undefined);
+  }
+
+  function selectDay(date: string) {
+    if (date === selected) return;
+    setSelected(date);
+    setLoggingOpen(false);
+    setLogSlot(null);
+    setMode("search");
+    setEditingPlannedMealId(null);
+    setPlannedMealToLog(null);
+    setEditingLoggedMealId(null);
+    setEditingNutritionId(null);
+    setSavedMealToLog(null);
+    setSavedMealSlot(null);
+  }
+
+  function closeLogEditor() {
+    document.getElementById("add-to-plan-action")?.focus();
+    setLoggingOpen(false);
+    setLogSlot(null);
+    setMode("search");
+  }
+
+  async function confirmPlannedLog(meal: PlannedMeal) {
+    const amount = Number(actualServings);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const food = meal.foodId ? foods.find((candidate) => candidate.id === meal.foodId) : undefined;
+    const recipe = meal.mealId ? snapshot.savedMeals.find((candidate) => candidate.id === meal.mealId) : undefined;
+    if (!food && (!recipe || recipe.ingredients.length === 0 || recipe.ingredients.some((ingredient) => !foods.some((candidate) => candidate.id === ingredient.foodId)))) return;
+    setSavingPlannedLog(true);
+    try {
+      const saved = food
+        ? await addFood(actions, meal.slot, selected, food, amount, meal.id, plannedLogKey)
+        : await logMeal(actions, recipe!.ingredients.map((ingredient) => ({
+            ...ingredient,
+            servings: ingredient.servings * amount / recipe!.servings,
+          })), selected, meal.slot, recipe!, foods, meal.id, plannedLogKey);
+      if (saved) {
+        plannedLogFocusRef.current = meal.id;
+        setPlannedMealToLog(null);
+      }
+    } finally {
+      setSavingPlannedLog(false);
+    }
+  }
+
+  function plannedLogConfirmation(meal: PlannedMeal, triggerKey: string, triggerId: string) {
+    if (plannedMealToLog !== triggerKey) return null;
+    const amount = Number(actualServings);
+    const food = meal.foodId ? foods.find((candidate) => candidate.id === meal.foodId) : undefined;
+    const recipe = meal.mealId ? snapshot.savedMeals.find((candidate) => candidate.id === meal.mealId) : undefined;
+    const actual = food ? foodMacros(food, amount) : recipe ? mealNutrition(recipe, foods).perServing : null;
+    const valid = Boolean(actual && Number.isFinite(amount) && amount > 0);
+    return <div role="group" aria-label={"Log " + meal.label} className="grid gap-2 rounded-xl bg-white p-3">
+      <label className="grid gap-1 text-xs font-bold text-ink-soft">Actual servings<input id={`actual-servings-${triggerKey}`} className="input" type="number" min="0.01" step="0.25" value={actualServings} onChange={(event) => { setActualServings(event.target.value); setPlannedLogKey(clientId("planned-log")); }} /></label>
+      <p className="text-xs font-semibold text-ink-soft">Estimated for this portion:</p>
+      {valid && actual ? <NutritionPills label="Actual portion nutrition" approximate precision={0} values={{ calories: actual.calories * (food ? 1 : amount), proteinG: actual.proteinG * (food ? 1 : amount), carbsG: actual.carbsG * (food ? 1 : amount), fatG: actual.fatG * (food ? 1 : amount) }} /> : <p className="text-xs font-semibold text-ink-soft">Choose valid servings.</p>}
+      <p className="text-xs font-semibold text-ink-soft">Confirm what you actually ate; the plan stays unchanged.</p>
+      <div className="flex flex-wrap justify-end gap-2"><Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={savingPlannedLog} onClick={() => { document.getElementById(triggerId)?.focus(); setPlannedMealToLog(null); }}>Cancel</Button><Button className="!min-h-11 !px-3 text-xs" disabled={savingPlannedLog || !Number.isFinite(amount) || amount <= 0} onClick={() => void confirmPlannedLog(meal)}>{savingPlannedLog ? "Saving…" : "Confirm log"}</Button></div>
+    </div>;
+  }
+
+  function canLogPlanned(meal: PlannedMeal) {
+    if (meal.foodId) return foods.some((candidate) => candidate.id === meal.foodId);
+    const recipe = meal.mealId ? snapshot.savedMeals.find((candidate) => candidate.id === meal.mealId) : undefined;
+    return Boolean(recipe && recipe.ingredients.length > 0 && recipe.ingredients.every((ingredient) => foods.some((candidate) => candidate.id === ingredient.foodId)));
+  }
+
+  function openPlannedLog(meal: PlannedMeal, triggerKey: string) {
+    setPlannedMealToLog(triggerKey);
+    setActualServings(String(meal.servings));
+    setPlannedLogKey(clientId("planned-log"));
+  }
+
+  function loggedRows(slot: MealSlot) {
+    const list = entries[slot];
+    const grouped = snapshot.loggedMeals.filter((meal) => meal.date === selected && meal.slot === slot);
+    const groupedIds = new Set(grouped.map((meal) => meal.id));
+    const standalone = list.filter((entry) => !entry.loggedMealId || !groupedIds.has(entry.loggedMealId));
+    return <>
+      {grouped.map((meal) => {
+        const linkedPlan = meal.plannedMealId ? todaysPlan.find((candidate) => candidate.id === meal.plannedMealId) : undefined;
+        const childEntries = list.filter((entry) => entry.loggedMealId === meal.id).sort((a, b) => (a.ingredientOrder ?? 0) - (b.ingredientOrder ?? 0));
+        const mealTotals = childEntries.reduce((sum, entry) => ({ calories: sum.calories + entry.calories, proteinG: sum.proteinG + entry.proteinG, carbsG: sum.carbsG + entry.carbsG, fatG: sum.fatG + entry.fatG }), { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
+        const hasRange = childEntries.some((entry) => entry.valueSource === "ai_estimate" && entry.estimateRange);
+        const low = childEntries.reduce((sum, entry) => sum + (entry.estimateRange?.calories.low ?? entry.calories), 0);
+        const high = childEntries.reduce((sum, entry) => sum + (entry.estimateRange?.calories.high ?? entry.calories), 0);
+        const expanded = expandedLoggedMealId === meal.id;
+        return <li key={meal.id} className="grid min-w-0 gap-2 rounded-xl bg-lav-50 px-3 py-2">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+            <button type="button" className="min-h-11 min-w-0 flex-[1_1_10rem] text-left" aria-expanded={expanded} onClick={() => setExpandedLoggedMealId(expanded ? null : meal.id)}>
+              <span className="text-[11px] font-bold text-ink-soft">Eaten</span>
+              <p className="break-words text-sm font-extrabold">{meal.name} <span className="text-xs font-semibold text-muted">{expanded ? "▴" : "▾"}</span></p>
+              <NutritionPills className="mt-1" values={mealTotals} approximate={hasRange} precision={0} />
+              <p className="mt-1 break-words text-[11px] font-semibold text-ink-soft">{hasRange ? `${Math.round(low)}–${Math.round(high)} kcal range · includes AI estimate` : "mixed sources"}</p>
+            </button>
+            <div className="flex min-w-0 max-w-full flex-wrap justify-end gap-1">
+              {linkedPlan ? <button id={`log-again-${meal.id}`} data-planned-meal-id={linkedPlan.id} type="button" disabled={!canLogPlanned(linkedPlan)} onClick={() => openPlannedLog(linkedPlan, `again-${meal.id}`)} className="min-h-11 rounded-full bg-white px-2 text-xs font-extrabold disabled:opacity-50">Log again</button> : null}
+              <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink" aria-label={`Edit ${meal.name}`} onClick={() => setEditingLoggedMealId(meal.id)}><Pencil className="h-4 w-4" aria-hidden /></button>
+              <button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink" aria-label={`Delete ${meal.name}`} onClick={() => void actions.deleteLoggedMeal(meal.id)}><Trash2 className="h-4 w-4" aria-hidden /></button>
+            </div>
+          </div>
+          {expanded ? <div className="grid gap-1 border-t border-white pt-2">{childEntries.map((entry) => <div key={entry.id} className="grid min-w-0 gap-1 rounded-lg bg-white px-2 py-2 text-xs"><span className="break-words">{entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName} ×{entry.servings} · {entry.preparationBasis ?? "basis unknown"}</span><NutritionPills values={entry} precision={0} /><span className="font-semibold text-ink-soft">{entry.valueSource === "ai_estimate" ? "AI estimate" : entry.valueSource === "trusted_catalog" ? "USDA/catalog" : "user value"}</span></div>)}<p className="text-[11px] font-semibold text-muted">Historical corrections affect this logged meal only. The reusable recipe remains unchanged.</p></div> : null}
+          {linkedPlan ? plannedLogConfirmation(linkedPlan, `again-${meal.id}`, `log-again-${meal.id}`) : null}
+          {editingLoggedMealId === meal.id ? <LoggedMealEditor meal={meal} entries={childEntries} foods={foods} onSave={async (nextMeal, nextIngredients) => { const saved = await actions.updateLoggedMeal(nextMeal, nextIngredients); if (saved) setEditingLoggedMealId(null); return saved; }} onCancel={() => setEditingLoggedMealId(null)} /> : null}
+        </li>;
+      })}
+      {standalone.map((entry) => {
+        const linkedPlan = entry.plannedMealId ? todaysPlan.find((candidate) => candidate.id === entry.plannedMealId) : undefined;
+        const name = entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName;
+        return <li key={entry.id} className="grid gap-2 rounded-xl bg-cream px-3 py-2 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-ink-soft">Eaten</p>
+            <p className="break-words text-sm font-bold">{name} <span className="font-semibold text-muted">×{entry.servings}</span></p>
+            <NutritionPills className="my-1" values={entry} precision={0} />
+            <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${confidenceClasses[entry.confidence]}`}>{entry.estimated ? `estimate (${entry.confidence})` : "your entry"}</span>
+            <p className="text-[10px] font-semibold text-muted">{entry.source} · {entry.preparationBasis ?? "preparation unknown"}</p>
+          </div>
+          <div className="flex justify-end gap-1">
+            {linkedPlan ? <button id={`log-again-${entry.id}`} data-planned-meal-id={linkedPlan.id} type="button" disabled={!canLogPlanned(linkedPlan)} onClick={() => openPlannedLog(linkedPlan, `again-${entry.id}`)} className="min-h-11 rounded-full bg-white px-2 text-xs font-extrabold disabled:opacity-50">Log again</button> : null}
+            <button type="button" onClick={() => setEditingNutritionId(entry.id)} aria-label={`Edit ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink"><Pencil className="h-4 w-4" aria-hidden /></button>
+            <button type="button" onClick={() => actions.deleteNutrition(entry.id)} aria-label={`Delete ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink"><Trash2 className="h-4 w-4" aria-hidden /></button>
+          </div>
+          {editingNutritionId === entry.id ? <NutritionEditForm entry={entry} foods={foods} onSave={async (next) => { const saved = await actions.updateNutrition(next); if (saved) setEditingNutritionId(null); return saved; }} onCancel={() => setEditingNutritionId(null)} /> : null}
+          {linkedPlan && plannedMealToLog === `again-${entry.id}` ? <div className="sm:col-span-2">{plannedLogConfirmation(linkedPlan, `again-${entry.id}`, `log-again-${entry.id}`)}</div> : null}
+        </li>;
+      })}
+    </>;
+  }
+
   return (
     <div className="grid min-w-0 gap-4 pb-4">
       <Card tone="blush">
-        <DayStrip selected={selected} onSelect={setSelected} />
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2"><h2 className="font-extrabold">
+        <DayStrip selected={selected} onSelect={selectDay} />
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2"><h2 className="font-extrabold">
               {isToday ? "Today" : selected}
             </h2><HelpPopover title="Daily nutrition"><p>Targets are estimates from your profile. Missing meal slots stay unknown, not zero intake. Estimated entries retain their ranges and confidence.</p></HelpPopover></div>
             <p className="text-xs font-bold text-ink-soft">
@@ -138,235 +342,148 @@ export default function NutritionPage() {
         </div>
         {status !== "unlogged" ? <p className="mt-2 text-xs font-bold text-ink-soft">Logged: {totals.estimateRange ? "≈ " : ""}{Math.round(totals.calories)} kcal · Target: {target?.calories ?? "not set"} kcal</p> : null}
         <div className="mt-3 grid gap-2.5">
-          <ProgressBar label="Protein" value={totals.proteinG} target={target?.proteinG ?? 0} unit=" g" barClassName="bg-lav-300" />
-          <ProgressBar label="Carbs" value={totals.carbsG} target={target?.carbsG ?? 0} unit=" g" barClassName="bg-peach-200" />
-          <ProgressBar label="Fat" value={totals.fatG} target={target?.fatG ?? 0} unit=" g" barClassName="bg-mint-200" />
+          <ProgressBar label="Protein" value={totals.proteinG} target={target?.proteinG ?? 0} unit=" g" barClassName={nutritionMetricStyles.proteinG.bar} />
+          <ProgressBar label="Carbs" value={totals.carbsG} target={target?.carbsG ?? 0} unit=" g" barClassName={nutritionMetricStyles.carbsG.bar} />
+          <ProgressBar label="Fat" value={totals.fatG} target={target?.fatG ?? 0} unit=" g" barClassName={nutritionMetricStyles.fatG.bar} />
         </div>
         {totals.estimateRange ? <p className="mt-2 text-[11px] font-bold text-muted">Estimated range today: {Math.round(totals.estimateRange.calories.low)}–{Math.round(totals.estimateRange.calories.high)} kcal. AI ranges are low-confidence and user-confirmed.</p> : null}
       </Card>
 
-      {/* Planned meals for the day */}
-      {snapshot.mealPlan ? (
-        <Card>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1"><h2 className="font-extrabold">Planned for this day</h2><HelpPopover title="Planned meals"><p>Editing or skipping changes the future meal plan. Logged history is untouched.</p>{carbLimit !== null ? <p>{snapshot.profile?.dietaryPattern} uses at most {carbLimit} g total carbs per planned day. This is a planning preference, not dietary care or a promise of ketosis. Unresolved slots mean the day is not fully planned.</p> : null}</HelpPopover></div>
-            <Button
-              variant="soft"
-              className="!min-h-11 !px-3 text-xs"
-              onClick={() => setEditingPlannedMealId("new")}
-            >
-              <Plus className="h-4 w-4" aria-hidden /> Add meal
-            </Button>
+      <Card role="region" aria-labelledby="planned-meals-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <h2 id="planned-meals-heading" className="font-extrabold">Planned</h2>
+            <HelpPopover title="Planned meals"><p>Planned and eaten meals appear together by slot. Editing or skipping a plan does not change food already logged.</p><p>Recipe card calories are per serving. The pie pill is the whole recipe yield; the planned portion is shown separately.</p></HelpPopover>
           </div>
-          {todaysPlan.length > 0 ? (
-            <ul className="mt-2 grid gap-1.5">
-              {todaysPlan.map((pm) => (
-              <li
-                key={pm.id}
-                className={`grid gap-2 rounded-xl bg-cream px-3 py-2 text-sm font-semibold sm:grid-cols-[auto_1fr_auto] sm:items-center ${
-                  pm.skipped ? "opacity-50" : ""
-                }`}
-              >
-                <span className="min-w-20 font-bold text-ink-soft">{slotLabels[pm.slot]}</span>
-                <span className={pm.skipped ? "line-through" : ""}>{pm.mealId || pm.foodId ? `${pm.label} ×${pm.servings}` : "Unresolved · choose a meal that fits your restrictions"}</span>
-                <div className="flex flex-wrap justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setEditingPlannedMealId(pm.id)}
-                    className="min-h-11 rounded-full px-3 text-xs font-extrabold text-ink underline underline-offset-2"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => actions.skipPlannedMeal(pm.id)}
-                    className="min-h-11 rounded-full px-3 text-xs font-extrabold text-muted underline underline-offset-2"
-                  >
-                    {pm.skipped ? "plan again" : "skip"}
-                  </button>
-                </div>
-              </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 rounded-xl bg-cream px-3 py-3 text-sm font-semibold text-muted">
-              No meal is planned for this day yet. Add one to the future plan.
-            </p>
-          )}
-          {editingPlannedMealId ? (
-            <PlannedMealEditor
-              key={editingPlannedMealId}
-              plannedMeal={editingPlannedMealId === "new" ? undefined : todaysPlan.find((meal) => meal.id === editingPlannedMealId)}
-              date={selected}
-              savedMeals={snapshot.savedMeals}
-              foods={foods}
-              onSave={savePlannedMeal}
-              onCancel={() => setEditingPlannedMealId(null)}
-            />
-          ) : null}
-          {carbLimit !== null ? <p className="mt-2 text-xs font-semibold text-ink-soft">{snapshot.profile?.dietaryPattern}: at most {carbLimit} g total carbs per planned day.</p> : null}
-        </Card>
-      ) : null}
-
-      {/* Log entries by slot */}
-      <div className="grid gap-3">
-        {SLOTS.map((slot) => {
-          const list = entries[slot];
-          const grouped = snapshot.loggedMeals.filter((meal) => meal.date === selected && meal.slot === slot);
-          const standalone = list.filter((entry) => !entry.loggedMealId);
-          const open = openSlot === slot;
-          return (
-            <Card key={slot} className="p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold">{slotLabels[slot]}</h3>
-                <Button
-                  variant="soft"
-                  className="!min-h-11 !px-3 text-xs"
-                  onClick={() => {
-                    setOpenSlot(open ? null : slot);
-                    setMode("search");
-                  }}
-                  aria-expanded={open}
-                >
-                  <Plus className="h-4 w-4" aria-hidden /> Add
-                </Button>
-              </div>
-
-              {list.length > 0 || grouped.length > 0 ? (
-                <ul className="mt-2 grid gap-1.5">
-                  {grouped.map((meal) => {
-                    const childEntries = list.filter((entry) => entry.loggedMealId === meal.id).sort((a, b) => (a.ingredientOrder ?? 0) - (b.ingredientOrder ?? 0));
-                    const mealTotals = childEntries.reduce((sum, entry) => ({ calories: sum.calories + entry.calories, proteinG: sum.proteinG + entry.proteinG, carbsG: sum.carbsG + entry.carbsG, fatG: sum.fatG + entry.fatG }), { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
-                    const hasRange = childEntries.some((entry) => entry.valueSource === "ai_estimate" && entry.estimateRange);
-                    const low = childEntries.reduce((sum, entry) => sum + (entry.estimateRange?.calories.low ?? entry.calories), 0);
-                    const high = childEntries.reduce((sum, entry) => sum + (entry.estimateRange?.calories.high ?? entry.calories), 0);
-                    const expanded = expandedLoggedMealId === meal.id;
-                    return <li key={meal.id} className="grid gap-2 rounded-xl bg-lav-50 px-3 py-2"><div className="flex items-start justify-between gap-2"><button type="button" className="min-w-0 flex-1 text-left" aria-expanded={expanded} onClick={() => setExpandedLoggedMealId(expanded ? null : meal.id)}><p className="text-sm font-extrabold">{meal.name} <span className="text-xs font-semibold text-muted">{expanded ? "▴" : "▾"}</span></p><p className="text-[11px] font-semibold text-muted">{hasRange ? "≈ " : ""}{Math.round(mealTotals.calories)} kcal · P {Math.round(mealTotals.proteinG)} · C {Math.round(mealTotals.carbsG)} · F {Math.round(mealTotals.fatG)} · {hasRange ? `${Math.round(low)}–${Math.round(high)} kcal range · includes AI estimate` : "mixed sources"}</p></button><div className="flex shrink-0 gap-1"><button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink" aria-label={`Edit ${meal.name}`} onClick={() => setEditingLoggedMealId(meal.id)}><Pencil className="h-4 w-4" aria-hidden /></button><button type="button" className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink" aria-label={`Delete ${meal.name}`} onClick={() => void actions.deleteLoggedMeal(meal.id)}><Trash2 className="h-4 w-4" aria-hidden /></button></div></div>{expanded ? <div className="grid gap-1 border-t border-white pt-2">{childEntries.map((entry) => <div key={entry.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-2 py-2 text-[11px]"><span>{entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName} ×{entry.servings} · {entry.preparationBasis ?? "basis unknown"}</span><span className="font-bold">{Math.round(entry.calories)} kcal · {entry.valueSource === "ai_estimate" ? "AI estimate" : entry.valueSource === "trusted_catalog" ? "USDA/catalog" : "user value"}</span></div>)}<p className="text-[11px] font-semibold text-muted">Historical corrections affect this logged meal only. The reusable recipe remains unchanged.</p></div> : null}{editingLoggedMealId === meal.id ? <LoggedMealEditor meal={meal} entries={childEntries} foods={foods} onSave={async (nextMeal, nextIngredients) => { const saved = await actions.updateLoggedMeal(nextMeal, nextIngredients); if (saved) setEditingLoggedMealId(null); return saved; }} onCancel={() => setEditingLoggedMealId(null)} /> : null}</li>;
-                  })}
-                  {standalone.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="grid gap-2 rounded-xl bg-cream px-3 py-2 sm:grid-cols-[1fr_auto] sm:items-center"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold">
-                          {entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName}
-                          <span className="ml-1 font-semibold text-muted">
-                            ×{entry.servings}
-                          </span>
-                        </p>
-                        <p className="text-[11px] font-semibold text-muted">
-                          {Math.round(entry.calories)} kcal · P {Math.round(entry.proteinG)} · C{" "}
-                          {Math.round(entry.carbsG)} · F {Math.round(entry.fatG)} ·{" "}
-                          <span className={`rounded-full px-1.5 py-0.5 ${confidenceClasses[entry.confidence]}`}>
-                            {entry.estimated ? `estimate (${entry.confidence})` : "your entry"}
-                          </span>
-                        </p>
-                        <p className="text-[10px] font-semibold text-muted">
-                          {entry.source} · {entry.preparationBasis ?? "preparation unknown"}
-                        </p>
-                      </div>
-                      <div className="flex justify-end gap-1">
-                        <button type="button" onClick={() => setEditingNutritionId(entry.id)} aria-label={`Edit ${entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink">
-                          <Pencil className="h-4 w-4" aria-hidden />
-                        </button>
-                        <button type="button" onClick={() => actions.deleteNutrition(entry.id)} aria-label={`Delete ${entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink">
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </button>
-                      </div>
-                      {editingNutritionId === entry.id ? (
-                        <NutritionEditForm
-                          entry={entry}
-                          foods={foods}
-                          onSave={async (next) => {
-                            const saved = await actions.updateNutrition(next);
-                            if (saved) setEditingNutritionId(null);
-                            return saved;
-                          }}
-                          onCancel={() => setEditingNutritionId(null)}
-                        />
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              {open ? (
-                   <EntryEditor
-                   slot={slot}
-                   mode={mode}
-                   onMode={setMode}
-                   onDone={() => setOpenSlot(null)}
-                 />
-              ) : null}
-            </Card>
-          );
-        })}
-      </div>
-
+          <Button id="add-to-plan-action" variant="soft" className="!min-h-11 !px-3 text-xs" aria-expanded={loggingOpen} aria-controls="nutrition-log-editor" onClick={() => {
+            if (loggingOpen) closeLogEditor();
+            else { setLoggingOpen(true); setLogSlot(null); setMode("search"); }
+          }}><Plus className="h-4 w-4" aria-hidden /> Add to plan</Button>
+        </div>
+        {loggingOpen ? <div id="nutrition-log-editor" className="mt-3 rounded-2xl bg-cream p-3" role="group" aria-label="Add meal">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="grid min-w-40 flex-1 gap-1 text-xs font-bold text-ink-soft" htmlFor="log-meal-slot">Meal slot
+              <select id="log-meal-slot" className="input" value={logSlot ?? ""} required onChange={(event) => { setLogSlot(event.target.value ? event.target.value as MealSlot : null); setMode("search"); }}>
+                <option value="">Choose a slot</option>
+                {SLOTS.map((slot) => <option key={slot} value={slot}>{slotLabels[slot]}</option>)}
+              </select>
+            </label>
+            <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={closeLogEditor}>Cancel</Button>
+          </div>
+          {logSlot ? <EntryEditor key={selected + ":" + logSlot} slot={logSlot} mode={mode} onMode={setMode} onDone={closeLogEditor} />
+            : <p className="mt-2 text-xs font-semibold text-ink-soft">Choose a meal slot before adding or logging food.</p>}
+        </div> : null}
+        {!canAddPlan ? <p className="mt-2 text-xs font-semibold text-muted">Set an eligible daily goal to add to the plan. You can still log food you ate.</p> : null}
+        <div className="mt-5 grid gap-4">
+          {SLOTS.map((slot) => {
+            const planned = todaysPlan.filter((meal) => meal.slot === slot && !loggedPlannedIds.has(meal.id)).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+            const eaten = entries[slot].length > 0 || snapshot.loggedMeals.some((meal) => meal.date === selected && meal.slot === slot);
+            return <section key={slot} className="min-w-0 border-t border-ink/10 pt-4" aria-label={slotLabels[slot]}>
+              <h3 className="font-extrabold">{slotLabels[slot]}</h3>
+              {planned.length > 0 ? <ul className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
+                {planned.map((pm) => {
+                  const canLog = canLogPlanned(pm);
+                  const recipe = pm.mealId ? snapshot.savedMeals.find(meal => meal.id === pm.mealId) : undefined;
+                  const food = pm.foodId ? foods.find(food => food.id === pm.foodId) : undefined;
+                  return <li key={pm.id} className="min-w-0">
+                    <RecipeCard planned name={canLog ? pm.label : "Unresolved meal"} image={recipe?.image}
+                      context={`Planned${pm.skipped ? " · skipped" : ""} · ${slotLabels[slot]} · ${pm.servings} ${pm.servings === 1 ? "serving" : "servings"}`}
+                      calories={recipe ? recipeCardCalories(recipe, foods) : food?.calories} recipeServings={recipe?.servings}
+                      totalTimeMinutes={recipe?.totalTimeMinutes} complexity={recipe?.complexity}
+                      onOpen={recipe ? event => openRecipe(recipe, event.currentTarget) : undefined}
+                      metadata={recipe ? recipeMetadata.recipes.get(recipe.id) : undefined}
+                      favoriteAvailable={recipeMetadata.available} favoritePending={recipeMetadata.pendingMeal !== null}
+                      onFavorite={recipe && !recipe.archivedAt ? () => void recipeMetadata.favorite(recipe.id) : undefined}
+                      actions={<div className="flex flex-wrap gap-2">
+                        <Button variant="soft" className="flex-1 !px-3 text-xs" aria-expanded={editingPlannedMealId === pm.id} onClick={event => { plannedEditReturnFocus.current = event.currentTarget; setEditingPlannedMealId(pm.id); }}>Edit</Button>
+                        <Button variant="soft" className="flex-1 !px-3 text-xs" onClick={() => void actions.skipPlannedMeal(pm.id)}>{pm.skipped ? "Plan again" : "Skip"}</Button>
+                        <Button id={`log-planned-${pm.id}`} className="flex-1 !px-3 text-xs" disabled={!canLog} title={canLog ? undefined : "Edit this unresolved meal before logging it"} onClick={() => openPlannedLog(pm, pm.id)}>Log</Button>
+                      </div>}>
+                      {!canLog ? <p className="text-xs font-semibold text-ink-soft">Choose a meal that fits your restrictions. Edit this unresolved item before it can be logged.</p> : null}
+                      {plannedLogConfirmation(pm, pm.id, `log-planned-${pm.id}`)}
+                      {editingPlannedMealId === pm.id ? <PlannedMealEditor key={pm.id} plannedMeal={pm} date={selected} savedMeals={snapshot.savedMeals} foods={foods} onSave={savePlannedMeal} onCancel={() => setEditingPlannedMealId(null)} /> : null}
+                    </RecipeCard>
+                  </li>;
+                })}
+              </ul> : null}
+              {eaten ? <ul className="mt-2 grid min-w-0 gap-1.5">{loggedRows(slot)}</ul> : null}
+              {!planned.length && !eaten ? <p className="mt-2 rounded-xl bg-cream px-3 py-3 text-sm font-semibold text-muted">Nothing planned or logged for {slotLabels[slot].toLowerCase()}. Intake is unknown.</p> : null}
+            </section>;
+          })}
+        </div>
+        {carbLimit !== null ? <p className="mt-3 text-xs font-semibold text-ink-soft">{snapshot.profile?.dietaryPattern}: at most {carbLimit} g total carbs per planned day.</p> : null}
+      </Card>
       {/* Saved meals */}
-      <Card>
-        <div className="flex items-center justify-between gap-2">
+      <Card role="region" aria-labelledby="saved-meals-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-1"><h2 className="font-extrabold">Saved meals</h2><HelpPopover title="Saved meals"><p>Create, reuse, or adjust recipes without changing logged history.</p></HelpPopover></div>
+            <div className="flex flex-wrap items-center gap-1"><h2 id="saved-meals-heading" className="font-extrabold">Saved meals</h2><HelpPopover title="Saved meals"><p>Create, reuse, or adjust recipes without changing logged history.</p><p>Card calories are per serving. The pie pill shows how many servings the whole recipe yields. Log records food you ate after choosing a meal slot and confirming.</p></HelpPopover></div>
           </div>
           <Button
             variant="soft"
             className="!min-h-11 !px-3 text-xs"
-            onClick={() => { setShowNewRecipe(true); setEditingRecipeId(null); }}
+            onClick={(event) => { recipeReturnFocus.current = event.currentTarget; setReturnToRecipeOverview(null); setViewingRecipeId(null); setShowNewRecipe(true); setEditingRecipeId(null); setRecipeModalOpen(true); }}
           >
             <Plus className="h-4 w-4" aria-hidden /> Create
           </Button>
         </div>
         {showNewRecipe || editingRecipeId ? (
           <RecipeEditor
-            key={editingRecipeId ?? "new"}
-            meal={editingRecipeId ? snapshot.savedMeals.find((meal) => meal.id === editingRecipeId) : undefined}
-            onSave={async (meal) => {
-              const saved = await actions.saveMeal(meal);
-              if (saved) { setShowNewRecipe(false); setEditingRecipeId(null); }
-              return saved;
-            }}
+            key={`recipe-editor:${editingRecipeId ?? "new"}`}
+            open={recipeModalOpen}
+            returnFocus={recipeReturnFocus}
+            meal={editingRecipeId ? snapshot.savedMeals.find((meal) => meal.id === editingRecipeId) : undefined}            onSave={(input) => actions.saveRecipe(input)}
+            onSaved={(mealId) => { setRecipeModalOpen(false); setShowNewRecipe(false); setEditingRecipeId(null); if (returnToRecipeOverview) setViewingRecipeId(mealId); }}
             foods={foods}
-            onCancel={() => { setShowNewRecipe(false); setEditingRecipeId(null); }}
+            onCancel={() => { setRecipeModalOpen(false); if (returnToRecipeOverview) setViewingRecipeId(returnToRecipeOverview); }}
           />
         ) : null}
-        <ul className="mt-3 grid gap-1.5">
-          {snapshot.savedMeals.map((meal) => (
-            <li key={meal.id} className="grid gap-2 rounded-xl bg-cream px-3 py-2 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div>
-                <p className="text-sm font-bold">{meal.name}</p>
-                <p className="text-[11px] font-semibold text-muted">
-                  {meal.ingredients.length} ingredients · {meal.servings}{" "}
-                  {meal.servings === 1 ? "serving" : "servings"}
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-1">
-                {!meal.isSystem ? (
-                  <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={() => setEditingRecipeId(meal.id)}>
-                    Edit
-                  </Button>
-                ) : null}
-                <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={() => void actions.duplicateMeal(meal.id)}>
-                  Duplicate
-                </Button>
-                <Button
-                  variant="soft"
-                  className="!min-h-11 !px-3 text-xs"
-                  onClick={() => void logMeal(actions, meal.ingredients, selected, "snack", meal, foods)}
-                >
-                  Log it
-                </Button>
-                {!meal.isSystem ? (
-                  <Button
-                    variant="ghost"
-                    className="!min-h-11 !px-3 text-xs text-coral-300"
-                    onClick={() => void actions.archiveMeal(meal.id)}
-                  >
-                    Archive
-                  </Button>
-                ) : null}
-              </div>
+        {viewingRecipeId && snapshot.savedMeals.find(meal => meal.id === viewingRecipeId) ? <RecipeOverview
+          key={`recipe-overview:${viewingRecipeId}`} meal={snapshot.savedMeals.find(meal => meal.id === viewingRecipeId)!} foods={foods} returnFocus={recipeReturnFocus}
+          onClose={() => setViewingRecipeId(null)}
+          onEdit={() => { setReturnToRecipeOverview(viewingRecipeId); setEditingRecipeId(snapshot.savedMeals.find(meal => meal.id === viewingRecipeId)?.catalogReplacementId ?? viewingRecipeId); setShowNewRecipe(false); setViewingRecipeId(null); setRecipeModalOpen(true); }}
+        /> : null}
+        {recipeMetadata.loading ? <p className="mt-3 text-xs text-ink-soft" role="status">Loading favorites and Popular…</p> : null}
+        {recipeMetadata.error ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-peach-50 p-3 text-xs text-ink-soft" role="status"><span>{recipeMetadata.error}</span><Button variant="ghost" className="!px-2 text-xs underline" disabled={recipeMetadata.loading || recipeMetadata.pendingMeal !== null} onClick={recipeMetadata.refresh}>Refresh cards</Button></div> : null}
+        <ul className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
+          {snapshot.savedMeals.filter(meal => !meal.archivedAt).map((meal) => (
+            <li key={meal.id} className="min-w-0">
+              <RecipeCard name={meal.name} image={meal.image} calories={recipeCardCalories(meal, foods)}
+                recipeServings={meal.servings} totalTimeMinutes={meal.totalTimeMinutes} complexity={meal.complexity}
+                onOpen={event => openRecipe(meal, event.currentTarget)} metadata={recipeMetadata.recipes.get(meal.id)}
+                favoriteAvailable={recipeMetadata.available} favoritePending={recipeMetadata.pendingMeal !== null}
+                onFavorite={() => void recipeMetadata.favorite(meal.id)}
+                actions={<div className="flex flex-wrap items-center gap-2">
+                  <Button id={`log-it-${meal.id}`} className="min-w-[96px] flex-[1_1_96px] !px-3 text-xs"
+                    aria-expanded={savedMealToLog === meal.id} aria-controls={savedMealToLog === meal.id ? `saved-meal-picker-${meal.id}` : undefined}
+                    disabled={savingSavedMeal || Boolean(pendingMutation)} onClick={() => { setSavedMealToLog(savedMealToLog === meal.id ? null : meal.id); setSavedMealSlot(null); }}>Log<Plus className="h-4 w-4 shrink-0" aria-hidden /></Button>
+                  <div className="flex shrink-0 gap-2">
+                    <IconButton label={`Edit ${meal.name}`} tooltip="Edit" disabled={savingSavedMeal || Boolean(pendingMutation)} onClick={event => { recipeReturnFocus.current = event.currentTarget; setReturnToRecipeOverview(null); setViewingRecipeId(null); setEditingRecipeId(meal.catalogReplacementId ?? meal.id); setShowNewRecipe(false); setRecipeModalOpen(true); }}><Pencil className="h-4 w-4" aria-hidden /></IconButton>
+                    <IconButton label={`Archive ${meal.name}`} tooltip="Archive" disabled={savingSavedMeal || Boolean(pendingMutation)} onClick={() => void actions.archiveMeal(meal.id)}><Archive className="h-4 w-4" aria-hidden /></IconButton>
+                  </div>
+                </div>}>
+              {savedMealToLog === meal.id ? <div id={`saved-meal-picker-${meal.id}`} className="flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 sm:col-span-2" role="group" aria-label={`Log ${meal.name}`}>
+                {meal.ingredients.length > 0 && meal.ingredients.every((ingredient) => foods.some((food) => food.id === ingredient.foodId)) ? <NutritionPills className="w-full" label="Saved meal nutrition" values={mealNutrition(meal, foods)} precision={0} approximate /> : null}
+                <label className="grid min-w-40 flex-1 gap-1 text-xs font-bold text-ink-soft" htmlFor={`saved-meal-slot-${meal.id}`}>
+                  Meal slot
+                  <select id={`saved-meal-slot-${meal.id}`} className="input" value={savedMealSlot ?? ""} required onChange={(event) => setSavedMealSlot(event.target.value ? event.target.value as MealSlot : null)}>
+                    <option value="">Choose a slot</option>
+                    {SLOTS.map((slot) => <option key={slot} value={slot}>{slotLabels[slot]}</option>)}
+                  </select>
+                </label>
+                <Button className="!min-h-11 !px-3 text-xs" disabled={!savedMealSlot || savingSavedMeal} onClick={async () => {
+                  if (!savedMealSlot) return;
+                  setSavingSavedMeal(true);
+                  try {
+                    const saved = await logMeal(actions, meal.ingredients, selected, savedMealSlot, meal, foods);
+                    if (saved) { document.getElementById(`log-it-${meal.id}`)?.focus(); setSavedMealToLog(null); setSavedMealSlot(null); }
+                  } finally {
+                    setSavingSavedMeal(false);
+                  }
+                }}>{savingSavedMeal ? "Saving…" : "Confirm log"}</Button>
+                <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={savingSavedMeal} onClick={() => { document.getElementById(`log-it-${meal.id}`)?.focus(); setSavedMealToLog(null); setSavedMealSlot(null); }}>Cancel</Button>
+              </div> : null}
+              </RecipeCard>
             </li>
           ))}
         </ul>
@@ -438,6 +555,7 @@ export default function NutritionPage() {
     const [ingredients, setIngredients] = useState<GuidedIngredient[]>([]);
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [estimateLoading, setEstimateLoading] = useState(false);
+    const [savingIntent, setSavingIntent] = useState(false);
     const [analysisError, setAnalysisError] = useState("");
     const [draftRestored, setDraftRestored] = useState(false);
     const [draftReady, setDraftReady] = useState(false);
@@ -445,7 +563,7 @@ export default function NutritionPage() {
     const draftType = `nutrition-guided:${selected}:${slot}`;
     const userId = snapshot.userId;
     const profileRevision = snapshot.profile?.revision;
-    const localResults = foods.filter((food) => food.name.toLowerCase().includes(query.toLowerCase())).slice(0, 6);
+    const localResults = searchFoods(foods, query);
     const appearsComposite = /,|\bwith\b|\band\b|\bplus\b/i.test(query.trim());
     const shouldSuggestAnalysis = query.trim().length >= 2 && (appearsComposite || localResults.length === 0);
     const authenticationExpired = (providerError || analysisError).startsWith("Your session has expired.");
@@ -453,7 +571,7 @@ export default function NutritionPage() {
     useEffect(() => {
       if (!userId) return;
       let active = true;
-      void readDraft<{ query: string; mealName: string; ingredients: GuidedIngredient[] }>(userId, draftType).then((saved) => {
+      void readDraft<{ query: string; mealName: string; ingredients: GuidedIngredient[]; quantityFood?: Food | null; quantity?: string; quantityUnit?: string }>(userId, draftType).then((saved) => {
         if (!active) return;
         if (saved) {
           setQuery(saved.payload.query);
@@ -462,6 +580,9 @@ export default function NutritionPage() {
             ...ingredient,
             food: ingredient.food?.id ? foods.find((food) => food.id === ingredient.food?.id) ?? ingredient.food : null,
           })));
+          setQuantityFood(saved.payload.quantityFood?.id ? foods.find((food) => food.id === saved.payload.quantityFood?.id) ?? saved.payload.quantityFood : null);
+          setQuantity(saved.payload.quantity ?? "1");
+          setQuantityUnit(saved.payload.quantityUnit ?? "serving");
           setDraftRestored(true);
         }
         setDraftReady(true);
@@ -470,17 +591,17 @@ export default function NutritionPage() {
     }, [draftType, foods, userId]);
 
     useEffect(() => {
-      if (!draftReady || !userId || (!query.trim() && ingredients.length === 0)) return;
+      if (!draftReady || !userId || (!query.trim() && ingredients.length === 0 && !quantityFood)) return;
       void writeDraft(createDraftEnvelope({
         userId,
         draftType,
-        payload: { query, mealName, ingredients },
+        payload: { query, mealName, ingredients, quantityFood, quantity, quantityUnit },
         baseVersions: { profileRevision, mealPlanVersion: snapshot.mealPlan?.version, groceryRevision: snapshot.grocery?.revision },
         ttlMs: draftTtlMs(draftType),
       })).then((saved) => {
         if (!saved) setAnalysisError("Review recovery could not be written on this device. Keep this screen open until you confirm or discard it.");
       });
-    }, [draftReady, draftType, ingredients, mealName, profileRevision, query, userId]);
+    }, [draftReady, draftType, ingredients, mealName, profileRevision, quantity, quantityFood, quantityUnit, query, userId]);
 
     function providerFood(candidate: NutritionProviderCandidate): Food {
       return { ...candidate, id: `food-fdc-${candidate.fdcId}`, category: "Other", valueSource: "trusted_catalog" };
@@ -583,23 +704,70 @@ export default function NutritionPage() {
       }
     }
 
-    async function confirmQuantity() {
+    async function confirmQuantity(intent: "plan" | "log") {
       if (!quantityFood) return;
       const amount = Number(quantity);
       const serving = servingPlanForCandidate(quantityFood, amount, quantityUnit);
       if (!serving) return;
-      if (quantityFood.fdcId && !snapshot.foods.some((food) => food.id === quantityFood.id)) {
-        if (!await actions.saveFood(quantityFood)) return;
-      }
-      if (await addFood(actions, slot, selected, quantityFood, serving)) {
-        setQuantityFood(null);
-        onDone();
+      setSavingIntent(true);
+      try {
+        const newFood = !snapshot.foods.some((food) => food.id === quantityFood.id) && quantityFood.fdcId ? quantityFood : null;
+        if (intent === "plan") {
+          if (await addToPlan(slot, { food: quantityFood, servings: serving.servings, newFoods: newFood ? [newFood] : [] })) {
+            setQuantityFood(null);
+            if (userId) await clearDraft(userId, draftType);
+            onDone();
+          }
+        } else {
+          if (newFood && !await actions.saveFood(newFood)) return;
+          if (await addFood(actions, slot, selected, quantityFood, serving)) {
+            setQuantityFood(null);
+            if (userId) await clearDraft(userId, draftType);
+            onDone();
+          }
+        }
+      } finally {
+        setSavingIntent(false);
       }
     }
 
-    async function confirmMeal() {
+    async function confirmMeal(intent: "plan" | "log") {
       const included = ingredients.filter((ingredient) => ingredient.included);
-      if (included.length === 0 || included.some((ingredient) => !ingredient.food && !ingredient.estimate)) return;
+      if (included.length === 0 || included.some((ingredient) => !ingredient.food && !ingredient.estimate && !ingredient.custom)) return;
+      if (intent === "plan") {
+        if (!canPlan) return;
+        const newFoods: Food[] = [];
+        const recipeIngredients: RecipeIngredient[] = [];
+        for (const ingredient of included) {
+          let food = ingredient.food;
+          if (ingredient.custom) {
+            food = {
+              id: clientId("food-review"), name: ingredient.name.trim(),
+              servingLabel: `${ingredient.quantity} ${ingredient.unit} reviewed portion`,
+              servingGrams: 100, unit: "g", category: "Other",
+              calories: Number(ingredient.custom.calories), proteinG: Number(ingredient.custom.proteinG),
+              carbsG: Number(ingredient.custom.carbsG), fatG: Number(ingredient.custom.fatG),
+              ...(ingredient.custom.fiberG ? { fiberG: Number(ingredient.custom.fiberG) } : {}),
+              source: "User-provided", sourceVersion: "user-v1", valueSource: "user_provided",
+              estimated: false, confidence: "medium", preparationBasis: "prepared",
+            };
+            newFoods.push(food);
+          } else if (food?.fdcId && !snapshot.foods.some((saved) => saved.id === food?.id)) {
+            newFoods.push(food);
+          }
+          if (!food) return;
+          recipeIngredients.push({ foodId: food.id, servings: ingredient.custom ? 1 : servingPlanForCandidate(food, ingredient.quantity, ingredient.unit)?.servings ?? ingredient.quantity });
+        }
+        const newMeal: Meal = { id: clientId("meal-review"), name: mealName.trim() || "Reviewed meal", servings: 1, ingredients: recipeIngredients };
+        setSavingIntent(true);
+        try {
+          if (await addToPlan(slot, { meal: newMeal, servings: 1, newFoods })) {
+            if (userId) await clearDraft(userId, draftType);
+            onDone();
+          }
+        } finally { setSavingIntent(false); }
+        return;
+      }
       const entries = included.map((ingredient) => {
         if (ingredient.food) {
           const serving = servingPlanForCandidate(ingredient.food, ingredient.quantity, ingredient.unit) ?? {
@@ -679,6 +847,8 @@ export default function NutritionPage() {
         };
       });
       const remoteFoods = included.flatMap((ingredient) => ingredient.food?.fdcId && !snapshot.foods.some((food) => food.id === ingredient.food?.id) && ingredient.food ? [ingredient.food] : []);
+      setSavingIntent(true);
+      try {
       for (const food of remoteFoods) if (!await actions.saveFood(food)) return;
       const saved = await actions.saveReviewedMeal({
         date: selected,
@@ -689,9 +859,10 @@ export default function NutritionPage() {
         ingredients: entries,
       });
       if (saved) {
-        if (userId) void clearDraft(userId, draftType);
+        if (userId) await clearDraft(userId, draftType);
         onDone();
       }
+      } finally { setSavingIntent(false); }
     }
 
     const included = ingredients.filter((ingredient) => ingredient.included);
@@ -708,6 +879,10 @@ export default function NutritionPage() {
       return { calories: sum.calories + macros.calories, proteinG: sum.proteinG + macros.proteinG, carbsG: sum.carbsG + macros.carbsG, fatG: sum.fatG + macros.fatG };
     }, { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
     const ready = included.length > 0 && included.every((ingredient) => Number.isFinite(ingredient.quantity) && ingredient.quantity > 0 && (ingredient.food || ingredient.estimate || (ingredient.custom && [ingredient.custom.calories, ingredient.custom.proteinG, ingredient.custom.carbsG, ingredient.custom.fatG].every((value) => value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0))));
+    const canPlan = ready && canAddPlan && included.every((ingredient) => {
+      if (ingredient.custom) return carbLimit === null;
+      return Boolean(ingredient.food && ingredient.food.valueSource !== "ai_estimate" && (carbLimit === null || ingredient.food.valueSource === "trusted_catalog"));
+    });
     const quantityServing = quantityFood ? servingPlanForCandidate(quantityFood, Number(quantity), quantityUnit) : null;
     const quantityMacros = quantityFood && quantityServing ? foodMacros(quantityFood, quantityServing.servings) : null;
 
@@ -721,15 +896,15 @@ export default function NutritionPage() {
         </div>
         {shouldSuggestAnalysis ? <div className="rounded-xl bg-lav-50 px-3 py-2 text-xs font-semibold"><div className="flex items-center justify-between gap-2"><p>Analyze sends your description to DeepSeek.</p><HelpPopover title="Meal analysis"><p>DeepSeek suggests ingredients and questions for you to review. It does not save meals. Catalog values are authoritative; optional AI estimates remain low-confidence ranges and require confirmation.</p></HelpPopover></div><Button className="mt-2 !min-h-11 !px-3 text-xs" disabled={analysisLoading} onClick={() => void analyzeMeal()}><Sparkles className="h-4 w-4" aria-hidden /> {analysisLoading ? "Analyzing…" : "Analyze this meal"}</Button></div> : null}
         {providerError || analysisError ? <div className="grid gap-1 text-[11px] font-bold text-coral-300" role="alert"><p>{providerError || analysisError}</p>{authenticationExpired ? <a className="w-fit underline underline-offset-2" href="/auth/sign-in?next=%2Fnutrition">Sign in again</a> : null}</div> : null}
-        {localResults.length > 0 ? <ul className="grid gap-1">{localResults.map((food) => <li key={food.id}><button type="button" className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setQuantityFood(food); setQuantity("1"); setQuantityUnit(food.unit === "piece" ? "piece" : "serving"); }}><span>{food.name}<span className="block text-[11px] font-semibold text-muted">{food.servingLabel} · {food.calories} kcal · {food.valueSource === "trusted_catalog" ? "trusted catalog" : "development catalog"}</span></span><Plus className="h-4 w-4 text-muted" aria-hidden /></button></li>)}</ul> : null}
-        {quantityFood ? <div className="grid gap-2 rounded-xl bg-white p-3" role="group" aria-label="Review food quantity"><p className="text-sm font-extrabold">Review {quantityFood.name}</p><div className="grid grid-cols-[1fr_1fr] gap-2"><input className="input" type="number" min="0.01" step="0.25" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-label="Quantity" /><select className="input" value={quantityUnit} onChange={(event) => setQuantityUnit(event.target.value)} aria-label="Serving unit"><option value="serving">serving</option><option value="g">grams</option><option value="piece">piece</option>{quantityFood.servingOptions?.map((option) => <option key={`${option.label}-${option.grams}`} value={option.unit}>{option.label}</option>)}</select></div><p className="text-[11px] font-semibold text-muted">{quantityFood.preparationBasis ?? "Preparation basis not specified"} · {quantityFood.valueSource === "trusted_catalog" ? "Trusted catalog nutrition" : "Development catalog estimate"} · {quantityFood.confidence} confidence</p>{quantityMacros ? <div className="grid grid-cols-4 gap-1 rounded-xl bg-cream px-2 py-2 text-center text-[11px] font-bold" aria-label="Nutrition preview"><span>{quantityMacros.calories} kcal</span><span>{quantityMacros.proteinG} g protein</span><span>{quantityMacros.carbsG} g carbs</span><span>{quantityMacros.fatG} g fat</span></div> : null}<div className="flex gap-2"><Button className="!min-h-11 !px-3 text-xs" disabled={!quantityServing} onClick={() => void confirmQuantity()}>Confirm food</Button><Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={() => setQuantityFood(null)}>Cancel</Button></div></div> : null}
+        {localResults.length > 0 ? <ul className="grid gap-1">{localResults.map(({ food, kind }) => <li key={food.id}><button type="button" className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setQuantityFood(food); setQuantity("1"); setQuantityUnit(food.unit === "piece" ? "piece" : "serving"); }}><span>{food.name}{kind === "close" ? <span className="ml-2 text-xs font-semibold text-ink-soft">Close match</span> : null}<span className="mt-1 block text-[11px] font-semibold text-ink-soft">{food.servingLabel} · {food.valueSource === "trusted_catalog" ? "trusted catalog" : "development catalog"}</span><NutritionPills className="mt-1" values={{ calories: food.calories }} /></span><Plus className="h-4 w-4 text-muted" aria-hidden /></button></li>)}</ul> : null}
+        {quantityFood ? <div className="grid gap-2 rounded-xl bg-white p-3" role="group" aria-label="Review food quantity"><p className="text-sm font-extrabold">Review {quantityFood.name}</p><div className="grid gap-2 sm:grid-cols-2"><input className="input" type="number" min="0.01" step="0.25" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-label="Quantity" /><select className="input" value={quantityUnit} onChange={(event) => setQuantityUnit(event.target.value)} aria-label="Serving unit"><option value="serving">serving</option><option value="g">grams</option><option value="piece">piece</option>{quantityFood.servingOptions?.map((option) => <option key={`${option.label}-${option.grams}`} value={option.unit}>{option.label}</option>)}</select></div><p className="text-[11px] font-semibold text-muted">{quantityFood.preparationBasis ?? "Preparation basis not specified"} · {quantityFood.valueSource === "trusted_catalog" ? "Trusted catalog nutrition" : "Development catalog estimate"} · {quantityFood.confidence} confidence</p>{quantityMacros ? <NutritionPills label="Nutrition preview" values={quantityMacros} /> : null}<div className="flex flex-wrap gap-2"><Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={!quantityServing || !canAddPlan || (carbLimit !== null && quantityFood.valueSource !== "trusted_catalog") || quantityFood.valueSource === "ai_estimate" || savingIntent} onClick={() => void confirmQuantity("plan")}>Add to plan</Button><Button className="!min-h-11 !px-3 text-xs" disabled={!quantityServing || savingIntent} onClick={() => void confirmQuantity("log")}>Log meal</Button><Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={() => setQuantityFood(null)}>Cancel</Button></div></div> : null}
         {providerResults.candidates.length > 0 ? <div className="rounded-xl bg-mint-100 p-2"><p className="text-[11px] font-extrabold uppercase tracking-wide">USDA FoodData Central</p><ul className="mt-1 grid gap-1">{providerResults.candidates.map((candidate) => { const food = providerFood(candidate); return <li key={candidate.fdcId}><button type="button" className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setQuantityFood(food); setQuantity("1"); setQuantityUnit("serving"); }}><span>{candidate.name}<span className="block text-[11px] font-semibold text-muted">{candidate.servingLabel} · {candidate.preparationBasis} · USDA {candidate.sourceVersion}</span></span><Check className="h-4 w-4" aria-hidden /></button></li>; })}</ul></div> : null}
         {ingredients.length > 0 ? (
           <div className="grid gap-2 rounded-2xl bg-lav-50 p-3" role="region" aria-label="Guided meal review">
             <HelpHeading title="Meal review" as="h3" className="text-sm font-extrabold"><p>Catalog values are authoritative. User values are explicit. Optional AI estimates are approximate, low-confidence ranges and require confirmation.</p><p>Check preparation, quantities, and assumptions before saving.</p></HelpHeading>
-            <div className="flex gap-2">
+            <div className="grid gap-2">
               <input className="input" value={mealName} onChange={(event) => setMealName(event.target.value)} aria-label="Meal name" placeholder="Meal name" />
-              <span className="self-center text-xs font-bold text-muted">≈ {Math.round(totals.calories)} kcal</span>
+              {ready ? <NutritionPills label="Reviewed meal nutrition" values={totals} precision={0} approximate /> : <p className="text-xs font-semibold text-ink-soft">Review each included ingredient to see the meal nutrition.</p>}
             </div>
             {ingredients.map((ingredient, index) => (
               <div key={ingredient.id} className={`grid gap-2 rounded-xl p-2 ${ingredient.included ? "bg-white" : "bg-cream"}`}>
@@ -741,7 +916,7 @@ export default function NutritionPage() {
                   </div>
                   <button type="button" className="min-h-11 px-2 text-xs font-bold underline" onClick={() => setIngredients((current) => current.filter((item) => item.id !== ingredient.id))}>Remove</button>
                 </div>
-                <div className="grid grid-cols-[1fr_1fr] gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <input className="input" type="number" min="0.01" step="0.25" value={ingredient.quantity} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, quantity: Number(event.target.value) } : item))} aria-label={`${ingredient.name} quantity`} />
                   <input className="input" value={ingredient.unit} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, unit: event.target.value } : item))} aria-label={`${ingredient.name} unit`} />
                 </div>
@@ -759,7 +934,7 @@ export default function NutritionPage() {
                     <p className="text-[11px] font-bold">User-provided values for this reviewed quantity</p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                       {([['Calories', 'calories'], ['Protein', 'proteinG'], ['Carbs', 'carbsG'], ['Fat', 'fatG'], ['Fiber', 'fiberG']] as const).map(([label, key]) => (
-                        <input key={key} className="input !min-h-11 text-xs" type="number" min="0" step="0.1" value={ingredient.custom?.[key] ?? ""} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, custom: { ...(item.custom ?? { calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" }), [key]: event.target.value } } : item))} aria-label={`${ingredient.name} custom ${label}`} placeholder={label} />
+                        <NutritionFieldLabel key={key} metric={key}><input className="input !min-h-11 text-xs" type="number" min="0" step="0.1" value={ingredient.custom?.[key] ?? ""} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, custom: { ...(item.custom ?? { calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" }), [key]: event.target.value } } : item))} aria-label={`${ingredient.name} custom ${label}`} placeholder={label} /></NutritionFieldLabel>
                       ))}
                     </div>
                     <button type="button" className="justify-self-start text-[11px] font-bold underline" onClick={() => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, custom: undefined } : item))}>Clear custom values</button>
@@ -775,8 +950,10 @@ export default function NutritionPage() {
             ))}
             <div className="flex flex-wrap gap-2">
               <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={estimateLoading || !ingredients.some((ingredient) => ingredient.included && !ingredient.food && !ingredient.estimate && !ingredient.custom)} onClick={() => void estimateSelected()}>{estimateLoading ? "Estimating…" : "Estimate selected unresolved"}</Button>
-              <Button className="!min-h-11 !px-3 text-xs" disabled={!ready} onClick={() => void confirmMeal()}>Confirm meal & save</Button>
+              <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={!canPlan || savingIntent} onClick={() => void confirmMeal("plan")}>Add to plan</Button>
+              <Button className="!min-h-11 !px-3 text-xs" disabled={!ready || savingIntent} onClick={() => void confirmMeal("log")}>Log meal</Button>
             </div>
+            {!canPlan ? <p className="text-xs font-semibold text-muted">Planning requires an eligible goal and catalog matches or user-corrected values. Carb-limited plans require trusted catalog data. You can still log an AI estimate with its uncertainty.</p> : null}
           </div>
         ) : null}
       </div>
@@ -799,9 +976,7 @@ export default function NutritionPage() {
     const [providerLoading, setProviderLoading] = useState(false);
     const [providerError, setProviderError] = useState("");
     const [providerResults, setProviderResults] = useState<Awaited<ReturnType<typeof searchNutritionProvider>>>({ candidates: [] });
-    const results = foods.filter((f) =>
-      f.name.toLowerCase().includes(query.toLowerCase()),
-    ).slice(0, 6);
+    const results = searchFoods(foods, query);
     const runProviderSearch = async (cursor?: string) => {
       setProviderLoading(true);
       setProviderError("");
@@ -838,7 +1013,7 @@ export default function NutritionPage() {
         </div>
         {providerError ? <p className="mt-2 text-[11px] font-bold text-coral-300" role="alert">{providerError}</p> : null}
         <ul className="mt-2 grid gap-1">
-          {results.map((food) => (
+          {results.map(({ food, kind }) => (
             <li key={food.id}>
               <button
                 type="button"
@@ -849,9 +1024,10 @@ export default function NutritionPage() {
               >
                 <span>
                   {food.name}
+                  {kind === "close" ? <span className="ml-2 text-xs font-semibold text-ink-soft">Close match</span> : null}
                   <span className="block text-[11px] font-semibold text-muted">
-                    {food.servingLabel} · {food.calories} kcal
-                  </span>
+                    {food.servingLabel}
+                  </span><NutritionPills className="mt-1" values={{ calories: food.calories }} />
                 </span>
                 <Plus className="h-4 w-4 text-muted" aria-hidden />
               </button>
@@ -885,7 +1061,7 @@ export default function NutritionPage() {
                       }
                     }}
                   >
-                    <span>{candidate.name}<span className="block text-[11px] font-semibold text-muted">{candidate.servingLabel} · {candidate.calories} kcal · confirmed provider record</span></span>
+                    <span>{candidate.name}<span className="block text-[11px] font-semibold text-ink-soft">{candidate.servingLabel} · confirmed provider record</span><NutritionPills className="mt-1" values={{ calories: candidate.calories }} /></span>
                     <Check className="h-4 w-4 text-muted" aria-hidden />
                   </button>
                 </li>
@@ -993,24 +1169,24 @@ export default function NutritionPage() {
           className="input"
           aria-label="Custom food name"
         />
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { label: "kcal", value: calories, set: setCalories },
-            { label: "P g", value: protein, set: setProtein },
-            { label: "C g", value: carbs, set: setCarbs },
-            { label: "F g", value: fat, set: setFat },
+            { label: "kcal", metric: "calories", value: calories, set: setCalories },
+            { label: "P g", metric: "proteinG", value: protein, set: setProtein },
+            { label: "C g", metric: "carbsG", value: carbs, set: setCarbs },
+            { label: "F g", metric: "fatG", value: fat, set: setFat },
           ].map((field) => (
-            <input
-              key={field.label}
+            <NutritionFieldLabel key={field.metric} metric={field.metric as NutritionMetric}><input
               value={field.value}
               onChange={(e) => field.set(e.target.value)}
               placeholder={field.label}
               aria-label={field.label}
               inputMode="decimal"
               className="input !min-h-11 text-sm"
-            />
+            /></NutritionFieldLabel>
           ))}
         </div>
+        {numericFields.every((value) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0) ? <NutritionPills label="Manual nutrition preview" values={{ calories: Number(calories), proteinG: Number(protein), carbsG: Number(carbs), fatG: Number(fat) }} /> : null}
         <div className="grid grid-cols-2 gap-2">
           <input value={servingGrams} onChange={(e) => setServingGrams(e.target.value)} placeholder="Serving grams" aria-label="Serving grams" inputMode="decimal" className="input !min-h-11 text-sm" />
           <select value={unit} onChange={(e) => setUnit(e.target.value as Food["unit"])} aria-label="Serving unit" className="input !min-h-11 text-sm"><option value="g">grams</option><option value="piece">piece</option></select>
@@ -1048,8 +1224,26 @@ export default function NutritionPage() {
             }
           }}
         >
-          Save entry
+          Log meal
         </Button>
+        <Button
+          variant="soft"
+          disabled={!valid || !canAddPlan || carbLimit !== null || !Number.isFinite(Number(servingGrams)) || Number(servingGrams) <= 0}
+          onClick={async () => {
+            const grams = Number(servingGrams);
+            const food: Food = {
+              id: clientId("food-custom"), name: name.trim(), servingLabel: `${grams} g serving`, servingGrams: grams,
+              unit, calories: Number(calories), proteinG: Number(protein), carbsG: Number(carbs), fatG: Number(fat),
+              source: "User-provided", sourceVersion: "user-v1", valueSource: "user_provided",
+              estimated: false, confidence: "medium", category: "Other", preparationBasis: "as_labeled",
+            };
+            if (await addToPlan(slot, { food, servings: 1, newFoods: [food] })) {
+              if (snapshot.userId) void clearDraft(snapshot.userId, draftType);
+              onDone();
+            }
+          }}
+        >Add to plan</Button>
+        {carbLimit !== null ? <p className="text-xs font-semibold text-muted">This carb-limited plan requires trusted catalog nutrition. You can still log your own values.</p> : null}
         <Button
           variant="soft"
           disabled={!valid || !Number.isFinite(Number(servingGrams)) || Number(servingGrams) <= 0}
@@ -1236,13 +1430,8 @@ export default function NutritionPage() {
                     <p className="text-sm font-bold">
                       {candidate.matched?.name ?? candidate.name} ×{candidate.quantity} {candidate.unit}
                     </p>
-                    <p className="text-[11px] font-semibold text-muted">
-                      {candidate.matched && candidate.servingPlan
-                        ? `${Math.round(candidate.matched.calories * candidate.servingPlan.servings)} kcal · ${candidate.matched.servingLabel}`
-                        : candidate.matched
-                          ? "serving basis needs correction"
-                          : "no catalog match"}
-                    </p>
+                    {candidate.matched && candidate.servingPlan ? <NutritionPills values={{ calories: candidate.matched.calories * candidate.servingPlan.servings }} precision={0} /> : null}
+                    <p className="text-[11px] font-semibold text-muted">{candidate.matched && candidate.servingPlan ? candidate.matched.servingLabel : candidate.matched ? "serving basis needs correction" : "no catalog match"}</p>
                     {candidate.assumptions.length > 0 ? (
                       <p className="mt-0.5 flex items-start gap-1 text-[11px] font-semibold text-muted">
                         <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
@@ -1407,6 +1596,12 @@ function NutritionEditForm({
     };
   }
 
+  const previewAmount = Number(servings);
+  const previewValues = servings.trim() !== "" && Number.isFinite(previewAmount) && previewAmount > 0
+    ? food ? valuesFor(previewAmount) : [calories, protein, carbs, fat].every((value) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0)
+      ? { calories: Number(calories), proteinG: Number(protein), carbsG: Number(carbs), fatG: Number(fat) } : null
+    : null;
+
   const submit = async () => {
     const nextServings = Number(servings);
     if (!Number.isFinite(nextServings) || nextServings <= 0) return;
@@ -1435,16 +1630,17 @@ function NutritionEditForm({
       {!food ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           {[
-            ["Calories", calories, setCalories],
-            ["Protein", protein, setProtein],
-            ["Carbs", carbs, setCarbs],
-            ["Fat", fat, setFat],
-            ["Fiber", fiber, setFiber],
-          ].map(([label, value, setValue]) => (
-            <input key={label as string} className="input !min-h-11 text-xs" type="number" min="0" step="0.1" value={value as string} onChange={(event) => (setValue as (value: string) => void)(event.target.value)} aria-label={label as string} />
+            { label: "Calories", metric: "calories", value: calories, set: setCalories },
+            { label: "Protein", metric: "proteinG", value: protein, set: setProtein },
+            { label: "Carbs", metric: "carbsG", value: carbs, set: setCarbs },
+            { label: "Fat", metric: "fatG", value: fat, set: setFat },
+            { label: "Fiber", metric: "fiberG", value: fiber, set: setFiber },
+          ].map((field) => (
+            <NutritionFieldLabel key={field.metric} metric={field.metric as NutritionMetric | "fiberG"}><input className="input !min-h-11 text-xs" type="number" min="0" step="0.1" value={field.value} onChange={(event) => field.set(event.target.value)} aria-label={field.label} /></NutritionFieldLabel>
           ))}
         </div>
       ) : null}
+      {previewValues ? <NutritionPills label="Correction nutrition preview" values={previewValues} /> : null}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={onCancel}>Cancel</Button>
         <Button className="!min-h-11 !px-3 text-xs" disabled={saving} onClick={() => void submit()}>{saving ? "Saving…" : "Save correction"}</Button>
@@ -1485,6 +1681,10 @@ function PlannedMealEditor({
   const [draftWasRestored, setDraftWasRestored] = useState(false);
   const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
   const draftType = `planned-meal:${date}:${plannedMeal?.id ?? "new"}`;
+  const choiceInput = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (draftReady) choiceInput.current?.focus();
+  }, [draftReady]);
   useEffect(() => {
     if (!draftSnapshot.userId) return;
     let active = true;
@@ -1571,7 +1771,7 @@ function PlannedMealEditor({
       {draftWriteUnavailable ? <p className="rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold" role="status">Draft recovery is unavailable on this device.</p> : null}
       <HelpHeading title="Edit future meal" as="h3" className="text-sm font-extrabold"><p>This creates a new future plan version. Logged nutrition history stays unchanged.</p></HelpHeading>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <select className="input" value={reference} onChange={(event) => setReference(event.target.value)} aria-label="Planned meal choice">
+        <select ref={choiceInput} className="input" value={reference} onChange={(event) => setReference(event.target.value)} aria-label="Planned meal choice">
           <optgroup label="Saved meals">
             {availableMeals.map((meal) => <option key={`meal:${meal.id}`} value={`meal:${meal.id}`}>{meal.name}</option>)}
           </optgroup>
@@ -1594,111 +1794,6 @@ function PlannedMealEditor({
   );
 }
 
-type IngredientDraft = { foodId: string; servings: string };
-
-function RecipeEditor({
-  meal,
-  foods,
-  onSave,
-  onCancel,
-}: {
-  meal?: Meal;
-  foods: Food[];
-  onSave: (meal: Meal) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const { snapshot: draftSnapshot } = useApp();
-  const [name, setName] = useState(meal?.name ?? "");
-  const [servings, setServings] = useState(String(meal?.servings ?? 1));
-  const [ingredients, setIngredients] = useState<IngredientDraft[]>(
-    () => meal?.ingredients.map((ingredient) => ({ foodId: ingredient.foodId, servings: String(ingredient.servings) }))
-      ?? [{ foodId: foods[0]?.id ?? "", servings: "1" }],
-  );
-  const [saving, setSaving] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
-  const [draftWasRestored, setDraftWasRestored] = useState(false);
-  const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
-  const draftType = `recipe:${meal?.id ?? "new"}`;
-  useEffect(() => {
-    if (!draftSnapshot.userId) return;
-    let active = true;
-    void readDraft<{ name: string; servings: string; ingredients: IngredientDraft[] }>(draftSnapshot.userId, draftType).then((saved) => {
-      if (!active) return;
-      if (saved) {
-        setName(saved.payload.name);
-        setServings(saved.payload.servings);
-        setIngredients(saved.payload.ingredients);
-        setDraftWasRestored(true);
-      }
-      setDraftReady(true);
-    });
-    return () => { active = false; };
-  }, [draftSnapshot.userId, draftType]);
-  useEffect(() => {
-    if (!draftReady || !draftSnapshot.userId) return;
-    void writeDraft(createDraftEnvelope({
-      userId: draftSnapshot.userId,
-      draftType,
-      payload: { name, servings, ingredients },
-      baseVersions: { groceryRevision: draftSnapshot.grocery?.revision },
-      ttlMs: draftTtlMs(draftType),
-    })).then((saved) => setDraftWriteUnavailable(!saved));
-  }, [draftReady, draftSnapshot.grocery?.revision, draftSnapshot.userId, draftType, ingredients, name, servings]);
-  const recipeServings = Number(servings);
-  const validIngredients = ingredients.length > 0 && ingredients.every((ingredient) => {
-    const quantity = Number(ingredient.servings);
-    return Boolean(foods.find((food) => food.id === ingredient.foodId)) && Number.isFinite(quantity) && quantity > 0;
-  });
-
-  async function submit() {
-    if (!name.trim() || !Number.isFinite(recipeServings) || recipeServings <= 0 || !validIngredients) return;
-    const next: Meal = {
-      id: meal?.id ?? clientId("meal"),
-      name: name.trim(),
-      servings: recipeServings,
-      ...(meal?.notes ? { notes: meal.notes } : {}),
-      ...(meal?.revision === undefined ? {} : { revision: meal.revision }),
-      ingredients: ingredients.map((ingredient): RecipeIngredient => ({ foodId: ingredient.foodId, servings: Number(ingredient.servings) })),
-    };
-    setSaving(true);
-    try {
-      const saved = await onSave(next);
-      if (saved && draftSnapshot.userId) await clearDraft(draftSnapshot.userId, draftType);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mt-3 grid gap-2 rounded-2xl bg-lav-50 p-3" role="group" aria-label={meal ? "Edit saved meal" : "Create saved meal"}>
-      <HelpHeading title={meal ? "Edit recipe" : "Create recipe"} as="h3" className="text-sm font-extrabold"><p>Nutrition uses the catalog records selected for each ingredient. Editing a recipe does not rewrite existing logs.</p></HelpHeading>
-      {draftWasRestored ? <div className="flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-[11px] font-bold" role="status"><span>Recipe draft restored.</span><button type="button" className="underline" onClick={() => { if (draftSnapshot.userId) void clearDraft(draftSnapshot.userId, draftType); setDraftWasRestored(false); }}>Discard draft</button></div> : null}
-      {draftWriteUnavailable ? <p className="rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold" role="status">Draft recovery is unavailable on this device.</p> : null}
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <input className="input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Recipe name" aria-label="Recipe name" />
-        <input className="input" type="number" min="0.25" step="0.25" value={servings} onChange={(event) => setServings(event.target.value)} aria-label="Recipe servings" />
-      </div>
-      <div className="grid gap-2">
-        {ingredients.map((ingredient, index) => (
-          <div key={`${index}-${ingredient.foodId}`} className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-            <select className="input" value={ingredient.foodId} onChange={(event) => setIngredients((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, foodId: event.target.value } : item))} aria-label={`Ingredient ${index + 1}`}>
-              {foods.map((food) => <option key={food.id} value={food.id}>{food.name} · {food.servingLabel}</option>)}
-            </select>
-            <input className="input" type="number" min="0.25" step="0.25" value={ingredient.servings} onChange={(event) => setIngredients((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, servings: event.target.value } : item))} aria-label={`Ingredient ${index + 1} quantity`} />
-            <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={ingredients.length <= 1} onClick={() => setIngredients((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</Button>
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-wrap justify-between gap-2">
-        <Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={() => setIngredients((current) => [...current, { foodId: foods[0]?.id ?? "", servings: "1" }])}><Plus className="h-4 w-4" aria-hidden /> Ingredient</Button>
-        <div className="flex gap-2">
-          <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={onCancel}>Cancel</Button>
-          <Button className="!min-h-11 !px-3 text-xs" disabled={saving || !name.trim() || !Number.isFinite(recipeServings) || recipeServings <= 0 || !validIngredients} onClick={() => void submit()}>{saving ? "Saving…" : "Save recipe"}</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 async function addFood(
   actions: ReturnType<typeof useApp>["actions"],
@@ -1706,6 +1801,8 @@ async function addFood(
   date: string,
   food: Food,
   serving: number | CandidateServingPlan,
+  plannedMealId?: string,
+  fixedKey?: string,
 ) {
   const servings = typeof serving === "number" ? serving : serving.servings;
   const macros = foodMacros(food, servings);
@@ -1713,6 +1810,7 @@ async function addFood(
     date,
     slot,
     foodId: food.id,
+    ...(plannedMealId ? { plannedMealId } : {}),
     servings,
     servingQuantity: typeof serving === "number"
       ? food.unit === "piece" ? servings : food.servingGrams * servings
@@ -1730,7 +1828,7 @@ async function addFood(
     valueSource: food.valueSource,
     ...(food.estimateRange ? { estimateRange: food.estimateRange } : {}),
     preparationBasis: food.preparationBasis ?? "as_labeled",
-  });
+  }, fixedKey);
 }
 
 function withAuthoredServingOptions(food: Food): Food {
@@ -1769,9 +1867,12 @@ async function logMeal(
   slot: MealSlot,
   meal: Meal,
   foods: Food[],
+  plannedMealId?: string,
+  fixedKey?: string,
 ) {
-  const entries = [];
-  for (const ing of ingredients) {
+  const providedEntry = providedRecipeLogEntry(meal, ingredients[0] && meal.ingredients[0] ? ingredients[0].servings / meal.ingredients[0].servings * meal.servings : meal.servings, date, slot);
+  const entries: Parameters<typeof actions.logSavedMeal>[2] = providedEntry ? [providedEntry] : [];
+  for (const ing of providedEntry ? [] : ingredients) {
     const food = foods.find((f) => f.id === ing.foodId);
     if (!food) continue;
     const macros = foodMacros(food, ing.servings);
@@ -1795,5 +1896,16 @@ async function logMeal(
       valueSource: food.valueSource,
     });
   }
-  await actions.logSavedMeal(date, slot, entries, meal);
+  if (plannedMealId) {
+    return actions.saveReviewedMeal({
+      date,
+      slot,
+      name: meal.name,
+      sourceMode: "saved_meal",
+      meal,
+      ingredients: entries,
+      plannedMealId,
+    }, fixedKey);
+  }
+  return actions.logSavedMeal(date, slot, entries, meal);
 }

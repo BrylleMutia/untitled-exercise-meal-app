@@ -109,7 +109,6 @@ export interface AppActions {
   applyProgressionDecision(input: Omit<ProgressionDecisionInput, "currentSnapshot">): Promise<boolean>;
   saveMeal(meal: Meal): Promise<boolean>;
   saveRecipe(input: Omit<SaveRecipeInput, "currentSnapshot">): Promise<boolean>;
-  duplicateMeal(mealId: string): Promise<boolean>;
   archiveMeal(mealId: string): Promise<boolean>;
   exportData(): Promise<AccountExport | null>;
   deleteAccount(): Promise<boolean>;
@@ -811,28 +810,6 @@ export function AppProvider({
             recordRevision: meal.revision,
             groceryRevision: current.grocery?.revision,
           },
-          idempotencyKey,
-        }));
-        return Boolean(outcome);
-      },
-
-      async duplicateMeal(mealId) {
-        const source = snapshotRef.current.savedMeals.find((meal) => meal.id === mealId);
-        if (!source) {
-          notify("That saved meal is no longer available.", "info");
-          return false;
-        }
-        const duplicate: Meal = {
-          ...source,
-          id: `meal-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
-          name: `${source.name} copy`,
-          isSystem: undefined,
-          revision: undefined,
-        };
-        const outcome = await execute("save_saved_meal", (current, idempotencyKey) => repository!.saveMeal({
-          meal: duplicate,
-          currentSnapshot: current,
-          expectedVersions: { groceryRevision: current.grocery?.revision },
           idempotencyKey,
         }));
         return Boolean(outcome);
