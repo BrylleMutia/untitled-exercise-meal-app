@@ -11,6 +11,65 @@ second source of truth. Durable mutations use deliberate authenticated RPC
 wrappers backed by private implementations; direct client table writes remain
 revoked.
 
+## Saved-recipe authoring rollout — 2026-10-08
+
+With explicit owner authorization, the four recipe migrations from
+`20261008074630_recipe_authoring.sql` through
+`20261008082400_validate_recipe_instruction_type.sql` were applied to the linked
+Cali database. Preflight matched all 52 baseline migration versions and all 12
+schema fingerprint categories after excluding only the declared new recipe
+objects and three replaced functions. The three deployed baseline function
+bodies matched their migration sources exactly. No legacy source URL exceeded
+the new 2,000-character reference limit.
+
+After the push, all 56 local/linked migration versions and all 12 complete schema
+fingerprint categories matched. The final dry run reports no pending migrations,
+seeds, or roles. Linked database lint found no schema errors. Linked database
+types were regenerated and TypeScript passed. The complete forward migration
+sequence had already passed a clean local reset and all 589 database assertions.
+
+The deployed authoring path passed 23 rollback-only assertions, including
+atomic custom-food/recipe saving, required text instructions, reference storage,
+invalid-input rollback, duplicate retries, stale revisions, legacy saved-meal
+compatibility, cross-owner and anonymous denial, and custom-recipe account
+cleanup. Unique disposable identities were used; the transaction rolled back
+and no test users remained. The live REST API returns HTTP 200 for the new
+reference column and rejects anonymous `save_recipe` execution with code
+`42501`. Reference backfill has no unmatched legacy source URLs. The user's
+open recipe draft was neither submitted nor cleared during verification.
+
+The security advisor continues to identify the deliberate authenticated
+`SECURITY DEFINER` wrappers, the server-only provider quota table with RLS and
+no client policies, and the pre-existing disabled leaked-password protection
+setting. RPC ownership and grants were verified; this rollout does not change
+Auth settings. See the advisor guidance for
+[authenticated function execution](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+[RLS without client policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy),
+and [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+## Planned-meal logging rollout — 2026-10-08
+
+With explicit owner authorization, the five forward migrations from
+`20261007034332_add_planned_meal_transaction.sql` through
+`20261007044520_link_logged_planned_meals.sql` were applied to the linked Cali
+database. Before the push, all 47 applied migration versions matched and a
+reconstructed local baseline matched the linked `public`/`private` schema in all
+12 fingerprint categories, including columns, constraints, indexes, policies,
+grants, triggers, and function bodies. The read-only data preview found no
+AI-only planned foods or recipe ingredients and identified one unambiguous
+standalone log and two unambiguous grouped logs for historical linking.
+
+The full local reset, 566 database assertions, and database lint passed before
+the push. Afterward, all 52 local/linked migration versions and all 12 schema
+fingerprint categories matched; the linked dry run had no pending migrations,
+seeds, or roles, and linked database lint found no schema errors. The linked
+type generator confirmed the new planned-meal columns and RPC. The live REST
+endpoint rejected anonymous execution with a permission error, while a
+rollback-only authenticated call reached `log_planned_meal` validation. No
+test data was retained. The security advisor still lists the deliberate
+authenticated `SECURITY DEFINER` RPC wrappers and the pre-existing disabled
+leaked-password protection setting; these remain separate from this rollout.
+
 ## MVP-3 operational handover — 2026-10-04
 
 Shared Cali already received the seven verified MVP-3 forward migrations on
@@ -921,3 +980,139 @@ the final eight repository scenarios passed without weakening JWT verification.
 The [official PostgREST changelog](https://github.com/PostgREST/postgrest/blob/main/CHANGELOG.md)
 records clock-related JWT corrections in later versions. Keep this operational
 limitation separate from database migration or application evidence.
+
+## 10. Recipe cards and catalog database release — 2026-10-12
+
+The user explicitly authorized all pending linked migrations. Preflight matched
+the 56 deployed migration files against their recorded statements and compared
+an isolated reconstruction of that deployed baseline with the shared schema.
+There were no table, column, constraint, index, policy or grant differences.
+Eighteen function formatting differences were checked against the applied source:
+their bodies, language, return types, security mode and search path matched.
+
+The verified push applied these five migrations in order:
+
+1. `20261009065053_recipe_total_time.sql`
+2. `20261011080358_recipe_cover_images.sql`
+3. `20261012020032_recipe_card_metadata.sql`
+4. `20261012021408_harden_recipe_card_rpc.sql`
+5. `20261012030943_creamy_lemon_chicken_catalog.sql`
+
+All 61 local/remote migration versions now agree. The linked dry run reports no
+pending migrations, seeds or roles. All 12 schema fingerprint groups match a
+fresh local replay, including function definitions, grants, policies and triggers.
+Linked public database types were regenerated into
+`src/types/database.generated.ts`; strict TypeScript, lint and production build
+passed. Local and hosted type generators differ in formatting and JSON null
+representation, but the public schema fields and RPC arguments match.
+
+Four rolled-back deployed suites passed 135 assertions: recipe time (45),
+cover images (30), card metadata/favorites/complexity (45), and catalog (15).
+No test users, recipes, image assets or Storage objects remained. Digests confirm
+that the existing 62 nutrition entries, 590 planned meals, seven personal recipes,
+grouped eaten meals and retired recipe ingredients were preserved.
+
+Creamy Lemon Chicken is the only active system recipe, with Easy complexity,
+30 minutes, two servings, six measured ingredients and the registered generated
+image. Eight previous system recipes remain archived for history and existing
+plan references. The running app at port 3000 was refreshed and verified against
+the shared backend, including the overview tabs, source, estimate notes, loaded
+image, enabled favorite control, and phone/desktop layout bounds.
+
+The full clean local migration chain passed 19 database suites / 724 assertions.
+Database lint has no errors and retains the earlier unused-payload warning in
+`public.claim_deleted_recipe_images`. The cleanup worker's production deployment
+and scheduling remain separate from this completed database migration release.
+Detailed local evidence is in `output/recipe-catalog/verification.md` and the
+adjacent schema, history and cleanup comparison records. These raw artifacts
+remain local under the Git-ignored `output/` directory; the release summary
+above is retained in this document.
+
+## 11. Korean Beef Bowl and personal catalog controls — 2026-10-12
+
+The continuing authorized release adds Korean Beef Bowl alongside Creamy Lemon
+Chicken. Korean Beef Bowl yields four servings, has Easy complexity and its own
+generated cover, and preserves the supplied per-serving nutrition: approximately
+560 kcal, 45 g protein, 58 g carbohydrates and 16 g fat. Cooking time remains
+unset because none was supplied. Ingredient records support ingredient information
+and grocery quantities; they do not replace supplied recipe macros.
+
+Edit and Archive now apply to active predefined recipes per account. Saving the
+first edit creates an owned replacement and hides the original from that account's
+Saved meals. Archival hides the catalog recipe for the caller. Shared catalog
+records, other accounts, existing plans and saved nutrition history remain intact.
+Preferences use authenticated RPCs, ownership RLS, revision checks and idempotency.
+The provided-nutrition logger uses authoritative stored values and scales them by
+actual portions; retries remain stable across subsequent recipe edits.
+
+The deployed 61-version baseline matched all 12 schema fingerprint groups before
+the following verified forward migrations were applied:
+
+1. `20261012041322_korean_beef_and_personal_catalog.sql`
+2. `20261012065031_recipe_provided_nutrition.sql`
+3. `20261012065733_fix_provided_recipe_portion_unit.sql`
+4. `20261012070212_harden_personal_recipe_controls.sql`
+5. `20261012070613_serialize_provided_recipe_logs.sql`
+
+All 66 local and linked migration versions agree. The final dry run has no pending
+migrations, seeds or roles. All 12 deployed schema fingerprint groups match the
+clean local replay. Linked public database types were regenerated and strict
+TypeScript passed. Before/after digests are unchanged for 62 nutrition entries,
+590 planned meals, 14 grouped eaten meals, seven personal recipes and 57 existing
+recipe ingredient rows. Both rolled-back deployed suites passed: 33 personal
+catalog checks and 21 provided-nutrition checks. No fixture accounts, recipes or
+catalog preferences remained.
+
+Verification passed 295 application tests, 14 authenticated repository scenarios,
+21 local database suites / 778 assertions, strict TypeScript, lint and production
+build. Ten selected desktop/mobile browser checks passed; the final Korean Beef
+Bowl rerun also passed both viewports with supplied-macro required-field validation.
+The running port-3000 app was refreshed against the shared backend and verified
+for the generated image, four-serving overview, all supplied macros, enabled
+favorite control and Edit/Archive actions. Database lint has no errors; the earlier
+unused-payload warning in `public.claim_deleted_recipe_images` remains.
+
+Local release evidence and screenshots are in `output/korean-beef-bowl/verification.md`
+under the Git-ignored `output/` directory.
+
+## 12. Recipe card metadata and compact actions — 2026-10-12
+
+Saved and Planned cards now separate per-serving calories from whole-recipe
+yield. A mint ChartPie pill displays yield, missing time reads Not set, and
+missing complexity defaults to Medium. Saved footers use Log +, a 48px Edit
+icon and a 48px Archive icon with accessible labels and hover/focus tooltips.
+Planned actions retain their existing behavior. Meal duplication has been
+removed; existing saved copies remain ordinary recipes. New and restored legacy
+drafts default complexity to Medium without making a blank draft recoverable.
+
+The verified 66-version remote baseline had no schema drift. The continuing
+authorized release applied these forward migrations after clean local checks:
+
+1. `20261012081211_recipe_complexity_default.sql`
+2. `20261012083355_isolate_planned_recipe_log_retries.sql`
+3. `20261012083815_qualify_planned_log_operation.sql`
+
+The complexity migration backfills only nulls, sets the medium insert default
+and non-null constraint, and uses a private security-invoker trigger to normalize
+legacy null writes while preserving configured values. Existing revision and
+timestamp triggers record the backfill. The other migrations fix a planned
+provided-macro logging retry collision found during browser verification.
+Separate original-intent claims preserve atomic linking, stable retries,
+existing ownership/validation and older completed linked requests.
+
+All 69 local/linked history versions agree, the final dry run has no pending
+changes, and all 12 deployed schema groups match the clean local replay.
+Fifteen null recipes became medium; configured rows stayed unchanged. Digests
+preserve all 63 nutrition entries, 590 planned meals, 15 grouped eaten meals,
+68 ingredient records and other recipe facts. Linked types were regenerated.
+Both rolled-back deployed suites passed 36 assertions and left no fixtures.
+
+Verification passed 297 application tests, 14 repository scenarios, 23 local
+database suites / 814 assertions, 30 consolidated desktop/mobile browser checks,
+strict TypeScript, ESLint and the production build. Browser checks include 320px,
+enlarged text, reduced motion, focus return, tooltip dismissal, failed saves,
+draft recovery, and planned Korean Beef Bowl logging at exact supplied macros.
+Database lint has no errors; the existing image-cleanup unused-payload warning
+remains. The running port-3000 client was refreshed against the shared backend.
+Local release records are in `output/recipe-card-refinements/verification.md`
+under the Git-ignored `output/` directory.
