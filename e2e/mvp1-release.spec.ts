@@ -260,6 +260,37 @@ test("recipe authoring saves custom nutrition, live totals, instructions and ref
   await expect(saved.getByRole("button", { name: "Duplicate", exact: true })).toHaveCount(0);
 });
 
+test("recipe authoring keeps the same retry key and recovers the full draft after failed saves", async ({ page }) => {
+  let editor = await openRecipe(page);
+  await editor.getByLabel("Recipe name", { exact: true }).fill(`Retry recipe ${Date.now()}`);
+  await editor.getByLabel("Recipe servings", { exact: true }).fill("1");
+  await editor.getByLabel("Ingredient search").fill("Greek yogurt");
+  await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
+  await editor.getByLabel("Greek yogurt quantity").fill("1");
+  await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Spoon into a bowl.");
+  await fillRecipeSection(editor, "Details", "Reference (optional)", "Cookbook page 4");
+  let firstKey = "";
+  await page.route("**/rest/v1/rpc/save_recipe", route => {
+    firstKey = route.request().postDataJSON().p_payload.idempotencyKey;
+    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Temporary test failure" }) });
+  });
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor.getByText(/Recipe was not saved/)).toBeVisible();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.reload();
+  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  editor = page.getByRole("dialog", { name: "Create recipe", exact: true });
+  await expect(editor.getByText("Recipe draft restored.")).toBeVisible();
+  await expect(editor.getByLabel("Reference (optional)")).toHaveValue("Cookbook page 4");
+  await expect(editor.getByLabel("Greek yogurt quantity")).toHaveValue("1");
+  await page.unroute("**/rest/v1/rpc/save_recipe");
+  const response = nextRpcResponse(page, "save_recipe");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  const savedResponse = await response;
+  expect(savedResponse.request().postDataJSON().p_payload.idempotencyKey).toBe(firstKey);
+  expect(savedResponse.ok()).toBe(true);
+  await expect(editor).toHaveCount(0);
+});
 
 test("recipe authoring reviews AI suggestions, supported units and provider failure without losing ingredients", async ({ page }) => {
   const editor = await openRecipe(page);
@@ -320,6 +351,163 @@ test("recipe authoring fills trusted search nutrition and retains input when sea
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
 });
 
+test("recipe modal traps focus, scopes help dismissal and retains drafts across closing", async ({ page }, info) => {
+  const editor = await openRecipe(page);
+  const create = page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true });
+  await expect(editor.getByLabel("Recipe name", { exact: true })).toBeFocused();
+  await expect(editor).toHaveAttribute("aria-modal", "true");
+  await expect(editor.getByRole("heading", { name: "Recipe basics", exact: true })).toHaveCount(0);
+  await expect(editor.getByRole("region", { name: "Recipe basics", exact: true })).toBeVisible();
+  await expect(editor.getByRole("heading", { name: "Ingredients", exact: true })).toBeVisible();
+  await editor.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(editor.getByRole("tabpanel", { name: "Details", exact: true })).toBeVisible();
+  await expect(editor.getByRole("textbox", { name: "Reference (optional)", exact: true })).toBeVisible();
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(editor.getByLabel("Time (mins.)", { exact: true })).toHaveValue("");
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
+  expect(await create.evaluate(node => Boolean(node.closest('[inert]')))).toBe(true);
+  const cancel = editor.getByRole("button", { name: "Cancel", exact: true });
+  await cancel.focus();
+  await page.keyboard.press("Tab");
+  await expect(editor.getByRole("button", { name: "About create recipe", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(cancel).toBeFocused();
+
+  await editor.getByRole("button", { name: "About create recipe", exact: true }).click();
+  const help = page.getByRole("dialog", { name: "Recipe authoring", exact: true });
+  await expect(help).toBeVisible();
+  await expect(help).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(help).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole("button", { name: "About create recipe", exact: true })).toBeFocused();
+  await editor.getByRole("button", { name: "About create recipe", exact: true }).click();
+  await help.getByRole("button", { name: "Close Recipe authoring help" }).click();
+  await expect(editor).toBeVisible();
+
+  await editor.getByLabel("Recipe name", { exact: true }).fill("Retained modal draft");
+  await editor.getByLabel("Time (mins.)", { exact: true }).fill("45");
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await expect(create).toBeFocused();
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe("hidden");
+  await create.click();
+  await expect(editor.getByLabel("Recipe name", { exact: true })).toHaveValue("Retained modal draft");
+  await expect(editor.getByLabel("Time (mins.)", { exact: true })).toHaveValue("45");
+  await expect(editor.getByLabel("Recipe name", { exact: true })).toBeFocused();
+  await editor.getByRole("button", { name: "Close create recipe" }).click();
+  await expect(create).toBeFocused();
+  await create.click();
+  if (info.project.name === "desktop") {
+    await page.locator("[data-modal-backdrop]").click({ position: { x: 8, y: 8 } });
+    await expect(editor).toHaveCount(0);
+    await expect(create).toBeFocused();
+    await create.click();
+  }
+
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 640 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect(await editor.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Long instructions. ".repeat(60));
+  expect(await editor.evaluate(node => node.getBoundingClientRect().width <= innerWidth + 1)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await expect(cancel).toBeInViewport();
+  await expect(editor.getByRole("button", { name: "Close create recipe" })).toBeInViewport();
+  if (info.project.name === "mobile") expect(await editor.evaluate(node => node.getBoundingClientRect().width)).toBeLessThanOrEqual(320);
+  expect(await editor.locator("[data-modal-body]").evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await editor.screenshot({ path: `test-results/recipe-modal-large-text-${info.project.name}.png` });
+  await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+  await editor.getByRole("button", { name: "Discard draft", exact: true }).click();
+  await expect(editor.getByLabel("Recipe name", { exact: true })).toHaveValue("");
+  await expect(editor.getByLabel("Time (mins.)", { exact: true })).toHaveValue("");
+  await cancel.click();
+  await create.click();
+  await expect(editor.getByLabel("Recipe name", { exact: true })).toHaveValue("");
+  await cancel.click();
+});
+
+test("recipe time validates, persists and clears through the modal", async ({ page }) => {
+  const editor = await openRecipe(page);
+  const name = `Timed recipe ${Date.now()}`;
+  await editor.getByLabel("Recipe name", { exact: true }).fill(name);
+  await editor.getByLabel("Recipe servings", { exact: true }).fill("2");
+  await editor.getByLabel("Ingredient search").fill("eggs");
+  await editor.getByRole("button", { name: /^Egg.*1 large egg/ }).click();
+  await editor.getByLabel("Egg quantity", { exact: true }).fill("1");
+  await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Prepare and serve.");
+  const time = editor.getByLabel("Time (mins.)", { exact: true });
+  const save = editor.getByRole("button", { name: "Save", exact: true });
+  await expect(save).toBeEnabled();
+  for (const invalid of ["-1", "1.5", "2147483648"]) {
+    await time.fill(invalid);
+    await expect(time).toHaveAttribute("aria-invalid", "true");
+    await expect(editor.getByRole("alert")).toContainText("Enter whole minutes");
+    await expect(save).toBeDisabled();
+  }
+  await time.fill(""); await time.press("e");
+  await expect(save).toBeDisabled();
+  await time.fill("0"); await expect(save).toBeEnabled();
+  let response = nextRpcResponse(page, "save_recipe");
+  await save.click(); expect((await response).ok()).toBe(true);
+  const savedRow = page.getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) });
+  await expect(savedRow.getByText("0 mins total", { exact: true })).toBeVisible();
+  await savedRow.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+  await expect(edit.getByLabel("Recipe name", { exact: true })).toBeFocused();
+  await expect(edit.getByLabel("Time (mins.)", { exact: true })).toHaveValue("0");
+  await edit.getByLabel("Time (mins.)", { exact: true }).fill("45");
+  response = nextRpcResponse(page, "save_recipe");
+  await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+  expect((await response).ok()).toBe(true);
+  await expect(savedRow.getByRole("button", { name: "Duplicate", exact: true })).toHaveCount(0);
+  await savedRow.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await expect(edit.getByLabel("Recipe name", { exact: true })).toBeFocused();
+  await edit.getByLabel("Time (mins.)", { exact: true }).fill("");
+  response = nextRpcResponse(page, "save_recipe");
+  await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+  const cleared = await response;
+  expect(cleared.ok()).toBe(true);
+  expect(cleared.request().postDataJSON().p_payload.meal.totalTimeMinutes).toBeNull();
+  await expect(savedRow.getByText(/mins total/)).toHaveCount(0);
+});
+
+test("recipe modal protects a pending save and shows stale-version recovery in the foreground", async ({ page }) => {
+  const editor = await openRecipe(page);
+  await editor.getByLabel("Recipe name", { exact: true }).fill("Conflict modal recipe");
+  await editor.getByLabel("Time (mins.)", { exact: true }).fill("45");
+  await editor.getByLabel("Recipe servings", { exact: true }).fill("1");
+  await editor.getByLabel("Ingredient search").fill("Greek yogurt");
+  await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
+  await editor.getByLabel("Greek yogurt quantity").fill("1");
+  await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Spoon into a bowl.");
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/rest/v1/rpc/save_recipe", async route => {
+    await gate;
+    await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ message: "stale_version" }) });
+  });
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor.getByText("Saving recipe…", { exact: true })).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+  await expect(editor.getByRole("button", { name: "Close create recipe" })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeVisible();
+  release();
+  await expect(editor.getByRole("alert")).toContainText("Your saved recipe or groceries changed");
+  await expect(editor.getByRole("button", { name: "Use latest version" })).toBeVisible();
+  await editor.getByRole("button", { name: "Use latest version" }).click();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(editor.getByLabel("Instructions (required)")).toHaveValue("Spoon into a bowl.");
+  await expect(editor.getByLabel("Time (mins.)", { exact: true })).toHaveValue("45");
+  await page.unroute("**/rest/v1/rpc/save_recipe");
+  const response = nextRpcResponse(page, "save_recipe");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await response).ok()).toBe(true);
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true })).toBeFocused();
+});
 
 test("loads an existing account immediately after signing in from a fresh browser", async ({ browser }) => {
   const accounts = JSON.parse(fs.readFileSync("playwright/.auth/test-accounts.json", "utf8")) as LocalAccount[];
