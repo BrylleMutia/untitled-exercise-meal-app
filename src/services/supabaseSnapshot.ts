@@ -1,3 +1,4 @@
+import { parseProvidedRecipeNutrition } from "@/utility/providedRecipeNutrition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.generated";
 import type {
@@ -30,6 +31,7 @@ import type {
 import type { HistoryQuery, HistoryReadModel } from "@/types/backend";
 import { addDays, todayKey } from "@/utility/dates";
 import { targetsForNutritionWeek } from "@/utility/targetHistory";
+import { parseRecipeImage } from "@/utility/recipeImage";
 
 type AppSupabaseClient = SupabaseClient<Database>;
 type ProfileRow = Tables<"profiles">;
@@ -357,6 +359,7 @@ function mapNutrition(row: NutritionRow, foodsByRow: Map<number, FoodRow>, logge
     ...(row.assumptions ? { assumptions: row.assumptions } : {}),
     ...(row.estimate_range ? { estimateRange: row.estimate_range as unknown as MacroEstimateRange } : {}),
     ...(row.logged_meal_row_id === null ? {} : { loggedMealId: loggedMealsByRow.get(row.logged_meal_row_id)?.app_id }),
+    ...(row.planned_meal_app_id ? { plannedMealId: row.planned_meal_app_id } : {}),
     ...(row.ingredient_order === null ? {} : { ingredientOrder: row.ingredient_order }),
     revision: row.revision,
     createdAt: row.created_at,
@@ -392,12 +395,21 @@ function mapMeal(
   ingredientsByMeal: Map<number, IngredientRow[]>,
   foodsByRow: Map<number, FoodRow>,
 ): Meal {
+  const reference = row.reference === undefined ? row.source_url : row.reference;
+  const image = parseRecipeImage((row as MealRow & { image?: unknown }).image);
+  const complexity = (row as MealRow & { complexity?: string | null }).complexity;
+  const providedNutrition = parseProvidedRecipeNutrition(row.provided_nutrition);
   return {
     id: row.app_id,
     name: row.name,
     servings: Number(row.servings),
     ...(row.is_system ? { isSystem: true } : {}),
     ...(row.notes ? { notes: row.notes } : {}),
+    ...(reference ? { reference } : {}),
+    ...(row.total_time_minutes != null ? { totalTimeMinutes: row.total_time_minutes } : {}),
+    ...(image ? { image } : {}),
+    ...(providedNutrition ? { providedNutrition } : {}),
+    ...(complexity === "easy" || complexity === "medium" || complexity === "hard" ? { complexity } : {}),
     revision: row.revision,
     ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
     ingredients: (ingredientsByMeal.get(row.row_id) ?? [])
@@ -460,6 +472,14 @@ async function required<T>(
   return data;
 }
 
+async function catalogPreferences(client: AppSupabaseClient, userId: string) {
+  const { data, error } = await client.from("recipe_catalog_preferences").select("*").eq("user_id", userId);
+  // Older servers remain readable while the additive release is being applied.
+  if (error && (error.code === "42P01" || error.code === "PGRST205")) return [];
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 export async function loadAppSnapshot(
   client: AppSupabaseClient,
   userId: string,
@@ -473,7 +493,7 @@ export async function loadAppSnapshot(
   const currentTarget = targetRows[0] ? mapTarget(targetRows[0]) : null;
 
   const historyFrom = addDays(todayKey(), -365);
-  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions, servingOptions, loggedMeals, dailySteps, customVersions, customSessions] =
+  const [exercises, foods, meals, ingredients, workoutPlans, mealPlans, sessions, nutrition, weights, groceryLists, groceryItems, goals, overrides, progressionDecisions, servingOptions, loggedMeals, dailySteps, customVersions, customSessions, preferences] =
     await Promise.all([
       required(client.from("exercises").select("*")),
       required(client.from("foods").select("*")),
@@ -494,6 +514,7 @@ export async function loadAppSnapshot(
       required(client.from("daily_step_entries").select("*").eq("user_id", userId).gte("entry_date", historyFrom).order("entry_date", { ascending: false }).limit(366)),
       required(client.from("current_custom_workouts").select("*").eq("user_id", userId).order("row_id", { ascending: false }).limit(100)),
       required(client.from("custom_workout_sessions").select("*").eq("user_id", userId).gte("session_date", historyFrom).order("row_id", { ascending: false }).limit(100)),
+      catalogPreferences(client, userId),
     ]);
 
   const exerciseRows = exercises as ExerciseRow[];
@@ -632,6 +653,7 @@ export async function loadAppSnapshot(
   }));
   snapshot.loggedMeals = loggedMealRows.map((row): LoggedMeal => ({
     id: row.app_id,
+    ...(row.planned_meal_app_id ? { plannedMealId: row.planned_meal_app_id } : {}),
     date: row.log_date,
     slot: row.meal_slot as LoggedMeal["slot"],
     name: row.name,
@@ -651,8 +673,19 @@ export async function loadAppSnapshot(
     ? mapGrocery(groceryListRows[0], groceryItemRows)
     : null;
   snapshot.savedMeals = mealRows
-    .filter((row) => (row.is_system || row.owner_user_id === userId) && !row.archived_at)
-    .map((row) => mapMeal(row, ingredientsByMeal, foodsByRow));
+    .map(row => {
+      const preference = preferences.find(preference => preference.catalog_meal_row_id === row.row_id);
+      return { row, preference, hiddenAt: row.archived_at ?? preference?.updated_at };
+    })
+    .filter(({ row, hiddenAt, preference }) => (row.is_system || row.owner_user_id === userId) && (!hiddenAt || preference ||
+      snapshot.mealPlan?.meals.some(meal => meal.mealId === row.app_id) ||
+      preferences.some(preference => preference.replacement_meal_row_id === row.row_id)))
+    .map(({ row, preference, hiddenAt }) => ({
+      ...mapMeal(row, ingredientsByMeal, foodsByRow),
+      ...(hiddenAt ? { archivedAt: hiddenAt } : {}),
+      ...(row.is_system ? { catalogPreferenceRevision: preference?.revision ?? 0 } : {}),
+      ...(preference?.replacement_meal_row_id ? { catalogReplacementId: mealsByRow.get(preference.replacement_meal_row_id)?.app_id } : {}),
+    }));
 
   return snapshot;
 }
