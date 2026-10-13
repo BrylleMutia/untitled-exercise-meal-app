@@ -19,6 +19,7 @@ The original nutrition and recipe delivery is complete and merged; the later Oct
 | Shared database | Authorized October 13 rollout verified: 70 matching local/linked versions through `20261013020142_prefer_provided_recipe_plan_nutrition.sql`, no pending dry run and all 12 schema groups equal; existing data digests unchanged |
 | Hosted app / current-main CI | Not inspected after the latest merge. Earlier MVP-3 CI success does not establish success for this baseline |
 | Current local delivery | Saved-recipe search/direct logging, compact rows, per-slot Add meal and focused review are implemented locally and uncommitted. Docker/local Supabase are running. The final affected browser gate passes 50/50 on desktop/mobile, including 320px/200% text. The supplied-macro planning correction is deployed and verified on the linked database. No hosted client deployment is part of this task |
+| Latest requested backlog | October 13: daily planned-only macro tracking, Saved meals primary action changed to Add to plan, and a separate custom workout library. These requests are documented in section 4; none is implemented by this handover update |
 
 The baseline SHA identifies application source before this handover file. A later documentation commit may move `main`; compare the actual checkout before proceeding. Local tracking references do not prove the remote has remained unchanged since the last network verification.
 
@@ -162,7 +163,7 @@ the historical shared Saved/Planned card descriptions below:
 - Keep recipes' calories **per serving**, even though the visible `/ serving` suffix is removed. Whole-recipe yield is a separate pill. Changing a planned portion must not change either metadata value.
 - Metadata order is **calories → yield → time → complexity**: coral, pale mint, lavender, peach. Yield uses `ChartPie` and preserves fractions. Configured card time reads **X mins**, without “total”; its accessible label retains the whole-recipe basis. Missing time reads **Not set**; explicit zero minutes is valid.
 - Missing recipe complexity is **Medium**, including new/legacy drafts, legacy displays, and stored null backfill. Easy/Medium/Hard remain editable. Unsupported values remain invalid.
-- Saved actions are **Log +**, then **Pencil** and **Archive** icon controls, with 48px secondary controls, descriptive accessible names, and hover/focus tooltips. This supersedes the earlier request to label the primary action “Add.”
+- Current Saved actions are **Log +**, then **Pencil** and **Archive** icon controls, with 48px secondary controls, descriptive accessible names, and hover/focus tooltips. The latest pending request in section 4 replaces this primary action with **Add to plan**; the source still uses Log until that work is implemented. Retain this distinction when updating tests and owning documentation.
 - Planned actions remain **Edit, Skip/Plan again, Log**. Expanded editors and confirmations remain above the footer.
 - **Recipe duplication is removed.** Do not add Duplicate buttons, handlers, editor props, or draft-opening paths. Previously saved copies remain normal recipes. Old duplicate drafts expire; they must not overwrite Create/Edit drafts.
 - Predefined recipes support per-account **Edit and Archive**. Editing creates a personal replacement; it must not mutate the shared original or another account's catalog.
@@ -182,7 +183,7 @@ the historical shared Saved/Planned card descriptions below:
 | Recipe creation/editing | Separate recoverable Create/Edit drafts; trusted search, reviewed description, custom ingredients, fractional yield, live nutrition, required instructions, references, optional total time, complexity, and covers | `src/components/nutrition/RecipeEditor.tsx`; `src/utility/recipeEditor.ts`, `recipeTime.ts`; focused utility/repository tests |
 | Recipe overview | Cover and shared tabs for recipe details; ingredients, nutrition, instructions, reference, time, complexity, and Edit behavior | `RecipeOverview.tsx`, `RecipeTabs.tsx`; `e2e/mvp1-release.spec.ts` |
 | Shared pastel card | Lavender Saved / blush Planned banner; image/title overview triggers; separate heart; badge; four wrapping metadata pills; contextual planned quantity/status; bottom action area | `RecipeCard.tsx`, `RecipeCard.test.tsx`; Nutrition page |
-| Refined Saved actions | Log + confirmation flow; Edit/Archive icon buttons; keyboard order and focus return; no Duplicate workflow | `src/app/nutrition/page.tsx`, `src/contexts/AppContext.tsx`, `src/services/repository.ts` |
+| Refined Saved actions | Current Log + confirmation flow; Edit/Archive icon buttons; keyboard order and focus return; no Duplicate workflow. Replacement with Add to plan is pending in section 4 | `src/app/nutrition/page.tsx`, `src/contexts/AppContext.tsx`, `src/services/repository.ts` |
 | Favorite persistence | Per-user stable recipe identity; desired state, revision, idempotency key; authoritative confirmation; same state in Saved/Planned; retryable error feedback | `useRecipeCardMetadata.ts`; `src/services/recipeCardMetadata.ts`; `set_recipe_favorite`; SQL/repository/browser tests |
 | Popular read model | Up to five eligible recipes eaten during the last 30 inclusive local calendar days; grouped eaten record counted once; tie-break by latest date then stable ID | `get_recipe_card_metadata`; `RecipeCardReadModel`; SQL ranking tests |
 | Medium complexity | Null-only stored backfill, insert default, non-null supported values, private legacy-write normalization; optional domain field retained for old caches | `src/utility/recipeCard.ts`; complexity migration and `recipe_complexity_default_test.sql` |
@@ -226,6 +227,9 @@ These are suggested task boundaries, not assignments to another agent. No messag
 
 | Priority | Next task | Status and acceptance evidence |
 |---|---|---|
+| User-requested, pending | Daily planned-only macro tracking | Add a way to view calories/protein/carbs/fat for each selected local day from planned meals, separately from Eaten totals. Preserve stored planned portions, supplied macros, unknown values and historical snapshots. Scope and checks are detailed below; no implementation or new verification is claimed |
+| User-requested, pending | Saved meals: Add to plan primary action | Replace the Saved card's Log action with Add to plan and connect it to the existing confirmed planning flow, rather than changing only the label. Preserve Edit/Archive and direct logging from meal-entry reviews. Detailed acceptance below; current Saved card source still logs |
+| User-requested, pending | Separate custom workout library | Provide a distinct library for user-customized workouts, separate from existing available workout options. Reuse the existing custom routine/version/session infrastructure and preserve built-in options. Detailed scope and decisions below; library implementation is pending |
 | P0 | Inspect latest `main` CI | Unverified after this merge. Check both `web` and `integration` for the exact current source SHA. Link run IDs/results. If failing, diagnose the first real failure and reproduce locally; do not substitute older MVP-3 runs |
 | P0 | Establish hosted application state | Latest hosting state is unknown. Inspect existing deployment/project association before creating anything. Record URL, source SHA, environment/backend identity, build status and authenticated load. Git pushes may trigger hosting automation; neither success nor absence was checked here |
 | P0 | Deploy/verify recipe image cleanup worker | Source and local handler/SQL tests exist; production deployment and recurring invocation remain open. Verify server-only authorization, actual removal through Storage API, lease/retry behavior, acknowledgement, and no exposure of keys/object paths. Record schedule, monitoring and sanitized failure evidence before enabling uploaded covers in production |
@@ -241,6 +245,109 @@ These are suggested task boundaries, not assignments to another agent. No messag
 | Operational | Auth/security advisor decisions | Earlier documentation records disabled leaked-password protection/platform limitations and advisor follow-ups. Reinspect current settings/advisors before stating their current condition; retain the owner's decision and platform constraints |
 
 The provided-macro planning mismatch is corrected on the linked backend for new and explicitly edited plans by the verified authorized migration. Previously saved prescriptions and eaten history were not recalculated. The initial combined browser run also exposed name-based selectors choosing an independent log from another scenario; tests now target the stable planned-meal link. Hosted acceptance remains unverified.
+
+### Latest user-requested features — 2026-10-13
+
+These three items were explicitly requested as additions to this handover, not as
+an instruction to implement them in this task. They are pending product work.
+The implementation notes and acceptance checks below guide the next agent;
+unsettled presentation and workflow choices are identified rather than recorded
+as already-approved behavior. Read the relevant owning feature/design/architecture
+sections and inspect current source before implementation. Update those documents
+when the final behavior is implemented.
+
+**Daily macros from planned meals, separate from Eaten**
+
+- User request: provide a way to track or see macros for each day from planned
+  meals only, separately from actual Eaten nutrition. Show a clearly labeled daily
+  planned summary for the selected local date, using the existing date navigation
+  and shared calorie/protein/carbohydrate/fat styling where suitable.
+- Use authoritative stored plan nutrition and each planned portion. Reuse
+  `src/utility/plannedMealNutrition.ts` and the current plan/version contracts;
+  recipe-level supplied macros must remain source-provided. Do not derive a past
+  plan from today's recipe contents or ingredient estimates when its snapshot
+  already contains the prescribed values.
+- Keep this summary independent of Eaten totals, calorie-remaining calculations
+  and actual progress. Rendering a summary must not log intake, mutate groceries,
+  regenerate plans or rewrite historical prescriptions. Planned entries hidden
+  from the compact list after linked logging must not silently disappear from a
+  prescription-based daily summary simply because their display row is hidden.
+- Define and document whether the summary represents the complete daily
+  prescription or remaining active meals before finalizing it. Specify skipped,
+  logged, unresolved and missing-nutrition treatment explicitly. Missing values
+  must remain visibly unknown/partial; never present an incomplete sum as a
+  complete total or treat an absent plan as zero intake.
+- Acceptance: navigate between days and accounts; verify fractional portions,
+  skipped/unresolved/missing entries, linked versus independent Eaten records,
+  and edited plan versions. Half a Korean Beef Bowl contributes 280 kcal,
+  22.5 g protein, 29 g carbs and 8 g fat when those values are stored in the plan.
+  Old prescriptions retain their historical values until explicitly edited.
+  Confirm planned and Eaten summaries cannot double-count one another and that
+  changes to a plan do not alter saved Eaten history. Cover calculations with
+  focused utility tests and the date/status behavior with page/browser tests.
+- Starting points: `src/app/nutrition/page.tsx`,
+  `src/components/nutrition/MealRow.tsx`, shared `NutritionPills`,
+  `src/utility/plannedMealNutrition.ts` and existing plan snapshot mapping/tests.
+
+**Saved meals primary action: Add to plan**
+
+- User request: change the Saved meals card's primary **Log** action to
+  **Add to plan**. This supersedes the previously selected Log + card footer for
+  this location. Keep the Pencil/Archive controls and their permissions, focus
+  behavior and touch targets; duplication remains removed.
+- Wire the new action through the existing atomic planning intent and
+  authenticated repository path. Review the chosen recipe, positive serving
+  quantity, selected local date and intended meal slot before confirmation.
+  Saved cards are outside a fixed-slot group, so reuse an appropriate slot
+  selection/review rather than guessing the destination. The exact confirmation
+  presentation remains to be designed consistently with existing reviews.
+- Retain goal/diet/trusted-nutrition restrictions, supplied macro scaling,
+  plan-version checks, stable retries and grocery reconciliation owned by the
+  current planning transaction. Disable pending controls, preserve failed input,
+  and report success only after the authoritative response.
+- Acceptance: the Saved primary action creates a planned recipe/portion on the
+  chosen day/slot and creates no Eaten intake. Test cancel, invalid/fractional
+  quantities, planning ineligibility, stale recipes/plans, failed or lost-response
+  retries, focus return and narrow layouts. Verify Korean Beef Bowl's supplied
+  macros, and preserve direct **Log meal** in meal-entry reviews plus **Log** on
+  planned rows. Update tests that currently expect Saved-card Log confirmation;
+  do not remove independent logging actions globally.
+- Starting points: Saved footer and confirmation state in
+  `src/app/nutrition/page.tsx`, `RecipeCard.tsx`, `RecipePortionReview.tsx`,
+  `src/contexts/AppContext.tsx`, existing `add_planned_meal` bindings and the
+  authenticated browser scenarios in `e2e/mvp1-release.spec.ts`.
+
+**Custom workout libraries separate from existing options**
+
+- User request: add customized workout libraries separate from the currently
+  available workout options. Existing custom routine authoring, immutable
+  versions and completed sessions are already implemented; inspect and reuse
+  those capabilities instead of treating all custom workout support as missing.
+- Provide a distinct area/group for the signed-in user's custom workouts while
+  preserving access to the existing built-in options. Reuse the current design,
+  navigation, routine editor, exercise catalog and workout assets. No social,
+  public sharing or third-party library functionality was requested.
+- Resolve the library organization before adding storage: one custom library
+  versus multiple named collections, how existing custom routines appear, and
+  whether creation, editing, removal or selection/scheduling need new entry
+  points. These choices are not yet specified by the user. Prefer reuse of
+  existing records and authorized actions; add schema/RPC work only if the
+  chosen behavior requires it and follow the migration authorization gate.
+- Preserve owner-only persistence, authoritative confirmation, failed-save draft
+  recovery and immutable routine/session versions. Editing a library routine
+  must not rewrite completed workout history or silently change existing plan
+  prescriptions. Retain equipment, duration and experience safeguards wherever
+  the custom routine participates in planning.
+- Acceptance: built-in and custom options are clearly separated; existing custom
+  routines remain available after reload; accounts cannot read or edit one
+  another's library. Exercise the supported create/edit/select/start and any
+  approved archive/remove flows, pending/failure recovery, keyboard/focus,
+  320px/large text and reduced motion. Verify an edited routine starts with the
+  intended version while past sessions retain their original contents.
+- Starting points: `src/app/workouts/page.tsx`,
+  `src/app/workouts/custom/page.tsx`,
+  `src/app/workouts/session/[id]/page.tsx`, workout domain/repository contracts,
+  and the existing custom routine/session coverage described in `MVP3_HANDOVER.md`.
 
 ### Deferred scope, not active defects
 
