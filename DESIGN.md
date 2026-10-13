@@ -407,6 +407,26 @@ Use one brief `animate-pop` entrance and honor reduced motion. Required fields,
 operational errors, provider disclosure, draft recovery, and retry controls stay
 visible within the modal rather than relying on background toasts.
 
+### Saved-recipe search and portion review
+
+The Nutrition meal-entry field reads “Search foods or saved recipes, or describe
+a meal.” Results use compact white rows with Saved recipes above Foods. Recipe
+names wrap, per-serving calories use the shared coral pill, and spelling
+suggestions retain the Close match label. A saved match suppresses the analysis
+suggestion; explicit provider actions remain available.
+
+Selecting a saved recipe, local food, or explicit USDA result replaces search
+controls and all matches with its inline white portion review. Entry tabs and
+unrelated description review are hidden while preserving their input. The review
+retains date/slot context and the search query. Focus
+moves to the visible Recipe servings field, initialized to 1. Shared macro pills
+show the selected portion, followed by a concise estimate/source statement and
+contextual source help. Log meal is primary, Add to plan secondary, then Cancel.
+Controls and pills wrap on narrow screens and enlarged text. Cancel returns
+focus to search. Pending saves disable selection and portion changes; errors
+and stale/unavailable-recipe recovery stay visible in the review. This flow adds
+no motion beyond the existing reduced-motion-aware shared controls.
+
 ## Layout and Navigation
 
 ### App shell (`AppShell.tsx`)
@@ -506,52 +526,68 @@ header and the avatar, not from the bottom nav.
 
 ### Nutrition day card
 
-A single Planned card follows the daily summary for every selected day. Its
-Add to plan control opens the existing inline search, description, AI review,
-and manual card after a required meal-slot selection. Each completed entry
-offers separate Add to plan and Log meal actions. Cancel returns focus to Add
-to plan; per-date, per-slot drafts remain recoverable. If no eligible goal is
-available, the card explains the prerequisite while logging stays available.
+A single Planned card follows the daily summary for every selected day. Each
+Breakfast, Lunch, Dinner and Snack heading has a right-aligned Plus + Add meal
+control. It opens one inline editor beneath that heading with the slot fixed;
+there is no header Add to plan button or entry slot selector. Switching groups
+preserves account/date/slot drafts. Search/manual mode has a Close control;
+closing or successful saving returns focus to the originating Add meal button.
+Selection shows only the food/recipe review, focusing quantity/servings. Review
+Cancel restores search/results and focus without discarding description input.
+Log meal and Add to plan remain separate review actions. Pending food and recipe
+saves disable portion changes, dismissal and all group entry controls. If no
+eligible goal is available, the prerequisite is explained while logging remains
+available.
 
 Four Breakfast, Lunch, Dinner, and Snack groups contain multiple planned and
 Eaten rows. These labels distinguish prescription from intake without a
-separate Logged section. An empty group states that intake is unknown. Planned
-rows retain Edit and Skip/Plan again and add Log, which opens an in-place
+separate Logged section. An empty group states “Nothing planned or logged.” Daily summary and help retain
+the distinction between unknown intake and zero. Planned
+and Eaten entries share compact lavender rows with a status, name, wrapping
+calorie/protein/carbohydrate/fat pills, source context and right-aligned actions.
+They have no image banners, recipe yield/time/complexity pills or favorite controls.
+Planned values describe the displayed planned portion; Eaten values come from
+saved history. Planned recipe summaries open the overview. Actions wrap below
+the summary when space is limited; expanded details/editors remain inside the row.
+Planned rows retain Edit and Skip/Plan again and add Log, which opens an in-place
 actual-serving confirmation. A successful linked log hides its Planned row to
 avoid repetition while keeping the plan snapshot intact. Linked Eaten rows
 offer Log again with the same confirmation; deleting the last linked Eaten row
 reveals Planned again. Eaten rows retain expand, edit, and delete.
 Saved meals use Log with a required slot and confirmation. Actions have
-44px or larger touch targets and wrap on narrow screens; keyboard focus moves
-to the slot selector when the card opens and back to Add to plan when it closes.
+44px or larger touch targets and wrap on narrow screens. Meal entry focuses its
+search field after draft recovery, or the portion field for a restored selection.
+Saved-card logging retains its separate required slot selector.
 
 ### Saved-recipe authoring
 
-Saved and Planned meals use the approved Option 1 pastel-banner `RecipeCard`.
-Saved banners are lavender; Planned banners are blush. The shared cover places
-a rounded image toward the left and falls back to the existing default bowl.
+Saved meals use the approved Option 1 pastel-banner `RecipeCard`.
+Saved banners are lavender. The shared cover places a rounded image toward the
+left and falls back to the existing default bowl.
 The upper-right badge is Popular for the five most eaten recipes in the last
 30 local days, or Favorite when favorited outside that group. The wrapping name
 and separate 44px heart occupy the next row. Image and name open the overview;
 the heart only changes the personal favorite and reflects server confirmation.
 Coral calories remain per serving, with an accessible basis label and contextual
 help rather than a visible suffix. A mint pie-icon pill shows the whole recipe
-yield, separately from Planned quantities. Lavender time means whole-recipe
-minutes; missing time reads “Not set” and explicit zero remains valid. Peach
+yield. Lavender time means whole-recipe minutes displayed as “X mins”;
+its accessible label retains the whole-recipe
+basis. Missing time reads “Not set” and explicit zero remains valid. Peach
 complexity shows Easy, Medium, or Hard, defaulting missing recipe values to Medium.
-Food-only and unresolved entries omit recipe-yield and complexity pills.
-Descriptions are omitted. Slot, planned quantity, skipped and unresolved context
-remain visible. Food-only entries use the shell without a favorite control.
+Descriptions are omitted. The Planned section uses compact meal rows instead
+of recipe cards, including food-only, skipped and unresolved entries.
 
 Saved footers place flexible Log with a trailing plus beside 48px Pencil/Edit
 and Archive icon buttons with contextual accessible labels and dismissible
 hover/focus tooltips. They wrap with Log first and secondary controls together.
 Meal duplication is removed; ordinary Create and Edit draft recovery remains.
-Planned footers retain Edit, Skip/Plan again, and Log. Expanded editors and
-confirmations precede the footer. Opening Planned Edit focuses its choice field
+Planned rows retain Edit, Skip/Plan again, and Log beside the summary. Expanded
+editors and confirmations follow the summary. Opening Planned Edit focuses its
+choice field
 after draft recovery; cancellation or successful saving returns to Edit.
-Lists preserve slot grouping and ordering, using one column on phones and up to
-two where space permits. Pills/actions wrap at enlarged text sizes. Fine-pointer
+Lists preserve slot grouping and ordering. Planned/Eaten rows remain a single
+column; Saved cards use one column on phones and up to two where space permits.
+Pills/actions wrap at enlarged text sizes. Fine-pointer
 hover lifts the card slightly, entry fades briefly, and confirmed hearts pulse;
 reduced motion disables these effects.
 

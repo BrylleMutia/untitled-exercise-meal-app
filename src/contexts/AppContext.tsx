@@ -89,6 +89,7 @@ export interface AppActions {
     slot: NutritionLog["slot"],
     entries: Array<Omit<NutritionLog, "id" | "createdAt">>,
     meal?: Meal,
+    fixedKey?: string,
   ): Promise<boolean>;
   saveReviewedMeal(input: Omit<SaveReviewedMealInput, "idempotencyKey">, fixedKey?: string): Promise<boolean>;
   updateLoggedMeal(loggedMeal: LoggedMeal, ingredients: Array<Omit<NutritionLog, "id" | "createdAt">>): Promise<boolean>;
@@ -102,7 +103,7 @@ export interface AppActions {
   regenerateGrocery(): Promise<void>;
   skipPlannedMeal(id: string): Promise<void>;
   editMealPlan(mealPlan: MealPlan): Promise<boolean>;
-  addPlannedMeal(plannedMeal: PlannedMeal, newFoods?: Food[], newMeal?: Meal): Promise<boolean>;
+  addPlannedMeal(plannedMeal: PlannedMeal, newFoods?: Food[], newMeal?: Meal, fixedKey?: string): Promise<boolean>;
   resetPlan(): Promise<void>;
   applyWorkoutOverride(input: Omit<WorkoutPlanOverrideInput, "currentSnapshot">): Promise<void>;
   removeWorkoutOverride(input: Omit<RemoveWorkoutOverrideInput, "currentSnapshot">): Promise<void>;
@@ -650,7 +651,7 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async logSavedMeal(date, slot, entries, meal) {
+      async logSavedMeal(date, slot, entries, meal, fixedKey) {
         if (entries.length === 0) {
           notify("This meal has no ingredients to log.", "info");
           return false;
@@ -659,7 +660,7 @@ export function AppProvider({
           notify("This saved meal has invalid nutrition values.", "warn");
           return false;
         }
-        const outcome = await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, meal, idempotencyKey }));
+        const outcome = await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, meal, idempotencyKey }), fixedKey);
         return Boolean(outcome);
       },
 
@@ -764,9 +765,10 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async addPlannedMeal(plannedMeal, newFoods, newMeal) {
+      async addPlannedMeal(plannedMeal, newFoods, newMeal, fixedKey) {
         const outcome = await execute("add_planned_meal", (current, idempotencyKey) =>
           repository!.addPlannedMeal({ plannedMeal, newFoods, newMeal, currentSnapshot: current, idempotencyKey }),
+          fixedKey,
         );
         return Boolean(outcome);
       },

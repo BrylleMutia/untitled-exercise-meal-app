@@ -15,7 +15,8 @@ describe("recipe card", () => {
     expect(html).not.toContain("kcal / serving");
     expect(html).toContain("Approximately 124 calories per serving");
     expect(html).toContain("Recipe yields 4 servings");
-    expect(html).toContain("0 mins total");
+    expect(html).toContain(">0 mins<");
+    expect(html).toContain("Total recipe time: 0 minutes");
     expect(html).toContain("Medium");
     expect(html.indexOf("Recipe details")).toBeLessThan(html.indexOf(">Log<"));
   });

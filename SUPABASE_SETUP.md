@@ -1116,3 +1116,73 @@ Database lint has no errors; the existing image-cleanup unused-payload warning
 remains. The running port-3000 client was refreshed against the shared backend.
 Local release records are in `output/recipe-card-refinements/verification.md`
 under the Git-ignored `output/` directory.
+
+
+## 13. Supplied recipe macros in planned prescriptions — 2026-10-13
+
+The regression showed half a Korean Beef Bowl planned as about 242 kcal because
+`private.normalize_planned_meal_record` summed ingredients despite stored supplied
+macros. The forward migration
+`20261013020142_prefer_provided_recipe_plan_nutrition.sql` now uses supplied
+per-serving calories/protein/carbs/fat, scaling them by the planned quantity and
+recording source-provided provenance plus the recipe revision. Unsupplied fiber
+remains unknown. Ingredient-based/food-only paths retain their existing behavior,
+and the private constraint trigger rejects unverified supplied macros in active
+carb-limited plans. Ownership, private privileges, plan concurrency and retries
+remain intact. No tables/public RPCs change, and no existing prescriptions or
+nutrition history are rewritten.
+
+Preflight was read-only: all 69 local/linked migration versions and all 12 baseline
+schema fingerprint groups matched, and the initial linked dry run was up to date.
+After explicit authorization, a fresh preflight confirmed exactly this migration
+pending, all 12 baseline fingerprint groups equal and all 69 original migration
+hashes unchanged. It was deployed with vault updates excluded. Linked/local
+history now agrees at **70** versions, the final dry run is up to date and all
+12 deployed schema groups match the verified local replay. Before/after digests
+are identical for all recipes (including provided nutrition), ingredients, meal
+plan snapshots, planned rows, grouped eaten meals and nutrition logs. No data
+backfill or permanent shared test fixture was created. Existing incorrect
+prescriptions are corrected only through explicit plan editing/saving into a
+new version.
+
+Read-only deployed normalization returns exact supplied macros for 0.5, 1 and
+1.5 Korean Beef Bowl servings: 280/560/840 kcal, 22.5/45/67.5 g protein,
+29/58/87 g carbs and 8/16/24 g fat, labeled source-provided with fiber unknown.
+Private client-execute denial and controlled search path were checked. Linked
+types were regenerated: public shapes are unchanged; only the current server
+PostgREST metadata changed from 14.5 to 14.17. Deployment evidence is retained
+under ignored `output/recipe-card-refinements/slot-entry-deploy-*`.
+
+Local validation: 70 migrations, 24 SQL suites / 854 assertions, no DB lint errors
+(the existing unused image-cleanup parameter warning remains), 323 application
+tests, 14 repository integration tests, TypeScript, lint and production build.
+Local public type regeneration confirms unchanged schema/RPC shapes. The local
+and linked generators differ for 18 existing non-null JSON columns and formatting;
+retain the canonical public contracts; the subsequent linked generation updates only current PostgREST metadata. Raw evidence is
+under ignored `output/recipe-card-refinements/planned-macros-*`. The earlier local-only checkpoint is superseded by the authorized rollout above. No Git commit or Git push was performed.
+
+The preceding planning-correction authenticated browser gate passed **30/30** across
+desktop/mobile, including the originally failing planned macro assertion,
+search-to-plan supplied macros, linked logging/retries, 320px/200% text, reduced
+motion and draft recovery. Stable planned-meal selectors avoid ambiguity with
+independent same-name logs left by another scenario. Only the routine fingerprint
+group differs after the local correction; the other 11 schema groups are unchanged.
+
+The subsequent per-slot meal-entry task reran the application/backend checks and
+the affected authenticated browser gate: **323 application tests / 46 files**,
+**14 repository integration tests**, **24 SQL suites / 854 assertions**, strict
+TypeScript, lint and a production build all pass. Database lint has no errors;
+the existing unused image-cleanup parameter warning remains. The final browser
+gate passes **50/50** on desktop/mobile, including slot-fixed food/recipe review,
+focus and cancellation, provider failures, failed/lost-response retries, original
+supplied macros, 320px/200% text and reduced motion. A separate focused rerun
+passes 6/6. Narrow review overflow found during testing was corrected before the
+final run. This does not replace the earlier clean 70-migration local replay;
+the unchanged migration's SQL/security checks were freshly rerun here.
+
+Fresh UI/backend logs and sanitized verification summary are under ignored
+`output/recipe-card-refinements/slot-entry-*`. The user's existing dev server was
+preserved; browser automation used its disposable local server on port 3030.
+Direct inspection of the user's in-app tab was blocked by its URL security policy,
+so no live-tab or hosted-client acceptance is claimed. Source changes remain
+uncommitted, with no Git repository push or hosted client deployment.

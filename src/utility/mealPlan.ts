@@ -18,9 +18,9 @@ function plannedMealMetadata(mealId: string | undefined, foodId: string | undefi
         expectedProteinG: Math.round(nutrition.perServing.proteinG * servings * 10) / 10,
         expectedCarbsG: Math.ceil(nutrition.perServing.carbsG * servings * 100) / 100,
         expectedFatG: Math.round(nutrition.perServing.fatG * servings * 10) / 10,
-        source: meal.ingredients.every((ingredient) => foods.find((food) => food.id === ingredient.foodId)?.valueSource === "trusted_catalog") ? "trusted-catalog" : "starter-catalog",
-        sourceVersion: meal.id.startsWith("meal-mvp3-") ? "USDA-SR-Legacy:2019-04-01" : "starter-v1",
-        assumptions: "Calculated from listed ingredients and labeled serving sizes. Portions and cooking can vary; all listed oil is included.",
+        source: meal.providedNutrition ? "source-provided" : meal.ingredients.every((ingredient) => foods.find((food) => food.id === ingredient.foodId)?.valueSource === "trusted_catalog") ? "trusted-catalog" : "starter-catalog",
+        sourceVersion: meal.providedNutrition ? `recipe:${meal.id}:revision:${meal.revision ?? 1}` : meal.id.startsWith("meal-mvp3-") ? "USDA-SR-Legacy:2019-04-01" : "starter-v1",
+        assumptions: meal.providedNutrition ? "Source-provided nutrition per serving; not independently verified or recalculated from ingredients." : "Calculated from listed ingredients and labeled serving sizes. Portions and cooking can vary; all listed oil is included.",
         confidence: "medium" as const,
         preparationBasis: "as_labeled" as const,
       };

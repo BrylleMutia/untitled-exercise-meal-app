@@ -66,23 +66,28 @@ function allTokensMatch(ranks: number[][], maximum: number): boolean {
 }
 
 /** Suggestions only: callers retain eligibility checks and explicit selection. */
-export function searchFoods(foods: readonly Food[], query: string, limit = 6): FoodSearchMatch[] {
+export function searchNamedItems<T extends { id: string; name: string }>(items: readonly T[], query: string, limit = 6, extraTokens: (item: T) => string = () => ""): Array<{ item: T; kind: FoodSearchMatchKind }> {
   const normalizedQuery = normalizeFoodSearch(query);
   if (!normalizedQuery || limit <= 0) return [];
   const queryTokens = normalizedQuery.split(" ");
-  const matches: Array<FoodSearchMatch & { rank: number; name: string }> = [];
-  for (const food of new Map(foods.map(food => [food.id, food])).values()) {
-    const name = normalizeFoodSearch(food.name);
-    const tokens = [...new Set(`${name} ${normalizeFoodSearch(food.preparationBasis ?? "")}`.trim().split(" "))];
+  const matches: Array<{ item: T; kind: FoodSearchMatchKind; rank: number; name: string }> = [];
+  for (const item of new Map(items.map(item => [item.id, item])).values()) {
+    const name = normalizeFoodSearch(item.name);
+    const tokens = [...new Set(`${name} ${normalizeFoodSearch(extraTokens(item))}`.trim().split(" "))];
     if (queryTokens.length > tokens.length) continue;
     const ranks = queryTokens.map(token => tokens.map(candidate => tokenRank(token, candidate)));
     let rank = [1, 2, 3].find(maximum => allTokensMatch(ranks, maximum));
     if (rank === undefined) continue;
     if (` ${name} `.includes(` ${normalizedQuery} `)) rank = name === normalizedQuery ? -1 : 0;
     const kind: FoodSearchMatchKind = rank <= 0 ? "exact" : rank === 1 ? "tokens" : rank === 2 ? "prefix" : "close";
-    matches.push({ food, kind, rank, name });
+    matches.push({ item, kind, rank, name });
   }
   const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
-  return matches.sort((a, b) => a.rank - b.rank || compare(a.name, b.name) || compare(a.food.id, b.food.id))
-    .slice(0, limit).map(({ food, kind }) => ({ food, kind }));
+  return matches.sort((a, b) => a.rank - b.rank || compare(a.name, b.name) || compare(a.item.id, b.item.id))
+    .slice(0, limit).map(({ item, kind }) => ({ item, kind }));
+}
+
+export function searchFoods(foods: readonly Food[], query: string, limit = 6): FoodSearchMatch[] {
+  return searchNamedItems(foods, query, limit, food => food.preparationBasis ?? "")
+    .map(({ item: food, kind }) => ({ food, kind }));
 }

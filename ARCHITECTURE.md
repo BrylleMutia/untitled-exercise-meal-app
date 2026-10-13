@@ -267,6 +267,34 @@ Rules:
   or copy a plan into a new version. Any newly reviewed reusable food or recipe,
   the planned row, and grocery reconciliation commit together. Eaten entries
   continue through the nutrition-save RPC and never mutate that plan version.
+- Guided meal entry searches recipes through typed `searchRecipes` suggestions
+  using the shared named-item ranker; recipes remain Meal records. A pure
+  `recipePortion` guard resolves every ingredient and scales amounts before
+  preview and grouped logging. Supplied macros bypass ingredient estimates.
+  The guided editor has a stable top-level component identity so Context save
+  feedback does not remount recoverable input. Its account/date/slot draft stores
+  a stable recipe ID, reviewed revision/content token, servings text, fixed log
+  key and planning key/reference. Resolve current snapshot contents at display
+  and confirmation; stale contents require explicit renewed review. Serialize
+  draft writes and retain the submitted identity before sending. Both
+  `logSavedMeal` and `addPlannedMeal` accept optional fixed keys through the
+  existing authorized actions. No RPC/schema/type change was made for search.
+  The forward migration `20261013020142_prefer_provided_recipe_plan_nutrition.sql`
+  corrects authoritative planning normalization: stored supplied macros override
+  ingredient sums for new/edited prescriptions, with recipe-revision provenance
+  and unknown fiber omitted. The private constraint trigger rejects unverified
+  supplied macros in active carb-limited plans. Existing ownership, grants,
+  plan-version checks and retries remain in force; no tables/public RPCs change.
+  It does not rewrite prior prescriptions or eaten history. The authorized linked
+  rollout has 70 matching migrations and 12 matching schema groups; evidence is
+  recorded in HANDOVER.md and SUPABASE_SETUP.md. Presentation-only selection
+  derives from the selected food/recipe and reports review visibility to the
+  parent; it is not another durable draft field. One slot-local editor is mounted
+  at a time with the existing account/date/slot draft identity. Selection hides
+  search/results without discarding their state, and focus waits for the review
+  or search field to mount. Close/success focus return waits for pending controls
+  to re-enable. Food-review saving also disables parent entry controls, and queued
+  draft writes finish before authoritative-success cleanup.
 - Direct logging from a planned row uses the authenticated `log_planned_meal`
   wrapper around the existing food or grouped-meal save path. The wrapper
   checks the current owned plan version, date, slot, and reference, then stores
@@ -274,6 +302,12 @@ Rules:
   transaction. The day view hides a planned item while any linked history
   exists; deleting the last linked log reveals it without editing the plan or
   groceries. Independent logs have no planned-meal link.
+  Planned, grouped Eaten and standalone Eaten entries share a presentation-only
+  `MealRow`. Planned macro pills prefer stored prescription fields and use a
+  fully resolved reference only for legacy missing fields. Unresolved placeholder
+  zeros are unavailable, not nutrition. Eaten pills continue reading saved logs.
+  Saved meals retain recipe cards and favorite metadata; changing row layout does
+  not persist or recalculate plans, recipes, groceries or eaten history.
 - Saved-meal edits use `saveMeal`; when the active grocery read model is
   supplied, recipe persistence and grocery reconciliation commit in the same
   authorized transaction. `archiveMeal` soft-deletes owned recipes so

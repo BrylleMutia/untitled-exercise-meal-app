@@ -302,9 +302,19 @@ Support these input methods in the MVP:
 
 The Nutrition day view has a Planned card with Breakfast, Lunch, Dinner, and
 Snack groups. Each group may contain multiple planned rows and independently
-marked Eaten rows. Empty slots say intake is unknown. Add to plan is visible
-even before a weekly plan exists. It asks for a slot and opens the shared
-search, description, AI review, or manual-entry card. A confirmed candidate
+marked Eaten rows. Empty slots say “Nothing planned or logged.” The summary and
+contextual help retain the distinction between unknown and zero intake. Planned and Eaten entries
+share compact status/name, nutrition and action rows without recipe banners
+or favorite controls. Planned
+nutrition describes its shown portion and preserves stored prescription values;
+Eaten nutrition retains saved historical values. Recipe yield/time/complexity
+pills remain on Saved recipe cards. Each meal-group heading has a Plus + Add meal
+button, even before a weekly plan exists. It opens the shared search, description,
+AI review, or manual editor beneath that heading with the slot already fixed;
+there is no Planned-header entry button or meal-slot selector in this editor.
+Only one editor is open at a time. Switching groups preserves their separate
+account/date/slot drafts. Closing or successful saving returns focus to the
+originating Add meal control. A confirmed candidate
 offers Add to plan and Log meal: the first versions the plan and reconciles
 groceries, while the second records actual intake without changing the plan.
 New plans use the active eligible target; without one, logging remains available
@@ -387,6 +397,49 @@ unaffected. New plans can select the replacement for lunch/dinner when compatibl
 with restrictions and cooking time; breakfast remains unresolved unless an
 eligible personal recipe is available. The app must not substitute chicken into
 vegetarian/vegan plans or bypass milk/wheat restrictions.
+
+### Saved recipes in daily meal entry
+
+The existing Search or describe editor searches active Saved meals locally as
+recipes, above its Foods matches. Archived recipes and catalog originals hidden
+by account preferences are excluded; personal replacements remain searchable.
+Exact names, partial names, plurals and close matches share food-search ranking,
+with up to six recipe suggestions. Neither searching nor selecting sends a
+provider request; USDA and DeepSeek remain explicit actions, and a matching
+recipe suppresses the no-match analysis suggestion.
+
+Selecting opens Review recipe servings for the selected date and meal slot,
+focuses a one-serving input, and accepts positive fractional portions. Log meal
+creates one independent grouped Eaten entry. Add to plan references the existing
+recipe through atomic planning, retaining goal, diet and trusted-value checks.
+Neither logging nor preview changes the recipe's whole yield or consumes an
+existing planned meal. Supplied per-serving macros stay authoritative: half a
+Korean Beef Bowl is 280 kcal / 22.5g protein / 29g carbs / 8g fat. Ingredient-based
+portions use the same scaled quantities and rounding as the existing logger.
+
+Recipe and food portion selection are mutually exclusive. A selected match hides
+search controls, all results, entry tabs and unrelated description review; the
+quantity/servings field receives focus. Pending saves disable portion controls
+and the surrounding meal-group entry buttons. Cancel returns focus
+to search and retains query and description-review inputs. Account/date/slot
+recovery retains recipe identity, reviewed revision/contents, servings text and
+submission identity. Failed saves retain the review and retry the same intent;
+changing the recipe or portion creates a new intent. Restored selections resolve
+against current recipes. Changed content requires an explicit renewed review;
+archived/unavailable recipes and missing or invalid ingredients block submission
+rather than producing partial nutrition. Only confirmed success clears the draft.
+
+Supplied recipe macros are also authoritative for new planned prescriptions and
+explicit plan edits. The server scales all four stored per-serving values by the
+planned portion, records source-provided provenance and recipe revision, and
+leaves fiber unknown when no fiber was supplied. These values do not become
+trusted catalog nutrition merely because ingredient records are trusted;
+carb-limited plans still require verified catalog values. Recipes without supplied
+macros and food-only plans retain their existing calculation paths. The forward
+correction does not backfill existing prescriptions or recalculate eaten history;
+explicitly saving an edited plan creates a corrected new version while retaining
+the previous version. The October 13 migration is deployed to the linked database
+with 70 matching history entries; see HANDOVER.md for verification evidence.
 
 ### 8. AI-Assisted Nutrition Estimation
 
@@ -521,14 +574,15 @@ tokens, prefixes, then bounded spelling suggestions labeled “Close match”. E
 query token must match; preparation terms remain distinct. Suggestions require
 explicit selection and do not authorize automatic nutrition or unit conversions.
 
-Saved and Planned displays share the approved pastel-banner card: cover, name,
+Saved meals use the approved pastel-banner card: cover, name,
 personal favorite heart, per-serving calories, whole-recipe yield, total time,
 editable complexity, and bottom actions. Calories omit the visible per-serving
 suffix but retain accessible labels and contextual help. A mint pie-icon yield
-pill is independent of planned portions. Missing time reads “Not set”; missing
+pill is independent of planned portions. Configured card time reads “X mins”;
+missing time reads “Not set”; missing
 recipe complexity defaults to Medium. Descriptions stay off cards. Planned
 serving changes never change per-serving calorie values or whole-recipe yields.
-Food-only and unresolved entries omit recipe favorites and retain logging
+Planned and Eaten displays use compact rows; food-only and unresolved entries retain logging
 restrictions. Existing slot grouping, ordering, permissions, skip and log flows
 remain unchanged. Catalog recipes can be favorited by their stable identity.
 

@@ -5,6 +5,20 @@ import { SAVED_MEALS } from "@/constants/meals";
 import type { Meal } from "@/types/domain";
 
 describe("meal plan generation", () => {
+  it("preserves supplied recipe macros and records their source instead of ingredient estimates", () => {
+    const recipe: Meal = { id: "meal-korean-beef-bowl", name: "Korean Beef Bowl", revision: 3, servings: 4,
+      ingredients: [{ foodId: "food-egg", servings: 4 }], providedNutrition: { calories: 560, proteinG: 45, carbsG: 58, fatG: 16 } };
+    const plan = generateMealPlan("target-1", "2026-10-12", { dietaryPattern: "No restrictions", allergies: [] }, { savedMeals: [recipe], foods: FOODS });
+    const portions = plan.meals.filter(meal => meal.mealId === recipe.id);
+    expect(portions.length).toBeGreaterThan(0);
+    for (const portion of portions) {
+      expect(portion).toMatchObject({ expectedCalories: 560, expectedProteinG: 45, expectedCarbsG: 58, expectedFatG: 16,
+        source: "source-provided", sourceVersion: "recipe:meal-korean-beef-bowl:revision:3" });
+      expect(portion.assumptions).toContain("not independently verified");
+    }
+    expect(recipe.servings).toBe(4);
+  });
+
   it.each(["Low-carb", "Keto-style", "Vegetarian low-carb", "Vegan keto-style"])("checks the curated catalog for %s across supported energy estimates", (pattern) => {
     const cap = pattern.toLowerCase().includes("keto") ? 50 : 130;
     for (const dailyCalories of [1200, 1800, 2500, 4000]) {
