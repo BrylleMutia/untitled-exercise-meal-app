@@ -44,9 +44,9 @@ function ModalContent({ open, title, children, footer, help, initialFocus, retur
             className="animate-pop flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-white text-ink shadow-card sm:h-auto sm:max-h-full sm:max-w-3xl sm:rounded-3xl"
             {...getFloatingProps({ "aria-labelledby": headingId, "aria-modal": true })}>
             <header className="flex max-h-[40dvh] shrink-0 items-start justify-between gap-2 overflow-y-auto bg-lav-50 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:items-center sm:px-6 sm:py-4">
-              <div className="flex min-w-0 flex-wrap items-center gap-1"><h2 id={headingId} className="min-w-0 self-center text-xl font-extrabold leading-tight sm:text-2xl">{title}</h2>{help}</div>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1"><h2 id={headingId} className="min-w-0 self-center break-words text-xl font-extrabold leading-tight [overflow-wrap:anywhere] sm:text-2xl">{title}</h2>{help}</div>
               <button type="button" aria-label={`Close ${title.toLowerCase()}`} disabled={dismissalDisabled} onClick={onClose}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/70 text-ink-soft hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-50">
+                className="grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full bg-white/70 text-ink-soft hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-50">
                 <X className="h-5 w-5" aria-hidden />
               </button>
             </header>

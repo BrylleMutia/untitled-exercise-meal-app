@@ -10,6 +10,25 @@ const props = {
   onServings: noop, onLog: noop, onPlan: noop, onCancel: noop, onReview: noop, onRefresh: noop,
 };
 describe("recipe portion review", () => {
+  it("associates each invalid quantity with its own validation message when reviews coexist", () => {
+    const html = renderToStaticMarkup(<><RecipePortionReview {...props} servings="" portion={null} /><RecipePortionReview {...props} servings="0" portion={null} /></>);
+    const descriptions = [...html.matchAll(/aria-describedby="([^"]+)"/g)].map(match => match[1]);
+    const messages = [...html.matchAll(/<p id="([^"]+)"/g)].map(match => match[1]);
+    expect(descriptions).toHaveLength(2);
+    expect(new Set(descriptions).size).toBe(2);
+    expect(messages).toEqual(descriptions);
+  });
+  it("offers only primary planning and cancellation when direct logging is omitted", () => {
+    const html = renderToStaticMarkup(<RecipePortionReview {...props} onLog={undefined} />);
+    expect(html).not.toContain("Log meal");
+    expect(html).toContain("Add to plan");
+    expect(html).toContain("Cancel");
+    const pending = renderToStaticMarkup(<RecipePortionReview {...props} onLog={undefined} pending />);
+    expect(pending).toContain("Adding…");
+    expect(pending.match(/disabled=""/g)).toHaveLength(3);
+    const ineligible = renderToStaticMarkup(<RecipePortionReview {...props} onLog={undefined} canPlan={false} />);
+    expect(ineligible).not.toContain("You can still log this recipe.");
+  });
   it("shows selected date/slot and authoritative supplied portion nutrition", () => {
     const html = renderToStaticMarkup(<RecipePortionReview {...props} />);
     for (const text of ["2026-10-13", "Dinner", "≈280 kcal", "≈22.5 g protein", "≈29 g carbs", "≈8 g fat", "Log meal", "Add to plan", "Source-provided recipe macros"]) expect(html).toContain(text);

@@ -7,9 +7,10 @@ type NutritionPillsProps = {
   precision?: number;
   label?: string;
   className?: string;
+  nullLabel?: "not logged" | "unavailable";
 };
 
-export function NutritionPills({ values, approximate = false, precision, label = "Nutrition summary", className = "" }: NutritionPillsProps) {
+export function NutritionPills({ values, approximate = false, precision, label = "Nutrition summary", className = "", nullLabel = "not logged" }: NutritionPillsProps) {
   return (
     <span role="group" aria-label={label} className={`flex min-w-0 flex-wrap gap-1.5 ${className}`}>
       {nutritionMetricOrder.filter((metric) => values[metric] !== undefined).map((metric) => {
@@ -19,7 +20,7 @@ export function NutritionPills({ values, approximate = false, precision, label =
         const display = known ? precision === undefined ? value : Number(value.toFixed(precision)) : null;
         return (
           <span key={metric} data-nutrition-metric={metric} className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-bold leading-5 text-ink tabular-nums [overflow-wrap:anywhere] ${style.pill}`}>
-            {display === null ? `${style.label} ${value === null ? "not logged" : "unavailable"}` : `${approximate ? "≈" : ""}${display} ${style.unit}`}
+            {display === null ? `${style.label} ${value === null ? nullLabel : "unavailable"}` : `${approximate ? "≈" : ""}${display} ${style.unit}`}
           </span>
         );
       })}
