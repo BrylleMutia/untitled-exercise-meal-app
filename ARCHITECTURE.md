@@ -287,7 +287,7 @@ Rules:
   plan-version checks and retries remain in force; no tables/public RPCs change.
   It does not rewrite prior prescriptions or eaten history. The authorized linked
   rollout has 70 matching migrations and 12 matching schema groups; evidence is
-  recorded in HANDOVER.md and SUPABASE_SETUP.md. Presentation-only selection
+  recorded in SUPABASE_SETUP.md section 13. Presentation-only selection
   derives from the selected food/recipe and reports review visibility to the
   parent; it is not another durable draft field. One slot-local editor is mounted
   at a time with the existing account/date/slot draft identity. Selection hides
@@ -295,6 +295,18 @@ Rules:
   or search field to mount. Close/success focus return waits for pending controls
   to re-enable. Food-review saving also disables parent entry controls, and queued
   draft writes finish before authoritative-success cleanup.
+- Saved-card Add to plan uses the same authorized `addPlannedMeal` action, not
+  a nutrition-save action. `SavedRecipePlanReview` resolves the current recipe
+  and ingredient records, previews a positive portion with `recipePortion`, and
+  requires a meal slot for the selected day. Its stable top-level component
+  retains the submitted planned-row identity and retry key through failed or
+  lost responses; deliberate slot/portion changes start a new intent. Stale
+  recipe contents require explicit renewed review, and missing ingredients or
+  planning-ineligible values cannot submit. The review is local presentation
+  state, without a new recoverable draft contract; reload or cancellation ends
+  that open review. Authoritative success closes it and focus return waits for
+  controls to re-enable. Existing plan/grocery concurrency, eligibility and
+  transaction boundaries remain unchanged. No migration or public RPC is added.
 - Direct logging from a planned row uses the authenticated `log_planned_meal`
   wrapper around the existing food or grouped-meal save path. The wrapper
   checks the current owned plan version, date, slot, and reference, then stores
@@ -303,11 +315,30 @@ Rules:
   exists; deleting the last linked log reveals it without editing the plan or
   groceries. Independent logs have no planned-meal link.
   Planned, grouped Eaten and standalone Eaten entries share a presentation-only
-  `MealRow`. Planned macro pills prefer stored prescription fields and use a
-  fully resolved reference only for legacy missing fields. Unresolved placeholder
-  zeros are unavailable, not nutrition. Eaten pills continue reading saved logs.
+  `MealRow`. Planned macro pills and the Planned daily summary use stored
+  prescription fields only. Missing values remain unavailable/partial rather
+  than being recalculated from current references. Unresolved placeholder zeros
+  are unavailable, not nutrition. Eaten pills continue reading saved logs.
   Saved meals retain recipe cards and favorite metadata; changing row layout does
   not persist or recalculate plans, recipes, groceries or eaten history.
+- Saved-recipe Eaten corrections use a servings-only presentation and the existing
+  authorized `update_logged_meal` endpoint. `logged_meals.recipe_servings` stores
+  the actual portion, independently of recipe yield or ingredient food servings.
+  Optional domain fields retain compatibility with older cached snapshots.
+  The save wrapper records the portion inside the original logging transaction;
+  its separate receipt prevents an original log retry from overwriting a later
+  correction. A servings correction locks the owner-scoped parent, checks its
+  original revision and retry intent, and scales existing child nutrition,
+  quantities and estimate ranges together. IDs, sources and planned linkage stay
+  intact. It never derives history from current food or recipe macros.
+  Legacy recovery requires all ingredient quantities to share one recipe ratio,
+  or a canonical source-provided recipe-serving snapshot. Unknown bases require
+  the owner's explicit previous portion; there is no migration backfill.
+  Older ingredient-editor callers retain their endpoint behavior and invalidate
+  stored recipe portions after editing ingredients. Helpers and compatibility
+  implementations remain private; no direct table writes or new public RPC are
+  granted. The UI freezes the original snapshots/revision while editing and
+  preserves both input and retry key across failed or lost-response saves.
 - Saved-meal edits use `saveMeal`; when the active grocery read model is
   supplied, recipe persistence and grocery reconciliation commit in the same
   authorized transaction. `archiveMeal` soft-deletes owned recipes so
@@ -322,6 +353,58 @@ Rules:
   source URLs copied by a forward migration. Drafts include units, review and
   custom input, stable ingredient/recipe IDs, base revisions, and the pending
   save key. Stale drafts require an explicit review/rebase before reapplication.
+  Cooking metadata is optional on `RecipeIngredient`, separate from canonical
+  `foodId`/nutrition `servings`. Ordered `meal_ingredients.cooking_measurement`
+  JSON stores kind (amount/range/unmeasured), original display text, quantities,
+  unit, optional/preparation notes and confirmed grams per unit. Nullable
+  `meals.unmeasured_ingredients` stores cooking items without nutrition records;
+  `nutrition_notes` stores assumptions separately from preparation instructions.
+  Pure helpers validate metadata, use upper-range quantities and resolve only
+  supported or explicitly confirmed conversions. Legacy records fall back to
+  available grams/pieces. Whole-recipe quantities remain fixed when yield changes;
+  source-provided per-serving macros remain independent.
+  The existing private saved-meal transaction wraps its compatible implementation
+  with the established lock order, owner checks, revision checks and idempotency
+  claim. It validates cooking/canonical quantity agreement before commit. Unknown
+  conversions and inconsistent payloads roll back the entire save. Older payloads
+  preserve metadata only when ordered canonical ingredients are unchanged;
+  changed ingredients clear incompatible metadata. No new public RPC or direct
+  writes are granted. Snapshot, weekly reads and row-based export carry the
+  fields, including permitted archived references. Authoring checks both table
+  contracts so an older backend cannot silently drop measurements. Draft fields
+  are optional additions, retaining older unit text and retry identity. Active
+  tabs remain presentation-only and reset to Details without discarding drafts.
+  A shared pure conversion resolver normalizes aliases, explicit numeric serving
+  bases and recipe-specific gram weights. It derives household volume ratios
+  only from an ingredient-specific density: 5 ml/tsp, 15 ml/tbsp, 240 ml/cup.
+  Exact saved target factors precede derived factors. Unit changes convert lower
+  and upper quantities together, retaining full precision and the same canonical
+  food servings within database numeric precision. Quantity edits deliberately
+  change the amount; source-provided macros remain independent.
+  Optional draft-only `conversionBases` and `pendingConversion` fields retain
+  reviewed alternate measures and unresolved confirmations. Pending steps do not
+  alter the submitted measurement or renew its retry identity; confirmation
+  creates the changed save intent. Completed conversions persist through the
+  existing cooking metadata. No schema, RPC or generated-type extension is needed.
+  Recipe authoring uses a shared nine-unit contract: g/kg/mg/oz/ml/tsp/tbsp/cup/piece
+  (cup displays as cups; piece as piece/s). Draft preparation normalizes saved ingredients,
+  provider review and recovered pending targets by measurement type. Legacy
+  conversions remain readable internally, with saved factors and range bounds
+  preserved. Exact volume ratios do not establish nutrition density. Unknown
+  sources remain original context and require matching or confirmation, never an
+  extra unit option. Completed conversions use the existing metadata transaction.
+  Payload-changing restored drafts renew retry identity while preserving meal IDs
+  and expected revisions; unchanged retries retain their key. Read-only overviews,
+  plan snapshots, groceries and Eaten history are unaffected.
+  Unit-only saves omit grocery reconciliation when the ordered food identities,
+  canonical quantities at database precision and yield are unchanged. Existing
+  recipe ownership/version checks still apply; the unused grocery version is
+  omitted with its payload, leaving grocery rows and revisions intact.
+  `refreshSnapshot({ silent: true })` suppresses refresh toasts for missing
+  predefined cooking metadata while retaining typed failure feedback. Account
+  identity guards prevent a completed read from replacing another account's
+  snapshot. Recipe opening also ignores superseded/cancelled reads, and never
+  infers personal original units from a name.
   Recipe saves check reference, total-time, and complexity columns before calling the RPC, so an
   older backend cannot silently drop authored details or pending ingredients.
   Whole-recipe time maps to nullable `meals.total_time_minutes`: nonnegative
@@ -344,6 +427,67 @@ Rules:
   request size, decodes still JPEG/PNG/WebP with Sharp, strips metadata and
   re-encodes to at most 1600px WebP. A checksum and client upload UUID make retry
   registration stable; storage upload never overwrites an attached object.
+  Recipe image presets reuse the existing optional `RecipeImage` union. Lunch is
+  null/default; breakfast-egg-salad, snack-sandwich and dinner-curry-omelette are
+  registered static asset IDs alongside the two existing catalog covers. A shared
+  registry supplies parser validation and rendering. Read snapshots, weekly data,
+  account export and recoverable recipe drafts retain the existing JSON contract.
+  The forward migration extends only meals_image_shape and the existing private
+  image validation handler; no new public RPC or client write grant is introduced.
+  The preset gallery is retired; existing IDs remain valid. Image-only edits retain
+  the existing grocery-basis check, preserving quantities, checked items, revisions,
+  plans, supplied macros and Eaten history. Older IDs and null remain compatible.
+  Recipe meal assignments use `meals.meal_slots` and typed `Meal.mealSlots` in
+  authoring, personal overrides, snapshots, weekly reads, export and drafts.
+  A private validator rejects unsupported or duplicate slots; explicit authoring
+  requires at least one, while omitted fields from older clients preserve saved
+  assignments. Original system recipes default to Lunch/Dinner. Personal legacy
+  rows remain excluded from generation until assigned. A targeted data-only
+  migration assigns the three user-reviewed legacy records by exact ID, owner,
+  revision and recipe/ingredient equality checks. Unexpected edits abort the
+  correction; already-applied assignments are a no-op. No general name classifier
+  is introduced. Whole yields are constrained
+  to 1–10,000; the forward migration rounds fractional definitions up, rescales
+  supplied per-serving nutrition by old/new yield and advances revisions without
+  rewriting whole-recipe ingredients, plans or historical nutrition.
+
+  `weeklyMealGeneration` owns seeded allocation. Capacitated augmenting paths
+  maximize recipe/slot matching; a bounded 28-slot branch-and-bound search adds
+  daily carbohydrate capacity when required. Domain eligibility reuses planner
+  rules. Typed exclusion codes retain domain eligibility independently of card
+  presentation. Cards end at planning counters; exclusion explanations belong
+  to the unused-preview results, not card content or checkbox descriptions. Cards
+  and Select all may select all displayed recipes; the allocator and server
+  still enforce the same capacity and restrictions. Generation drafts retain their seed, exact preview, selected revisions,
+  basis and idempotency key under an account/week key. Zero version tokens mean
+  no plan/list existed and remain valid in draft envelopes. Changed source data
+  requires renewed review and a new intent; unchanged failed-save retries retain
+  their key.
+
+  Chicken meal-prep catalog additions share reviewed JSON definitions between
+  typed constants and the forward SQL migration. Nine distinct USDA food records
+  retain their FDC IDs and release/review provenance; Foundation bean values use
+  Atwater Specific Factors and the existing two-decimal catalog representation,
+  with original precision in the checked-in source evidence. Existing foods and
+  recipes are never overwritten. The two new recipes calculate nutrition from
+  ingredients, keeping quoted recipe macros only in nutrition notes. Registered
+  covers extend the existing asset constraint and private authoring allowlist.
+  Client and authoritative generation checks include the new raw chicken identity
+  and unmeasured allergen names; unknown garnish amounts stay outside totals and
+  grocery quantities. Existing time/budget classes and serving limits still apply.
+
+  Context's typed `generateNutritionWeek` calls the repository and the authorized
+  `generate_nutrition_week` RPC. The private writer locks the profile, selected
+  week and recipes; validates profile/plan/grocery/recipe versions, ownership,
+  eligibility, occupied slots, one-serving assignments and shared weekly yield;
+  and rejects changes to existing rows. Existing plan-edit and grocery merge
+  handlers perform atomic additions with authoritative nutrition. An empty week
+  is created inside the same transaction. Explicit grants expose only the public
+  wrapper; direct writes and private execution remain denied. Successful saves
+  refresh the affected week while the main current-week snapshot stays independent.
+  Recipe authoring checks the revision of its submitted grocery week, so a future
+  generated grocery list cannot invalidate an otherwise current recipe editor.
+
   The private `recipe-covers` bucket uses authorized registration/read/removal
   helpers and Storage RLS. GET resolves an owner-scoped one-hour signed URL;
   the cover refreshes it after 45 minutes or an explicit retry. External HTTPS
@@ -675,14 +819,17 @@ plans, profile data, and weight data remain owner-controlled.
 
 ## Supabase Migration Safety
 
-Only perform linked-database changes when explicitly authorized. Before
-creating, repairing, or pushing migrations:
+The user has granted standing authorization for verified forward migrations to
+the configured linked Supabase project after implementation. Do not request
+per-deployment approval; complete the local verification, schema/history preflight,
+preservation and security gates before proceeding. Before creating, repairing,
+or pushing migrations:
 
 1. Inspect `git status --short`, the migration list, and `supabase db push --dry-run`.
 2. Compare local migrations with the linked schema, including columns, constraints, indexes, policies, grants, function bodies, and relevant data.
-3. If exact equivalence cannot be proven, stop. Do not use blind pulls, force flags, `--include-all`, or guessed repairs.
+3. Prove the deployed baseline matches its migrations and any differences are exactly the verified pending changes. If that cannot be proven, stop and investigate. Do not use blind pulls, force flags, `--include-all`, or guessed repairs.
 4. For proven equivalence, record the remote/local versions and evidence, repair history in an auditable order, and rerun the dry run.
-5. Push only the verified pending set with explicit authorization for the shared remote.
+5. Push only the verified pending set under the standing authorization, without another approval request. Exclude unrelated seeds, roles, Vault changes, and migrations.
 
 Never edit, rename, delete, or reorder a migration that may already be applied.
 Use a forward migration for corrections.
@@ -692,6 +839,45 @@ run, deployed RLS and RPC behavior, generated types, local reset behavior, and
 the applicable database tests.
 
 ## Read Models and Snapshot Size
+
+`loadNutritionWeek(weekOf)` uses authenticated security-invoker
+`get_nutrition_week(date)` for one validated Monday-based local week. Its single
+read includes the latest version for that week, saved planned rows, complete
+seven-day logs and grouped meals, effective target versions, referenced recipes
+(including permitted archives), ingredients/foods/serving options and matching
+grocery state. Ownership is enforced through RLS and explicit execute grants.
+It is separate from AppSnapshot's bounded recent history. The main snapshot's
+meal plan and groceries select the current calendar week, not the most recently
+edited historical week.
+
+`useNutritionWeek` keys requests by account and week and ignores superseded
+responses. Changing weeks hides prior data immediately; same-week refresh keeps
+mounted review input while disabling edits. Read failures offer Retry and never
+stand in for an empty week. `nutritionWeekSnapshot` scopes presentation and
+mutation context without replacing global current-week state or making archived
+references selectable. Context actions accept optional authoritative week context
+for compatibility with existing callers, and historical corrections/deletions
+carry the visible record's revision rather than requiring its presence among the
+main snapshot's last 100 logs.
+
+Nutrition's Planned and Eaten views share a stateless daily-summary presentation;
+the existing calorie-budget utility accepts an optional planned mode, leaving
+Eaten callers compatible. Planned completeness is checked per metric; incomplete
+calories never produce an authoritative remaining budget. Corrections keep the
+existing authorized update RPCs and do not create additional logs. Numeric input
+steps must not introduce a minimum-based offset or round stored food quantities.
+
+Week edits, additions and linked logging share an authenticated owner/week lock,
+validate the selected plan and matching grocery revisions and preserve idempotent
+operation receipts. An edit copies unchanged prescription rows exactly; explicit
+content/portion changes alone use normalization. Stored plan dietary constraints
+and target associations are inherited across versions. Only matching-week
+groceries are reconciled, preserving identity, checked state and user overrides;
+recipe ingredient quantities scale by planned servings divided by recipe yield.
+No historical backfill or read-time durable writes occur. Public mutation entry
+points remain compatible; private implementations are not directly executable
+by clients. Migration rollout uses the standing authorization and still requires
+the complete linked schema/history preflight and post-deployment verification.
 
 The main app snapshot should contain only the compact state required to render
 the authenticated user's current profile, active targets, current plan, and

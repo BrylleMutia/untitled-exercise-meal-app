@@ -163,14 +163,18 @@ Apply these rules to every exposed user-data table and every server mutation:
 
 ## Supabase Migration Safety
 
-Only perform linked-database changes when explicitly authorized. Before
-creating, repairing, or pushing migrations:
+The user has granted standing authorization to deploy verified forward migrations
+to this repository's configured linked Supabase project after implementing changes.
+Proceed without asking for a separate migration approval each time. This authorization
+does not waive local verification, schema/history preflight, data preservation,
+security checks, or the restrictions below. Before creating, repairing, or pushing
+migrations:
 
 1. Inspect `git status --short`, the migration list, and `supabase db push --dry-run`.
 2. Compare local migrations with the linked schema, including columns, constraints, indexes, policies, grants, function bodies, and relevant data.
-3. If exact equivalence cannot be proven, stop. Do not use blind pulls, force flags, `--include-all`, or guessed repairs.
+3. Prove the deployed baseline matches its migrations and that any differences are exactly the verified pending changes. If that cannot be proven, stop and investigate. Do not use blind pulls, force flags, `--include-all`, or guessed repairs.
 4. For proven equivalence, record the remote/local versions and evidence, repair history in an auditable order, and rerun the dry run.
-5. Push only the verified pending set with explicit authorization for the shared remote.
+5. Push only the verified pending set under the standing authorization above, without another approval request. Do not include unrelated seeds, roles, Vault changes, or migrations.
 
 Never edit, rename, delete, or reorder a migration that may already be applied.
 Use a forward migration for corrections.
@@ -209,7 +213,7 @@ any linked push.
 - `npm run lint` - run the configured ESLint checks.
 - `npm run test:local` - local utility, repository, and service tests.
 - `npm run supabase:start`, `supabase:reset`, `supabase:test`, `supabase:lint`, and `supabase:types` - local database workflow for the backend.
-- `npm run supabase:push:dry` - preview linked-project changes; push only when authorized.
+- `npm run supabase:push:dry` - preview linked-project changes; deploy the verified pending set under the standing authorization and migration safety checks above.
 
 Use an available development-server port for automated browser checks and do
 not stop a server that was not started by the current test. Verify PWA behavior
@@ -305,6 +309,7 @@ A feature is complete only when all applicable conditions are met:
 
 ## Documentation Ownership
 
+- Do not recreate or maintain `HANDOVER.md`; the user retired it. Record relevant feature, design, architecture, and release details in their owning documents below.
 - This file owns mandatory agent workflow, task routing, product guardrails, engineering guardrails, and verification requirements.
 - [`FEATURES.md`](FEATURES.md) owns product goals, feature scope, UX behavior, navigation, data-model expectations, and MVP acceptance criteria.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) owns stable client architecture, state/data ownership, security, persistence, testing, and delivery standards.

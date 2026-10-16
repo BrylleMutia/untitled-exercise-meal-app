@@ -1,6 +1,7 @@
-import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Browser, type BrowserContext, type Locator, type Page, type Route } from "@playwright/test";
 import fs from "node:fs";
 import { strFromU8, unzipSync } from "fflate";
+import { addDays, formatCompactWeekRange, formatFullDate, fromKey, startOfWeek, todayKey } from "../src/utility/dates";
 import {
   createAuthenticatedContext,
   createLocalAccount,
@@ -18,18 +19,492 @@ async function fillRecipeSection(editor: Locator, section: "Details" | "Instruct
   await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
 }
 
-async function openRecipe(page: Page) {
+async function openRecipe(page: Page, configureDefaults = true) {
   await openNutritionPage(page);
   await clearBrowserDrafts(page);
-  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Create recipe", exact: true });
-  await editor.getByLabel("Complexity (required)", { exact: true }).selectOption("easy");
+  if (configureDefaults) {
+    await editor.getByLabel("Complexity (required)", { exact: true }).selectOption("easy");
+    await editor.getByRole("checkbox", { name: "Breakfast", exact: true }).check();
+  }
   return editor;
 }
 
+test("reviewed chicken catalog preserves cooking units, estimates, covers and personal edits", async ({ browser }, info) => {
+  const account = await createLocalAccount(`chicken-catalog-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Chicken Catalog"); await openNutritionPage(page);
+    const recipes = page.getByRole("region", { name: "Recipes", exact: true });
+    const cases = [
+      { name: "Sticky Teriyaki Chicken", asset: "sticky-teriyaki-chicken", calories: "≈449 kcal", time: "30 mins", slots: "Lunch, Dinner", comparison: "520 kcal, 48 g protein", amounts: ["80 ml", "250 g"], garnish: "Sesame seeds" },
+      { name: "Chicken Burrito Protein Boxes", asset: "chicken-burrito-protein-boxes", calories: "≈327 kcal", time: "20 mins", slots: "Breakfast, Lunch", comparison: "480 kcal, 50 g protein", amounts: ["1 tin (240 g drained)", "1 tin (285 g drained)", "½ red onion"], garnish: "Fresh coriander" },
+    ];
+    const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+    for (const recipe of cases) {
+      await recipes.getByRole("button", { name: `View recipe: ${recipe.name}`, exact: true }).click();
+      await expect(overview.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(overview.getByText(recipe.calories, { exact: true })).toBeVisible();
+      await expect(overview.getByText(recipe.time, { exact: true })).toBeVisible();
+      await expect(overview.getByText(`Use this recipe for: ${recipe.slots}`, { exact: true })).toBeVisible();
+      await expect(overview.getByRole("img", { name: `Cover for ${recipe.name}`, exact: true })).toHaveAttribute("src", `/images/recipes/${recipe.asset}.png`);
+      await expect(overview.getByText(recipe.comparison, { exact: false })).toBeVisible();
+      await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+      for (const amount of recipe.amounts) await expect(overview.getByText(amount, { exact: true })).toBeVisible();
+      await expect(overview.getByText(recipe.garnish, { exact: true })).toBeVisible();
+      await expect(overview.getByRole("tabpanel", { name: "Ingredients", exact: true }).getByText("Per serving · estimates", { exact: true })).toHaveCount(0);
+      await overview.getByRole("tab", { name: "Instructions", exact: true }).click();
+      await expect(overview.getByText(/74°C \(165°F\)/)).toBeVisible();
+      await expect(overview.getByRole("tabpanel", { name: "Instructions", exact: true }).getByText(recipe.comparison, { exact: false })).toHaveCount(0);
+      if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+      expect(await overview.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+      await overview.getByRole("button", { name: "Close", exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await page.getByRole("button", { name: "Generate", exact: true }).click();
+    const generation = page.getByRole("dialog", { name: "Generate plan", exact: true });
+    await generation.getByRole("button", { name: "Clear", exact: true }).click();
+    for (const recipe of cases) await generation.getByRole("checkbox", { name: recipe.name, exact: true }).check();
+    await expect(generation.getByRole("heading", { name: "Preview · 8 meals", exact: true })).toBeVisible();
+    await generation.getByRole("button", { name: "Close", exact: true }).click();
+    await recipes.getByRole("button", { name: "View recipe: Sticky Teriyaki Chicken", exact: true }).click();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+    const personalName = `Teriyaki personal ${info.project.name}`;
+    await editor.getByLabel("Recipe name", { exact: true }).fill(personalName);
+    const save = nextRpcResponse(page, "save_recipe"); await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await save).ok()).toBe(true);
+    await expect(editor).not.toBeVisible();
+    if (await overview.isVisible()) await overview.getByRole("button", { name: "Close", exact: true }).click();
+    await recipes.getByRole("button", { name: `View recipe: ${personalName}`, exact: true }).click();
+    await expect(overview.getByRole("img", { name: `Cover for ${personalName}`, exact: true })).toHaveAttribute("src", "/images/recipes/sticky-teriyaki-chicken.png");
+    await expect(overview.getByText("≈449 kcal", { exact: true })).toBeVisible();
+    await overview.screenshot({ path: `output/chicken-recipe-catalog/overview-${info.project.name}.png` });
+    await overview.getByRole("button", { name: "Close", exact: true }).click();
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
+test("recipe meal assignments generate a recoverable weekly preview without changing history", async ({ browser }, info) => {
+  const account = await createLocalAccount(`weekly-generation-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Weekly Generation");
+    const editor = await openRecipe(page);
+    const recipes = page.getByRole("region", { name: "Recipes", exact: true });
+    await expect(recipes.getByRole("heading", { name: "Recipes", exact: true })).toHaveCount(1);
+    await expect(recipes.getByRole("button", { name: "About Recipes", exact: true })).toHaveCount(1);
+    await expect(recipes.getByRole("button", { name: "Create", exact: true })).toHaveClass(/bg-white\/70 text-ink/);
+    await expect(recipes.getByRole("button", { name: "Create", exact: true }).locator('svg.lucide-plus[aria-hidden="true"]')).toHaveCount(1);
+    const name = `Weekly Recipe ${info.project.name} with chicken, vegetables and rice`;
+    await editor.getByLabel("Recipe name", { exact: true }).fill(name);
+    await editor.getByLabel("Recipe servings", { exact: true }).fill("2.5");
+    await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(editor.getByText("Enter a whole serving count from 1 to 10,000.")).toBeVisible();
+    await editor.getByLabel("Recipe servings", { exact: true }).fill("4");
+    await editor.getByRole("checkbox", { name: "Snack", exact: true }).check();
+    await editor.getByRole("button", { name: "Change image", exact: true }).click();
+    await expect(editor.getByRole("radiogroup", { name: "Recipe image presets" })).toHaveCount(0);
+    for (const label of ["Upload image", "Use image URL", "Reset to default"]) await expect(editor.getByRole("button", { name: label, exact: true })).toBeVisible();
+    await editor.getByRole("tab", { name: "Instructions", exact: true }).click();
+    await editor.getByLabel("Instructions (required)").fill("Mix and serve.");
+    await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    await editor.getByLabel("Ingredient search").fill("Greek yogurt");
+    await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
+    await editor.getByLabel("Greek yogurt quantity", { exact: true }).fill("400");
+    await editor.getByRole("tab", { name: "Details", exact: true }).click();
+    await editor.getByRole("checkbox", { name: "Breakfast", exact: true }).uncheck();
+    await editor.getByRole("checkbox", { name: "Snack", exact: true }).uncheck();
+    await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await editor.getByRole("checkbox", { name: "Breakfast", exact: true }).check();
+    await editor.getByRole("checkbox", { name: "Snack", exact: true }).check();
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
+    await expect(editor.getByRole("checkbox", { name: "Breakfast", exact: true })).toBeChecked();
+    await expect(editor.getByRole("checkbox", { name: "Snack", exact: true })).toBeChecked();
+    const created = nextRpcResponse(page, "save_recipe"); await editor.getByRole("button", { name: "Save", exact: true }).click();
+    expect((await created).ok()).toBe(true);
+    const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+    await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: `View recipe: ${name}`, exact: true }).click();
+    await expect(overview.getByText("Breakfast, Snack", { exact: false })).toBeVisible();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    const edit = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+    await expect(edit.getByRole("checkbox", { name: "Snack", exact: true })).toBeChecked();
+    await edit.getByRole("button", { name: "Cancel", exact: true }).click();
+    if (await overview.isVisible()) await overview.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    const generate = page.getByRole("region", { name: "Planned", exact: true }).getByRole("button", { name: "Generate", exact: true });
+    await page.route("**/images/recipes/korean-beef-bowl.png", route => route.abort());
+    await expect(generate).toBeEnabled(); await generate.click();
+    await expect(generate).toHaveClass(/bg-ink text-white/);
+    await expect(generate.locator('svg.lucide-wand-sparkles[aria-hidden="true"]')).toHaveCount(1);
+    const dialog = page.getByRole("dialog", { name: "Generate plan", exact: true });
+    await expect(dialog.getByRole("button", { name: "Close generate plan", exact: true })).toBeVisible();
+    const selectedWeek = startOfWeek(addDays(todayKey(), 7));
+    await expect(dialog.getByText(formatCompactWeekRange(selectedWeek), { exact: true })).toBeVisible();
+    await expect(dialog.getByText(`${formatFullDate(selectedWeek)} – ${formatFullDate(addDays(selectedWeek, 6))}`, { exact: true })).toHaveClass("sr-only");
+    const explanation = "Fill this week’s empty meals with one serving per entry. Each recipe has one weekly batch; existing active planned servings count toward its yield.";
+    await expect(dialog.getByText(explanation, { exact: true })).toHaveCount(0);
+    const help = dialog.getByRole("button", { name: "About generate plan", exact: true });
+    if (info.project.name === "desktop") { await help.hover(); await expect(help).toHaveAttribute("aria-expanded", "true"); }
+    await help.click();
+    const helpPanel = page.getByRole("dialog", { name: "Generate plan", exact: true }).filter({ has: page.getByRole("heading", { level: 3, name: "Generate plan", exact: true }) });
+    await expect(helpPanel.getByText(explanation, { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(help).toBeFocused(); await expect(helpPanel).toHaveCount(0);
+    const choices = dialog.getByRole("list", { name: "Recipe choices" });
+    await expect(choices.getByRole("checkbox", { name: "Korean Beef Bowl", exact: true }).locator("xpath=ancestor::label").locator("img")).toHaveAttribute("src", "/images/recipe-default.png");
+    await page.unroute("**/images/recipes/korean-beef-bowl.png");
+    const gridColumns = () => choices.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(" ").length);
+    expect(await gridColumns()).toBe(info.project.name === "mobile" ? 2 : 4);
+    const selectAll = dialog.getByRole("button", { name: "Select all", exact: true });
+    const clear = dialog.getByRole("button", { name: "Clear", exact: true });
+    await expect(selectAll).toHaveClass(/bg-ink text-white/);
+    await expect(clear).not.toHaveClass(/bg-ink text-white/);
+    for (const [control, label] of [[selectAll, "Select all"], [clear, "Clear"]] as const) {
+      expect((await control.innerText()).trim()).toBe(label);
+      const bounds = (await control.boundingBox())!;
+      expect(bounds.width).toBeGreaterThanOrEqual(44); expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(await control.evaluate(node => {
+        const icon = node.querySelector('svg[aria-hidden="true"]')!;
+        const range = document.createRange(); range.selectNodeContents(node.lastChild!);
+        return icon.getBoundingClientRect().right <= range.getBoundingClientRect().left;
+      })).toBe(true);
+      await control.focus();
+      await expect(page.getByRole("tooltip", { name: label, exact: true })).toHaveCount(0);
+      expect(await control.evaluate(node => getComputedStyle(node).outlineStyle)).toBe("solid");
+      await expect(dialog).toBeVisible(); await expect(control).toBeFocused();
+    }
+    await selectAll.focus(); await page.keyboard.press("Tab"); await expect(clear).toBeFocused();
+    if (info.project.name === "desktop") {
+      await selectAll.hover(); await expect(page.getByRole("tooltip", { name: "Select all", exact: true })).toHaveCount(0);
+    }
+    const header = dialog.getByRole("heading", { name: "Choose recipes", exact: true });
+    const headerBounds = (await header.boundingBox())!, selectBounds = (await selectAll.boundingBox())!, clearBounds = (await clear.boundingBox())!;
+    expect(selectBounds.x).toBeGreaterThan(headerBounds.x + headerBounds.width);
+    expect(clearBounds.x).toBeGreaterThan(selectBounds.x);
+    expect(clearBounds.y).toBeCloseTo(selectBounds.y, 0);
+    await selectAll.click();
+    expect(await choices.locator('input:checked').count()).toBe(await choices.getByRole("checkbox").count());
+    await dialog.getByRole("button", { name: "Clear", exact: true }).click();
+    expect(await choices.locator('input:checked').count()).toBe(0);
+    const choice = dialog.getByRole("checkbox", { name, exact: true });
+    await choices.getByText(name, { exact: true }).click();
+    await expect(choice).toBeChecked();
+    await choice.focus(); await page.keyboard.press("Space"); await expect(choice).not.toBeChecked();
+    await page.keyboard.press("Space"); await expect(choice).toBeChecked();
+    expect(await choice.locator("xpath=ancestor::label").evaluate(node => getComputedStyle(node).outlineStyle)).toBe("solid");
+    const imageInset = await choice.locator("xpath=ancestor::label").locator("img").evaluate(image => {
+      const well = image.parentElement!.parentElement!.getBoundingClientRect(), bounds = image.getBoundingClientRect();
+      return [bounds.left - well.left, bounds.top - well.top, well.right - bounds.right, well.bottom - bounds.bottom];
+    });
+    for (const inset of imageInset) expect(inset).toBeCloseTo(15, 0);
+    await expect(dialog.getByRole("heading", { name: "Preview · 4 meals", exact: true })).toBeVisible();
+    const preview = dialog.getByRole("region", { name: "Generated plan preview" });
+    const first = await preview.getByRole("listitem").allTextContents();
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(generate).toBeFocused(); await generate.click();
+    await expect(dialog.getByText("Weekly plan draft restored. Review the preview before saving.")).toBeVisible();
+    expect(await preview.getByRole("listitem").allTextContents()).toEqual(first);
+    await dialog.getByRole("button", { name: "Shuffle", exact: true }).click();
+    await expect(preview.getByRole("listitem")).toHaveCount(4);
+    if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+    expect(await gridColumns()).toBe(info.project.name === "mobile" ? 2 : 4);
+    await choices.screenshot({ path: `output/weekly-generation/compact-cards-${info.project.name}.png` });
+    await header.scrollIntoViewIfNeeded();
+    await dialog.screenshot({ path: `output/nutrition-button-labels/generate-${info.project.name}.png` });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    expect(await dialog.locator('[data-modal-body]').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    expect(await gridColumns()).toBe(info.project.name === "mobile" ? 1 : 2);
+    const enlargedActions = clear.locator("..").locator("..");
+    expect(await enlargedActions.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    expect(await choices.evaluate(node => [node, ...node.querySelectorAll("*")].every(element => element.scrollWidth <= element.clientWidth + 1))).toBe(true);
+    await dialog.screenshot({ path: `output/weekly-generation/dialog-${info.project.name}.png` });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+    let firstKey = ""; let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/rest/v1/rpc/generate_nutrition_week", async route => {
+      firstKey = route.request().postDataJSON().p_payload.idempotencyKey; await held;
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Temporary save failure" }) });
+    });
+    const failed = nextRpcResponse(page, "generate_nutrition_week"); await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Shuffle", exact: true })).toBeDisabled();
+    await expect(choice).toBeDisabled();
+    await expect(selectAll).toBeDisabled(); await expect(clear).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Next week", exact: true })).toBeDisabled();
+    release(); expect((await failed).ok()).toBe(false);
+    await expect(dialog.getByText(/The save was not confirmed/)).toBeVisible();
+    await page.unroute("**/rest/v1/rpc/generate_nutrition_week");
+    const retry = nextRpcResponse(page, "generate_nutrition_week"); await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
+    const response = await retry; expect(response.ok()).toBe(true); expect(response.request().postDataJSON().p_payload.idempotencyKey).toBe(firstKey);
+    await expect(dialog).not.toBeVisible(); await expect(generate).toBeEnabled(); await generate.click();
+    await dialog.getByRole("button", { name: "Clear", exact: true }).click();
+    await expect(choice).toBeEnabled(); await choice.check();
+    await expect(dialog.getByRole("heading", { name: "Preview · 0 meals", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeDisabled();
+    await expect(choices.getByText("No whole servings remain in this week’s allowance.", { exact: true })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Select all", exact: true }).click();
+    expect(await choices.locator('input:checked').count()).toBe(await choices.getByRole("checkbox").count());
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await page.reload(); await expect(generate).toBeEnabled();
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await expect(generate).toBeEnabled();
+    await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: `View recipe: ${name}`, exact: true }).click();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    await edit.getByLabel("Recipe servings", { exact: true }).fill("40");
+    const expanded = nextRpcResponse(page, "save_recipe"); await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+    const expandedResponse = await expanded;
+    if (!expandedResponse.ok()) {
+      // The recovered editor predates the generated grocery revision.
+      await edit.getByRole("button", { name: "Use latest version", exact: true }).click();
+      await expect(edit.getByLabel("Recipe servings", { exact: true })).toHaveValue("40");
+      const reviewed = nextRpcResponse(page, "save_recipe"); await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+      const response = await reviewed; expect(response.ok(), await response.text()).toBe(true);
+    }
+    await overview.getByRole("button", { name: "Close", exact: true }).click();
+    await generate.click();
+    await expect(dialog.getByRole("button", { name: "Review updated preview", exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Review updated preview", exact: true }).click();
+    await dialog.getByRole("button", { name: "Clear", exact: true }).click();
+    await dialog.getByRole("checkbox", { name: new RegExp(name) }).check();
+    await expect(dialog.getByRole("region", { name: "Unused servings" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeDisabled();
+    await dialog.getByRole("checkbox", { name: "Save the meals shown, leaving these servings unused.", exact: true }).check();
+    await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeEnabled();
+    await dialog.screenshot({ path: `output/weekly-generation/dialog-normal-${info.project.name}.png` });
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
+test("recipe unit conversions retain amounts and recover pending confirmations", async ({ browser }, info) => {
+  const account = await createLocalAccount(`unit-conversions-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Unit Conversions"); await openNutritionPage(page);
+    await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }).click();
+    const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+    await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    await expect(overview.getByText("2 tbsp", { exact: true })).toBeVisible();
+    await expect(overview.getByText("2 cloves", { exact: true })).toBeVisible();
+    await expect(overview.getByText("½ cucumber", { exact: true })).toBeVisible();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+    const name = `Converted Bowl ${info.project.name}`;
+    await editor.getByLabel("Recipe name", { exact: true }).fill(name);
+    await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    for (const picker of await editor.getByRole("combobox").filter({ has: page.locator('option[value="kg"]') }).all()) {
+      expect(await picker.locator("option").allTextContents()).toEqual(["g", "kg", "mg", "oz", "ml", "tsp", "tbsp", "cups", "piece/s"]);
+    }
+    await expect(editor.getByLabel("Garlic unit", { exact: true })).toHaveValue("piece");
+    await expect(editor.getByLabel("Garlic quantity", { exact: true })).toHaveValue("2");
+    const soyQuantity = editor.getByLabel("Soy sauce quantity", { exact: true });
+    await editor.getByLabel("Soy sauce unit", { exact: true }).selectOption("tsp");
+    await expect(soyQuantity).toHaveValue("6");
+    await editor.getByLabel("Soy sauce unit", { exact: true }).selectOption("g"); await expect(soyQuantity).toHaveValue("32");
+    await editor.getByLabel("Soy sauce unit", { exact: true }).selectOption("tbsp"); await expect(soyQuantity).toHaveValue("2");
+    await editor.getByLabel("Honey unit", { exact: true }).selectOption("tsp");
+    await expect(editor.getByLabel("Honey quantity", { exact: true })).toHaveValue("3");
+    const beefQuantity = editor.getByLabel("Beef mince, 5% fat quantity", { exact: true });
+    const beefUnit = editor.getByLabel("Beef mince, 5% fat unit", { exact: true });
+    const confirmation = editor.getByRole("region", { name: "Confirm conversion for Beef mince, 5% fat", exact: true });
+    const factor = confirmation.getByLabel("Beef mince, 5% fat conversion grams per cup", { exact: true });
+    await beefUnit.selectOption("cup"); await expect(factor).toBeFocused();
+    await expect(beefQuantity).toHaveValue("600"); await expect(editor.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+    await factor.fill("0"); await expect(confirmation.getByRole("button", { name: "Confirm conversion", exact: true })).toBeDisabled();
+    await confirmation.getByRole("button", { name: "Cancel conversion", exact: true }).click();
+    await expect(beefQuantity).toHaveValue("600"); await expect(beefUnit).toHaveValue("g"); await expect(beefQuantity).toBeFocused();
+    await beefUnit.selectOption("cup"); await factor.fill("200");
+    await expect(confirmation).toContainText("≈3 cup");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await overview.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(editor.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+    await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    await expect(factor).toHaveValue("200"); await expect(factor).toBeFocused(); await expect(beefQuantity).toHaveValue("600");
+    if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" }); await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await editor.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    expect(await confirmation.evaluate(node => [node, ...node.querySelectorAll("*")].every(element => element.scrollWidth <= element.clientWidth + 1))).toBe(true);
+    await factor.scrollIntoViewIfNeeded();
+    await editor.screenshot({ path: `output/recipe-unit-conversions/confirmation-${info.project.name}.png` });
+    const confirm = confirmation.getByRole("button", { name: "Confirm conversion", exact: true });
+    await confirm.scrollIntoViewIfNeeded(); await expect(confirm).toBeInViewport(); await confirm.click();
+    await expect(beefQuantity).toHaveValue("3"); await expect(beefQuantity).toBeFocused();
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+    await editor.getByRole("tab", { name: "Details", exact: true }).click();
+    await expect(editor.getByLabel("Provided calories (kcal)", { exact: true })).toHaveValue("560");
+    const response = nextRpcResponse(page, "save_recipe"); await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await response).ok()).toBe(true); await overview.getByRole("button", { name: "Close", exact: true }).click();
+    await page.reload(); await page.getByRole("button", { name: `View recipe: ${name}`, exact: true }).click();
+    await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    await expect(overview.getByText("3 cup", { exact: true })).toBeVisible(); await expect(overview.getByText("3 tsp", { exact: true })).toBeVisible();
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
+test("recipe authoring normalizes legacy draft units and unmatched volume suggestions", async ({ page }, info) => {
+  const editor = await openRecipe(page);
+  await editor.getByLabel("Recipe name", { exact: true }).fill("Recovered units");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await editor.getByLabel("Ingredient search").fill("Greek yogurt");
+  await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
+  await editor.getByLabel("Greek yogurt quantity", { exact: true }).fill("100");
+  await editor.getByLabel("Greek yogurt unit", { exact: true }).selectOption("ml");
+  const conversion = editor.getByRole("region", { name: "Confirm conversion for Greek yogurt", exact: true });
+  await conversion.getByLabel("Greek yogurt conversion grams per ml", { exact: true }).fill("1");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.evaluate(async () => {
+    const request = indexedDB.open("calicoach-drafts");
+    const db = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("drafts", "readwrite"), read = tx.objectStore("drafts").openCursor();
+      read.onsuccess = () => { const cursor = read.result; if (!cursor) return; const record = cursor.value, value = record.value ?? record;
+        if (value.draftType === "recipe:new" && value.payload.name === "Recovered units") {
+          value.payload.ingredients[0].pendingConversion = { unit: "l", gramsPerUnit: "1000" };
+          cursor.update(record);
+        } cursor.continue(); };
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+    }); db.close();
+  });
+  await page.reload();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(editor.getByLabel("Greek yogurt unit", { exact: true })).toHaveValue("ml");
+  await expect(conversion.getByLabel("Greek yogurt conversion grams per ml", { exact: true })).toHaveValue("1");
+  await conversion.getByRole("button", { name: "Confirm conversion", exact: true }).click();
+  await expect(editor.getByLabel("Greek yogurt quantity", { exact: true })).toHaveValue("100");
+  await page.route("**/functions/v1/nutrition-text-parse", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ suggestedMealName: "Vegetables", candidates: [{ name: "Unmatched vegetable", quantity: 3, unit: "cups", preparation: "raw", assumptions: [], confidence: "medium", presence: "stated" }], questions: [] }) }));
+  await page.route("**/functions/v1/nutrition-meal-match", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ matches: [] }) }));
+  await editor.getByRole("button", { name: "Describe ingredients", exact: true }).click();
+  await editor.getByLabel("Ingredient description").fill("3 cups of vegetables");
+  await editor.getByRole("button", { name: "Analyze ingredients", exact: true }).click();
+  const review = editor.getByRole("region", { name: "Ingredient review" });
+  const unit = review.getByLabel("Unmatched vegetable unit", { exact: true });
+  await expect(review.getByLabel("Unmatched vegetable quantity", { exact: true })).toHaveValue("3");
+  await expect(unit).toHaveValue("cup");
+  expect(await unit.locator("option").allTextContents()).toEqual(["g", "kg", "mg", "oz", "ml", "tsp", "tbsp", "cups", "piece/s"]);
+  await unit.selectOption("tsp");
+  await expect(review.getByLabel("Unmatched vegetable quantity", { exact: true })).toHaveValue("144");
+  await expect(review.getByRole("button", { name: "Add selected ingredients", exact: true })).toBeDisabled();
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await unit.scrollIntoViewIfNeeded();
+  expect(await editor.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await editor.screenshot({ path: `output/restricted-recipe-units/recovered-units-${info.project.name}.png` });
+});
+
+test("recipe original measurements recover from a stale snapshot and failed refresh", async ({ page }) => {
+  const editor = await openRecipe(page);
+  await editor.getByLabel("Recipe name", { exact: true }).fill("Retained during recipe refresh");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.addInitScript(() => {
+    const stream: unknown[] = [];
+    const push = stream.push.bind(stream);
+    stream.push = (...entries) => push(...entries.map(entry => Array.isArray(entry) ? entry.map(value => typeof value === "string" ? value.replaceAll("cookingMeasurement", "legacyCookingMeasurement") : value) : entry));
+    (window as typeof window & { __next_f: unknown[] }).__next_f = stream;
+  });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+  let failedReads = 0;
+  await page.route("**/rest/v1/meal_ingredients*", async route => { failedReads += 1; await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Temporary recipe read failure" }) }); });
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }).click();
+  await expect(page.getByText(/Original recipe measurements could not be loaded/)).toBeVisible();
+  expect(failedReads).toBeGreaterThan(0); await expect(page.getByRole("dialog", { name: "Recipe overview", exact: true })).toHaveCount(0);
+  await page.unroute("**/rest/v1/meal_ingredients*"); await page.getByRole("button", { name: "Retry recipe", exact: true }).click();
+  const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+  await expect(overview).toBeVisible(); await expect(page.getByText("Current account data refreshed.", { exact: true })).toHaveCount(0);
+  await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(overview.getByText("2 tbsp", { exact: true })).toBeVisible();
+  await expect(overview.getByText("½ cucumber", { exact: true })).toBeVisible();
+  await overview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
+  await expect(editor.getByLabel("Recipe name", { exact: true })).toHaveValue("Retained during recipe refresh");
+  await editor.getByRole("button", { name: "Discard draft", exact: true }).click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+});
+
+test("recipe cooking measurements open Details first and preserve original units through personal edits", async ({ browser }, info) => {
+  const account = await createLocalAccount(`cooking-measurements-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+  await completeOnboarding(page, "Cooking Measurements");
+  await openNutritionPage(page); await clearBrowserDrafts(page);
+  const saved = page.getByRole("region", { name: "Recipes" });
+  await page.route("**/images/recipes/creamy-lemon-chicken.png", route => route.fulfill({ status: 503, body: "Image temporarily unavailable" }));
+  await saved.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true }).click();
+  const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+  await expect(overview.getByText("Image unavailable · default shown", { exact: true })).toBeVisible();
+  await page.unroute("**/images/recipes/creamy-lemon-chicken.png");
+  await overview.getByRole("button", { name: "Retry image", exact: true }).click();
+  await expect(overview.getByText("Image unavailable · default shown", { exact: true })).toHaveCount(0);
+  await expect(overview.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(overview.getByText("Recipe image", { exact: true })).toHaveCount(0);
+  await expect(overview.getByText("30 mins", { exact: true })).toBeVisible();
+  await expect(overview.getByRole("group", { name: "Recipe nutrition per serving" })).toBeVisible();
+  await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  const ingredients = overview.getByRole("tabpanel", { name: "Ingredients", exact: true });
+  for (const text of ["400 g", "25–30 g", "300 ml", "Juice of 1 lemon", "Salt", "Pepper", "Chicken bouillon powder", "MSG"]) await expect(ingredients.getByText(text, { exact: true })).toBeVisible();
+  await expect(ingredients.getByRole("group", { name: "Recipe nutrition per serving" })).toHaveCount(0);
+  await expect(ingredients.getByText(/USDA FoodData Central/)).toHaveCount(0);
+  await overview.getByRole("tab", { name: "Instructions", exact: true }).click();
+  await expect(overview.getByRole("tabpanel", { name: "Instructions", exact: true }).getByText(/Nutrition estimate:/)).toHaveCount(0);
+  await overview.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+  await expect(editor.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await editor.getByLabel("Recipe name", { exact: true }).fill("Cooking Chicken " + info.project.name);
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(editor.getByLabel("Milk quantity", { exact: true })).toHaveValue("300");
+  await expect(editor.getByLabel("Milk unit", { exact: true })).toHaveValue("ml");
+  await expect(editor.getByLabel("Butter quantity", { exact: true })).toHaveValue("25");
+  await expect(editor.getByLabel("Butter upper quantity", { exact: true })).toHaveValue("30");
+  await editor.getByLabel("Milk quantity", { exact: true }).fill("200");
+  const panel = editor.getByRole("tabpanel", { name: "Ingredients", exact: true });
+  await expect(panel.getByRole("group", { name: "Recipe nutrition per serving" })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await overview.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(editor.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(editor.getByLabel("Milk quantity", { exact: true })).toHaveValue("200");
+  let key = "";
+  await page.route("**/rest/v1/rpc/save_recipe", route => { key = route.request().postDataJSON().p_payload.idempotencyKey; return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary save failure" }) }); });
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(editor.getByText(/Recipe was not saved/)).toBeVisible();
+  await expect(editor.getByLabel("Milk unit", { exact: true })).toHaveValue("ml");
+  await page.unroute("**/rest/v1/rpc/save_recipe");
+  const response = nextRpcResponse(page, "save_recipe");
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  const result = await response; expect(result.ok()).toBe(true); expect(result.request().postDataJSON().p_payload.idempotencyKey).toBe(key);
+  await expect(overview.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await overview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.reload();
+  await saved.getByRole("button", { name: "View recipe: Cooking Chicken " + info.project.name, exact: true }).click();
+  await expect(overview.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(overview.getByText("200 ml", { exact: true })).toBeVisible();
+  await expect(overview.getByText("25–30 g", { exact: true })).toBeVisible();
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(await overview.getByRole("tabpanel", { name: "Ingredients", exact: true }).evaluate(node => [node, ...node.querySelectorAll("*")].filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.tagName))).toEqual([]);
+  const headingBounds = await overview.getByRole("heading", { name: "Recipe overview", exact: true }).boundingBox();
+  const closeBounds = await overview.getByRole("button", { name: "Close recipe overview", exact: true }).boundingBox();
+  expect(headingBounds!.x + headingBounds!.width).toBeLessThanOrEqual(closeBounds!.x);
+  await overview.getByRole("tabpanel", { name: "Ingredients", exact: true }).scrollIntoViewIfNeeded();
+  await overview.screenshot({ path: `output/recipe-measurements/cooking-overview-${info.project.name}.png` });
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
 test("predefined recipe catalog displays the replacement image, complete metadata and source", async ({ page }, info) => {
   await openNutritionPage(page);
-  const saved = page.getByRole("region", { name: "Saved meals" });
+  const saved = page.getByRole("region", { name: "Recipes" });
   const row = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true }) });
   await expect(row).toBeVisible();
   for (const name of ["Greek Yogurt Berry Bowl", "PB Banana Toast", "Chicken & Rice Plate", "Salmon & Sweet Potato", "Egg, Broccoli & Almond Plate", "Chicken & Broccoli Plate", "Tofu & Broccoli Plate", "Tofu, Broccoli & Almond Bowl"]) {
@@ -48,7 +523,7 @@ test("predefined recipe catalog displays the replacement image, complete metadat
   await expect(overview.getByRole("link", { name: /7647909556240076033/ })).toBeVisible();
   await expect(overview.getByRole("group", { name: "Recipe nutrition per serving" })).toBeVisible();
   await overview.getByRole("tab", { name: "Instructions", exact: true }).click();
-  await expect(overview.getByText(/Seasonings are unmeasured and excluded/)).toBeVisible();
+  await expect(overview.getByRole("tabpanel", { name: "Instructions", exact: true }).getByText(/Nutrition estimate:/)).toHaveCount(0);
   await overview.getByRole("button", { name: "Close", exact: true }).click();
   if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -64,7 +539,7 @@ test("Korean Beef Bowl keeps provided macros and supports personal edit and arch
   try {
     await completeOnboarding(recipePage, "Recipe Controls");
     await openNutritionPage(recipePage);
-    const saved = recipePage.getByRole("region", { name: "Saved meals" });
+    const saved = recipePage.getByRole("region", { name: "Recipes" });
     const card = (name: string) => saved.getByRole("listitem").filter({ has: recipePage.getByRole("button", { name: `View recipe: ${name}`, exact: true }) });
     const original = card("Korean Beef Bowl");
     await expect(original.getByText("≈560 kcal", { exact: true })).toBeVisible();
@@ -72,10 +547,13 @@ test("Korean Beef Bowl keeps provided macros and supports personal edit and arch
     await expect(original.locator("img")).toHaveAttribute("src", "/images/recipes/korean-beef-bowl.png");
     await expect(original.getByRole("button", { name: "Edit Korean Beef Bowl", exact: true })).toBeEnabled();
     await original.screenshot({ path: `output/korean-beef-bowl/card-${info.project.name}.png` });
-    await original.getByRole("button", { name: "Log", exact: true }).click();
-    await original.getByRole("combobox", { name: "Meal slot", exact: true }).selectOption("lunch");
+    await openNutritionSlot(recipePage, "Lunch");
+    await recipePage.getByLabel("Search foods or saved recipes, or describe a meal.", { exact: true }).fill("korean beef bowl");
+    await recipePage.getByRole("region", { name: "Saved recipes matches" }).getByRole("button", { name: /Korean Beef Bowl/ }).click();
+    const logReview = recipePage.getByRole("group", { name: "Review recipe servings", exact: true });
+    await logReview.getByLabel("Recipe servings", { exact: true }).fill("4");
     let response = nextRpcResponse(recipePage, "save_reviewed_meal");
-    await original.getByRole("button", { name: "Confirm log", exact: true }).click();
+    await logReview.getByRole("button", { name: "Log meal", exact: true }).click();
     expect((await response).ok()).toBe(true);
     const logged = recipePage.getByRole("region", { name: "Planned" }).getByRole("listitem").filter({ has: recipePage.getByRole("button", { name: "Delete Korean Beef Bowl", exact: true }) });
     await expect(logged.getByText("2240 kcal", { exact: true })).toBeVisible();
@@ -90,6 +568,10 @@ test("Korean Beef Bowl keeps provided macros and supports personal edit and arch
     await expect(editor.getByText("Check all four provided macro values.", { exact: true })).toBeVisible();
     await editor.getByLabel("Provided calories (kcal)", { exact: true }).fill("560");
     await editor.getByLabel("Recipe name", { exact: true }).fill("My Korean Beef Bowl");
+    await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    await editor.getByLabel("Beef mince, 5% fat quantity", { exact: true }).fill("500");
+    await editor.getByRole("tab", { name: "Details", exact: true }).click();
+    await expect(editor.getByLabel("Provided calories (kcal)", { exact: true })).toHaveValue("560");
     await recipePage.route("**/rest/v1/rpc/save_recipe", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "temporary failure" }) }));
     response = nextRpcResponse(recipePage, "save_recipe");
     await editor.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -115,8 +597,8 @@ test("Korean Beef Bowl keeps provided macros and supports personal edit and arch
     await recipePage.reload();
     await expect(card("Creamy Lemon Chicken")).toHaveCount(0);
     await page.goto("/nutrition");
-    await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true })).toBeVisible();
     await recipePage.emulateMedia({ reducedMotion: "reduce" });
     if (info.project.name === "mobile") await recipePage.setViewportSize({ width: 320, height: 900 });
     await recipePage.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -136,7 +618,7 @@ test("saved recipe favorites persist while compact planned rows retain logging a
   const recipeTitle = planned.getByRole("button", { name: /^View recipe: / }).first();
   const name = (await recipeTitle.getAttribute("aria-label"))!.replace("View recipe: ", "");
   const plannedCard = planned.getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${name}`, exact: true }) }).first();
-  const saved = page.getByRole("region", { name: "Saved meals" });
+  const saved = page.getByRole("region", { name: "Recipes" });
   const savedCard = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: `View recipe: ${name}`, exact: true }) });
   const heart = savedCard.getByRole("button", { name: `Add to favorites: ${name}`, exact: true });
   await expect(heart).toBeEnabled();
@@ -194,16 +676,16 @@ test("saved recipe favorites persist while compact planned rows retain logging a
 
 test("recipe card refinements preserve calorie basis, yield, icon controls and Medium defaults", async ({ page }, info) => {
   await openNutritionPage(page); await clearBrowserDrafts(page);
-  const saved = page.getByRole("region", { name: "Saved meals" });
+  const saved = page.getByRole("region", { name: "Recipes" });
   const row = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) });
   await expect(row.getByText("≈560 kcal", { exact: true })).toBeVisible();
   await expect(row.getByRole("img", { name: "Recipe yields 4 servings", exact: true })).toBeVisible();
   await expect(row.getByRole("img", { name: "Approximately 560 calories per serving", exact: true })).toBeVisible();
   await expect(saved.getByRole("button", { name: "Duplicate", exact: true })).toHaveCount(0);
-  const log = row.getByRole("button", { name: "Log", exact: true });
+  const planTrigger = row.getByRole("button", { name: "Add to plan", exact: true });
   const edit = row.getByRole("button", { name: "Edit Korean Beef Bowl", exact: true });
   const archive = row.getByRole("button", { name: "Archive Korean Beef Bowl", exact: true });
-  await log.focus(); await page.keyboard.press("Tab"); await expect(edit).toBeFocused();
+  await planTrigger.focus(); await page.keyboard.press("Tab"); await expect(edit).toBeFocused();
   await expect(row.getByRole("tooltip", { name: "Edit", exact: true })).toBeVisible();
   await page.keyboard.press("Escape"); await expect(row.getByRole("tooltip")).toHaveCount(0);
   await page.keyboard.press("Tab"); await expect(archive).toBeFocused();
@@ -214,10 +696,12 @@ test("recipe card refinements preserve calorie basis, yield, icon controls and M
   const editDialog = page.getByRole("dialog", { name: "Edit recipe", exact: true });
   await editDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(edit).toBeFocused();
-  await log.click(); await expect(row.getByRole("combobox", { name: "Meal slot", exact: true })).toBeFocused();
-  const confirmation = row.getByRole("group", { name: "Log Korean Beef Bowl", exact: true });
-  expect((await confirmation.boundingBox())!.y).toBeLessThan((await log.boundingBox())!.y);
-  await row.getByRole("button", { name: "Cancel", exact: true }).click();
+  await planTrigger.click();
+  const confirmation = saved.getByRole("group", { name: "Add Korean Beef Bowl to plan", exact: true });
+  await expect(confirmation.getByRole("combobox", { name: "Meal slot", exact: true })).toBeFocused();
+  expect((await confirmation.boundingBox())!.y).toBeLessThan((await planTrigger.boundingBox())!.y);
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(planTrigger).toBeFocused();
   const planned = page.getByRole("region", { name: "Planned" });
   const initialPlannedRow = planned.getByRole("listitem").filter({ has: page.getByRole("button", { name: /^View recipe: / }) }).first();
   const plannedLogId = await initialPlannedRow.getByRole("button", { name: "Log", exact: true }).getAttribute("id");
@@ -267,7 +751,9 @@ test("recipe card refinements preserve calorie basis, yield, icon controls and M
   await saved.getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByText("Recipe draft restored.", { exact: true })).toHaveCount(0);
   await editor.getByLabel("Recipe name", { exact: true }).fill("Default Medium " + info.project.name);
-  await editor.getByLabel("Recipe servings", { exact: true }).fill("2.5");
+  await editor.getByLabel("Recipe servings", { exact: true }).fill("3");
+  await editor.getByRole("checkbox", { name: "Breakfast", exact: true }).check();
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByLabel("Ingredient search").fill("eggs");
   await editor.getByRole("button", { name: /^Egg.*1 large egg/ }).click();
   await editor.getByLabel("Egg quantity", { exact: true }).fill("1");
@@ -278,7 +764,7 @@ test("recipe card refinements preserve calorie basis, yield, icon controls and M
   await page.reload();
   const created = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Default Medium " + info.project.name, exact: true }) });
   await expect(created.getByText("Medium", { exact: true })).toBeVisible();
-  await expect(created.getByRole("img", { name: "Recipe yields 2.5 servings", exact: true })).toBeVisible();
+  await expect(created.getByRole("img", { name: "Recipe yields 3 servings", exact: true })).toBeVisible();
 });
 
 test("recipe controls step servings, suggest plural and close matches, and preserve method text", async ({ page }, info) => {
@@ -291,10 +777,8 @@ test("recipe controls step servings, suggest plural and close matches, and prese
   await plus.focus();
   await page.keyboard.press("Enter");
   await expect(servings).toHaveValue("1");
-  await minus.click();
-  await expect(servings).toHaveValue("0");
   await expect(minus).toBeDisabled();
-  await servings.fill("1.5"); await plus.click(); await minus.click();
+  await servings.fill("1.5"); await expect(plus).toBeDisabled(); await expect(minus).toBeDisabled();
   await expect(servings).toHaveValue("1.5");
   await servings.fill("-1"); await expect(minus).toBeDisabled(); await expect(plus).toBeDisabled();
   await servings.fill("10000"); await expect(plus).toBeDisabled();
@@ -325,7 +809,7 @@ test("recipe controls step servings, suggest plural and close matches, and prese
   expect(Math.abs(removeBounds!.y + removeBounds!.height - unitBounds!.y - unitBounds!.height)).toBeLessThan(2);
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.reload();
-  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
   await editor.getByRole("button", { name: "Describe ingredients", exact: true }).click();
   await expect(editor.getByLabel("Ingredient description")).toHaveValue("Eggs and cooked rice");
   await editor.getByRole("button", { name: "Add custom ingredient", exact: true }).click();
@@ -359,6 +843,7 @@ test("recipe authoring saves custom nutrition, live totals, instructions and ref
   await expect(editor.getByPlaceholder("Servings", { exact: true })).toHaveValue("");
   await editor.getByLabel("Recipe name", { exact: true }).fill(name);
   await editor.getByLabel("Recipe servings", { exact: true }).fill("2");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByRole("button", { name: "Add custom ingredient", exact: true }).click();
   await editor.getByLabel("Custom ingredient name").fill("Recipe test ingredient");
   await editor.getByLabel("Custom serving label").fill("100 g");
@@ -366,7 +851,17 @@ test("recipe authoring saves custom nutrition, live totals, instructions and ref
   for (const [metric,value] of [["calories","100"],["protein","10"],["carbs","20"],["fat","0"]]) await editor.getByLabel(`Custom ${metric}`, { exact: true }).fill(value);
   await editor.getByRole("button", { name: "Add custom ingredient to recipe" }).click();
   await expect(editor.getByPlaceholder("Quantity", { exact: true })).toHaveValue("");
-  await editor.getByLabel("Recipe test ingredient quantity").fill("1.5");
+  await editor.getByLabel("Recipe test ingredient measurement type").selectOption("range");
+  await editor.getByLabel("Recipe test ingredient quantity", { exact: true }).fill("100");
+  await editor.getByLabel("Recipe test ingredient upper quantity").fill("150");
+  await editor.getByLabel("Recipe test ingredient unit").selectOption("tbsp");
+  await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  const confirmation = editor.getByRole("region", { name: "Confirm conversion for Recipe test ingredient", exact: true });
+  await confirmation.getByLabel("Recipe test ingredient conversion grams per tbsp", { exact: true }).fill("100");
+  await expect(confirmation).toContainText("≈1–1.5 tbsp");
+  await confirmation.getByRole("button", { name: "Confirm conversion", exact: true }).click();
+  await expect(editor.getByLabel("Recipe test ingredient quantity", { exact: true })).toHaveValue("1");
+  await editor.getByRole("tab", { name: "Details", exact: true }).click();
   const pills = editor.getByRole("group", { name: "Recipe nutrition per serving" });
   await expect(pills).toContainText("75 kcal");
   await expect(pills).toContainText("8 g protein");
@@ -378,10 +873,13 @@ test("recipe authoring saves custom nutrition, live totals, instructions and ref
   await fillRecipeSection(editor, "Details", "Reference (optional)", "https://example.com/recipe");
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.reload();
-  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByText("Recipe draft restored.")).toBeVisible();
-  await expect(editor.getByLabel("Recipe test ingredient quantity")).toHaveValue("1.5");
   await expect(pills).toContainText("50 kcal");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
+  await expect(editor.getByLabel("Recipe test ingredient quantity", { exact: true })).toHaveValue("1");
+  await expect(editor.getByLabel("Recipe test ingredient upper quantity")).toHaveValue("1.5");
+  await expect(editor.getByLabel("Recipe test ingredient unit")).toHaveValue("tbsp");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
@@ -394,7 +892,7 @@ test("recipe authoring saves custom nutrition, live totals, instructions and ref
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   expect((await response).ok()).toBe(true);
   await expect(editor).toHaveCount(0);
-  const saved = page.getByRole("region", { name: "Saved meals" }).getByRole("listitem").filter({ hasText: name }).first();
+  const saved = page.getByRole("region", { name: "Recipes" }).getByRole("listitem").filter({ hasText: name }).first();
   await saved.getByRole("button", { name: `View recipe: ${name}`, exact: true }).click();
   const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
   await overview.getByRole("tab", { name: "Instructions", exact: true }).click();
@@ -414,6 +912,7 @@ test("recipe authoring keeps the same retry key and recovers the full draft afte
   let editor = await openRecipe(page);
   await editor.getByLabel("Recipe name", { exact: true }).fill(`Retry recipe ${Date.now()}`);
   await editor.getByLabel("Recipe servings", { exact: true }).fill("1");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByLabel("Ingredient search").fill("Greek yogurt");
   await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
   await editor.getByLabel("Greek yogurt quantity").fill("1");
@@ -428,10 +927,11 @@ test("recipe authoring keeps the same retry key and recovers the full draft afte
   await expect(editor.getByText(/Recipe was not saved/)).toBeVisible();
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.reload();
-  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
   editor = page.getByRole("dialog", { name: "Create recipe", exact: true });
   await expect(editor.getByText("Recipe draft restored.")).toBeVisible();
   await expect(editor.getByLabel("Reference (optional)")).toHaveValue("Cookbook page 4");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await expect(editor.getByLabel("Greek yogurt quantity")).toHaveValue("1");
   await page.unroute("**/rest/v1/rpc/save_recipe");
   const response = nextRpcResponse(page, "save_recipe");
@@ -446,6 +946,7 @@ test("recipe authoring reviews AI suggestions, supported units and provider fail
   const editor = await openRecipe(page);
   await editor.getByLabel("Recipe name", { exact: true }).fill("Review recipe");
   await editor.getByLabel("Recipe servings", { exact: true }).fill("2");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByLabel("Ingredient search").fill("Greek yogurt");
   await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
   await editor.getByLabel("Greek yogurt quantity").fill("1");
@@ -457,7 +958,11 @@ test("recipe authoring reviews AI suggestions, supported units and provider fail
   const review = editor.getByRole("region", { name: "Ingredient review" });
   await expect(review.getByRole("button", { name: "Add selected ingredients" })).toBeDisabled();
   await expect(review.getByRole("checkbox", { name: "Honey", exact: true })).not.toBeChecked();
-  await review.getByLabel("Greek yogurt unit").selectOption("serving");
+  await expect(review.getByLabel("Greek yogurt unit")).toHaveValue("g");
+  expect(await review.getByLabel("Greek yogurt unit").locator("option").allTextContents()).toEqual(["g", "kg", "mg", "oz", "ml", "tsp", "tbsp", "cups", "piece/s"]);
+  const conversion = review.getByRole("region", { name: "Confirm conversion for Greek yogurt", exact: true });
+  await conversion.getByLabel("Greek yogurt conversion grams per buckets", { exact: true }).fill("170");
+  await conversion.getByRole("button", { name: "Confirm conversion", exact: true }).click();
   await review.getByRole("button", { name: "Add selected ingredients" }).click();
   await expect(editor.getByRole("button", { name: "Remove Greek yogurt", exact: true })).toHaveCount(2);
   await expect(review.getByRole("checkbox", { name: "Greek yogurt", exact: true })).toHaveCount(0);
@@ -472,7 +977,7 @@ test("recipe authoring reviews AI suggestions, supported units and provider fail
   await expect(editor.getByRole("group", { name: "Recipe nutrition per serving" })).toHaveCount(0);
   await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByText("Recipe draft restored.")).toBeVisible();
   await editor.getByRole("button", { name: "Discard draft", exact: true }).click();
   await expect(editor.getByLabel("Recipe name", { exact: true })).toHaveValue("");
@@ -483,14 +988,18 @@ test("recipe authoring reviews AI suggestions, supported units and provider fail
 test("recipe authoring fills trusted search nutrition and retains input when search fails", async ({ page }) => {
   const editor = await openRecipe(page);
   await editor.getByLabel("Recipe servings", { exact: true }).fill("2");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByLabel("Ingredient search").fill("Test lentils");
   await page.route("**/functions/v1/nutrition-search", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ candidates: [{ fdcId: "recipe-test-lentils", recordType: "Foundation", name: "Test lentils", servingLabel: "100 g", servingGrams: 100, unit: "g", calories: 120, proteinG: 8, carbsG: 20, fatG: 0, nutrientsPer100g: { calories: 120, proteinG: 8, carbsG: 20, fatG: 0 }, source: "USDA FoodData Central", sourceVersion: "test", estimated: false, confidence: "high", preparationBasis: "cooked" }] }) }));
   await editor.getByRole("button", { name: "Search trusted USDA", exact: true }).click();
   await editor.getByRole("button", { name: /Test lentils.*USDA FoodData Central/ }).click();
-  await expect(editor.getByText("100 g · cooked · USDA FoodData Central", { exact: true })).toBeVisible();
+  await expect(editor.getByText("100 g · cooked · USDA FoodData Central", { exact: true })).toHaveCount(0);
   await editor.getByLabel("Test lentils quantity").fill("150");
   await editor.getByLabel("Test lentils unit").selectOption("g");
+  await editor.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(editor.getByRole("group", { name: "Recipe nutrition per serving" })).toContainText("90 kcal");
+  await expect(editor.getByRole("region", { name: "Nutrition basis", exact: true })).toContainText("USDA FoodData Central");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await page.unroute("**/functions/v1/nutrition-search");
   await page.route("**/functions/v1/nutrition-search", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "provider_unavailable" }) }));
   await editor.getByLabel("Ingredient search").fill("Another ingredient");
@@ -502,17 +1011,17 @@ test("recipe authoring fills trusted search nutrition and retains input when sea
 });
 
 test("recipe modal traps focus, scopes help dismissal and retains drafts across closing", async ({ page }, info) => {
-  const editor = await openRecipe(page);
-  const create = page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true });
+  const editor = await openRecipe(page, false);
+  const create = page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true });
   await expect(editor.getByLabel("Recipe name", { exact: true })).toBeFocused();
   await expect(editor).toHaveAttribute("aria-modal", "true");
   await expect(editor.getByRole("heading", { name: "Recipe basics", exact: true })).toHaveCount(0);
   await expect(editor.getByRole("region", { name: "Recipe basics", exact: true })).toBeVisible();
-  await expect(editor.getByRole("heading", { name: "Ingredients", exact: true })).toBeVisible();
+  await expect(editor.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(editor.getByRole("heading", { name: "Ingredients", exact: true })).not.toBeVisible();
   await editor.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(editor.getByRole("tabpanel", { name: "Details", exact: true })).toBeVisible();
   await expect(editor.getByRole("textbox", { name: "Reference (optional)", exact: true })).toBeVisible();
-  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await expect(editor.getByLabel("Time (mins.)", { exact: true })).toHaveValue("");
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
   expect(await create.evaluate(node => Boolean(node.closest('[inert]')))).toBe(true);
@@ -583,10 +1092,12 @@ test("recipe time validates, persists and clears through the modal", async ({ pa
   const name = `Timed recipe ${Date.now()}`;
   await editor.getByLabel("Recipe name", { exact: true }).fill(name);
   await editor.getByLabel("Recipe servings", { exact: true }).fill("2");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByLabel("Ingredient search").fill("eggs");
   await editor.getByRole("button", { name: /^Egg.*1 large egg/ }).click();
   await editor.getByLabel("Egg quantity", { exact: true }).fill("1");
   await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Prepare and serve.");
+  await editor.getByRole("tab", { name: "Details", exact: true }).click();
   const time = editor.getByLabel("Time (mins.)", { exact: true });
   const save = editor.getByRole("button", { name: "Save", exact: true });
   await expect(save).toBeEnabled();
@@ -628,6 +1139,7 @@ test("recipe modal protects a pending save and shows stale-version recovery in t
   await editor.getByLabel("Recipe name", { exact: true }).fill("Conflict modal recipe");
   await editor.getByLabel("Time (mins.)", { exact: true }).fill("45");
   await editor.getByLabel("Recipe servings", { exact: true }).fill("1");
+  await editor.getByRole("tab", { name: "Ingredients", exact: true }).click();
   await editor.getByLabel("Ingredient search").fill("Greek yogurt");
   await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
   await editor.getByLabel("Greek yogurt quantity").fill("1");
@@ -656,7 +1168,7 @@ test("recipe modal protects a pending save and shows stale-version recovery in t
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   expect((await response).ok()).toBe(true);
   await expect(editor).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("button", { name: "Create", exact: true })).toBeFocused();
+  await expect(page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true })).toBeFocused();
 });
 
 test("loads an existing account immediately after signing in from a fresh browser", async ({ browser }) => {
@@ -704,14 +1216,15 @@ async function clearBrowserDrafts(page: Page) {
 
 async function openNutritionSlot(page: Page, slot: "Breakfast" | "Lunch" | "Dinner" | "Snack" = "Breakfast") {
   await page.goto("/nutrition");
-  await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("listitem").first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recipes" }).getByRole("listitem").first()).toBeVisible();
   await page.getByRole("region", { name: slot, exact: true }).getByRole("button", { name: "Add meal", exact: true }).click();
 
 }
 
 async function openNutritionPage(page: Page) {
   await page.goto("/nutrition");
-  await expect(page.getByRole("region", { name: "Saved meals" }).getByRole("listitem").first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recipes" }).getByRole("listitem").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
 }
 
 async function changeDayAndReturn(page: Page) {
@@ -1101,21 +1614,22 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
     await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
     const firstEaten = breakfast.getByRole("listitem").filter({ hasText: "Egg ×2" }).last();
-    await expect(firstEaten.getByRole("button", { name: "Log again" })).toBeFocused();
-    await firstEaten.getByRole("button", { name: "Log again" }).click();
-    await firstEaten.getByRole("spinbutton", { name: "Actual servings" }).fill("1.5");
-    const secondLog = nextRpcResponse(page, "log_planned_meal");
-    await firstEaten.getByRole("button", { name: "Confirm log" }).click();
-    expect((await secondLog).ok()).toBe(true);
-    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
-    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 2);
-    const secondEaten = breakfast.getByRole("listitem").filter({ hasText: "Egg ×1.5" }).last();
-    const secondDeleted = nextRpcResponse(page, "delete_nutrition_log");
-    await secondEaten.getByRole("button", { name: "Delete Egg" }).click();
-    expect((await secondDeleted).ok()).toBe(true);
-    await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore);
+    await expect(firstEaten.getByRole("button", { name: "Edit Egg", exact: true })).toBeFocused();
+    await expect(firstEaten.getByRole("button", { name: "Log again" })).toHaveCount(0);
+    await firstEaten.getByRole("button", { name: "Edit Egg", exact: true }).click();
+    const quantity = firstEaten.getByRole("spinbutton", { name: "Servings", exact: true });
+    await quantity.fill("3");
+    expect(await quantity.evaluate((input: HTMLInputElement) => input.validity.stepMismatch)).toBe(false);
+    await quantity.press("ArrowUp");
+    await expect(quantity).not.toHaveValue("3.01");
+    await quantity.fill("1.5");
+    const corrected = nextRpcResponse(page, "update_nutrition_log");
+    await firstEaten.getByRole("button", { name: "Save correction", exact: true }).click();
+    expect((await corrected).ok()).toBe(true);
+    await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
+    const correctedEaten = breakfast.getByRole("listitem").filter({ hasText: "Egg ×1.5" }).last();
     const firstDeleted = nextRpcResponse(page, "delete_nutrition_log");
-    await firstEaten.getByRole("button", { name: "Delete Egg" }).click();
+    await correctedEaten.getByRole("button", { name: "Delete Egg" }).click();
     expect((await firstDeleted).ok()).toBe(true);
     await expect(breakfast.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore + 1);
     await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore);
@@ -1139,7 +1653,21 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(lunch.getByText(/^Planned(?: ·|$)/)).toHaveCount(plannedBefore - 1);
     await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
     const eatenRecipe = lunch.getByRole("listitem").filter({ has: page.locator(`[data-planned-meal-id="${plannedRecipeId}"]`) });
-    await expect(eatenRecipe.getByRole("button", { name: "Log again" })).toBeVisible();
+    await expect(eatenRecipe.getByRole("button", { name: "Log again" })).toHaveCount(0);
+    await eatenRecipe.getByRole("button", { name: `Edit ${recipeName}`, exact: true }).click();
+    const correction = eatenRecipe.getByRole("group", { name: "Edit logged meal servings", exact: true });
+    await expect(correction.getByRole("combobox")).toHaveCount(0);
+    const ingredientQuantity = correction.getByRole("spinbutton", { name: "Recipe servings", exact: true });
+    await ingredientQuantity.fill("3");
+    expect(await ingredientQuantity.evaluate((input: HTMLInputElement) => input.validity.stepMismatch)).toBe(false);
+    await ingredientQuantity.press("ArrowUp");
+    await expect(ingredientQuantity).not.toHaveValue("3.01");
+    await ingredientQuantity.fill("0.5");
+    const corrected = nextRpcResponse(page, "update_logged_meal");
+    await correction.getByRole("button", { name: "Save correction", exact: true }).click();
+    expect((await corrected).ok()).toBe(true);
+    await expect(correction).toHaveCount(0);
+    await expect(lunch.getByText("Eaten", { exact: true })).toHaveCount(eatenBefore + 1);
     const deleted = nextRpcResponse(page, "delete_logged_meal");
     await eatenRecipe.getByRole("button", { name: `Delete ${recipeName}`, exact: true }).click();
     expect((await deleted).ok()).toBe(true);
@@ -1295,35 +1823,6 @@ test.describe("MVP-1 release browser gate", () => {
     await expect(card.getByRole("region", { name: "Breakfast" }).getByText("Two eggs", { exact: false })).toBeVisible();
   });
 
-  test("requires a slot before logging a saved meal", async ({ page }) => {
-    await page.goto("/nutrition");
-    const savedMeals = page.getByRole("region", { name: "Saved meals" });
-    await expect(savedMeals.getByRole("listitem").first()).toBeVisible();
-    const loggedDinnerMeals = page.getByRole("region", { name: "Dinner" }).getByRole("button", { name: /^Eaten Creamy Lemon Chicken/ });
-    const beforeCount = await loggedDinnerMeals.count();
-    const firstMeal = savedMeals.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true }) });
-    await firstMeal.getByRole("button", { name: "Log" }).click();
-    const picker = firstMeal.getByRole("group", { name: /^Log / });
-    await expect(picker.getByRole("button", { name: "Confirm log" })).toBeDisabled();
-    await picker.getByRole("combobox", { name: "Meal slot" }).selectOption("dinner");
-    const saved = nextRpcResponse(page, "save_reviewed_meal");
-    await picker.getByRole("button", { name: "Confirm log" }).click();
-    expect((await saved).ok()).toBe(true);
-    await expect(picker).toHaveCount(0);
-    await expect(loggedDinnerMeals).toHaveCount(beforeCount + 1);
-    const loggedMeal = loggedDinnerMeals.last();
-    await loggedMeal.click();
-    await expect(loggedMeal).toHaveAttribute("aria-expanded", "true");
-    const loggedRow = loggedMeal.locator("xpath=ancestor::li[1]");
-    await loggedRow.getByRole("button", { name: "Edit Creamy Lemon Chicken" }).click();
-    await expect(loggedRow.getByRole("group", { name: "Edit logged meal history" })).toBeVisible();
-    await loggedRow.getByRole("button", { name: "Discard changes" }).click();
-    const deleted = nextRpcResponse(page, "delete_logged_meal");
-    await loggedRow.getByRole("button", { name: "Delete Creamy Lemon Chicken" }).click();
-    expect((await deleted).ok()).toBe(true);
-    await expect(loggedDinnerMeals).toHaveCount(beforeCount);
-  });
-
   test("keeps logged food after a planned meal is skipped", async ({ page }) => {
     await logEgg(page);
     const dayCard = page.getByRole("region", { name: "Planned" });
@@ -1331,7 +1830,7 @@ test.describe("MVP-1 release browser gate", () => {
     const beforeCount = await breakfast.getByText("Eaten", { exact: true }).count();
     const firstPlanned = breakfast.getByRole("listitem").filter({ hasText: "Planned" }).first();
     const skip = firstPlanned.getByRole("button", { name: /^(Skip|Plan again)$/ });
-    const changed = nextRpcResponse(page, "skip_planned_meal");
+    const changed = nextRpcResponse(page, "edit_meal_plan");
     await skip.click();
     expect((await changed).ok()).toBe(true);
     await expect(breakfast.getByText("Eaten", { exact: true })).toHaveCount(beforeCount);
@@ -1631,6 +2130,76 @@ test("meal entry uses slot controls and focuses isolated food reviews", async ({
   await review.screenshot({ path: `output/recipe-card-refinements/slot-entry-review-${info.project.name}.png` });
 });
 
+test("saved recipe history edits whole meal servings and retains failed correction retries", async ({ page }, info) => {
+  await openNutritionPage(page); await clearBrowserDrafts(page);
+  const snack = page.getByRole("region", { name: "Snack", exact: true });
+  const originalPlanned = await snack.getByText(/^Planned(?: ·|$)/).count();
+  for (const name of ["Creamy Lemon Chicken", "Korean Beef Bowl"]) {
+    await openNutritionSlot(page, "Snack");
+    await page.getByLabel("Search foods or saved recipes, or describe a meal.", { exact: true }).fill(name);
+    await page.getByRole("region", { name: "Saved recipes matches" }).getByRole("button", { name: new RegExp(name) }).click();
+    const review = page.getByRole("group", { name: "Review recipe servings", exact: true });
+    await review.getByLabel("Recipe servings", { exact: true }).fill("3");
+    const logged = nextRpcResponse(page, "save_reviewed_meal");
+    await review.getByRole("button", { name: "Log meal", exact: true }).click();
+    expect((await logged).ok()).toBe(true);
+    const row = snack.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Delete ${name}`, exact: true }) }).last();
+    const edit = row.getByRole("button", { name: `Edit ${name}`, exact: true });
+    await edit.click();
+    const correction = row.getByRole("group", { name: "Edit logged meal servings", exact: true });
+    const amount = correction.getByLabel("Recipe servings", { exact: true });
+    await expect(amount).toBeFocused(); await expect(amount).toHaveValue("3");
+    await expect(correction.getByRole("spinbutton")).toHaveCount(1);
+    await expect(correction.getByRole("combobox")).toHaveCount(0);
+    await amount.fill("2");
+    await correction.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(edit).toBeFocused();
+    await edit.click(); await expect(amount).toHaveValue("3");
+    for (const invalid of ["", "0", "-1"]) {
+      await amount.fill(invalid); await expect(correction.getByRole("button", { name: "Save correction", exact: true })).toBeDisabled();
+    }
+    await amount.fill("0.5");
+    if (name === "Korean Beef Bowl") for (const text of ["≈280 kcal", "≈22.5 g protein", "≈29 g carbs", "≈8 g fat"]) await expect(correction.getByText(text, { exact: true })).toBeVisible();
+    if (name === "Creamy Lemon Chicken") {
+      let originalKey = "";
+      await page.route("**/rest/v1/rpc/update_logged_meal", async route => {
+        originalKey = route.request().postDataJSON().p_payload.idempotencyKey;
+        const response = await route.fetch(); expect(response.ok()).toBe(true);
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "response lost after commit" }) });
+      });
+      const failed = nextRpcResponse(page, "update_logged_meal");
+      await correction.getByRole("button", { name: "Save correction", exact: true }).click();
+      expect((await failed).ok()).toBe(false);
+      await expect(amount).toHaveValue("0.5");
+      await expect(correction.getByText(/Could not save the serving change/)).toBeVisible();
+      await page.unroute("**/rest/v1/rpc/update_logged_meal");
+      const retry = nextRpcResponse(page, "update_logged_meal");
+      await correction.getByRole("button", { name: "Save correction", exact: true }).click();
+      const response = await retry; expect(response.ok()).toBe(true);
+      expect(response.request().postDataJSON().p_payload.idempotencyKey).toBe(originalKey);
+      expect((await response.json()).replayed).toBe(true);
+    } else {
+      if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+      await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      expect(await correction.evaluate(node => [node, ...node.querySelectorAll("*")].filter(element => element.scrollWidth > element.clientWidth + 1).map(element => ({ tag: element.tagName, text: element.textContent?.slice(0, 60) })))).toEqual([]);
+      await correction.screenshot({ path: `output/recipe-serving-correction/servings-editor-${info.project.name}.png` });
+      await page.evaluate(() => { document.documentElement.style.fontSize = "100%"; });
+      const saved = nextRpcResponse(page, "update_logged_meal");
+      await correction.getByRole("button", { name: "Save correction", exact: true }).click();
+      expect((await saved).ok()).toBe(true);
+    }
+    await expect(correction).toHaveCount(0);
+    await edit.click(); await expect(amount).toHaveValue("0.5");
+    await correction.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(snack.getByText(/^Planned(?: ·|$)/)).toHaveCount(originalPlanned);
+    const deleted = nextRpcResponse(page, "delete_logged_meal");
+    await row.getByRole("button", { name: `Delete ${name}`, exact: true }).click();
+    expect((await deleted).ok()).toBe(true);
+  }
+});
+
 test("saved recipe search offers direct portion review and restores date-slot drafts", async ({ page }, info) => {
   await openNutritionPage(page); await clearBrowserDrafts(page); await openNutritionSlot(page, "Dinner");
   const field = page.getByLabel("Search foods or saved recipes, or describe a meal.", { exact: true });
@@ -1717,8 +2286,95 @@ test("saved recipe search logs once after a lost response and reload without con
   const eaten = lunch.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Delete Korean Beef Bowl", exact: true }) }).last();
   await expect(eaten.getByText("280 kcal", { exact: true })).toBeVisible(); await expect(eaten.getByText("23 g protein", { exact: true })).toBeVisible(); // Existing Eaten summaries round for display; stored portion stays 22.5g.
   expect(response.request().postDataJSON().p_payload.ingredients[0]).toMatchObject({ servings: 0.5, calories: 560, proteinG: 45, carbsG: 58, fatG: 16 });
-  const savedCard = page.getByRole("region", { name: "Saved meals" }).getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) });
+  const savedCard = page.getByRole("region", { name: "Recipes" }).getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) });
   await expect(savedCard.getByText("≈560 kcal", { exact: true })).toBeVisible(); await expect(savedCard.getByRole("img", { name: "Recipe yields 4 servings", exact: true })).toBeVisible();
+});
+
+test("Saved meals require a slot and add fractional portions to the plan without recording intake", async ({ page }, info) => {
+  await openNutritionPage(page);
+  const saved = page.getByRole("region", { name: "Recipes", exact: true });
+  const card = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) });
+  const trigger = card.getByRole("button", { name: "Add to plan", exact: true });
+  await expect(saved.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
+  await trigger.click();
+  const review = saved.getByRole("group", { name: "Add Korean Beef Bowl to plan", exact: true });
+  const slot = review.getByRole("combobox", { name: "Meal slot", exact: true });
+  await expect(slot).toBeFocused();
+  const add = review.getByRole("button", { name: "Add to plan", exact: true });
+  await expect(add).toBeDisabled();
+  await expect(review.getByRole("button", { name: "Log meal", exact: true })).toHaveCount(0);
+  await review.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  for (const mealSlot of ["breakfast", "lunch", "dinner", "snack"]) {
+    await slot.selectOption(mealSlot);
+    await expect(add).toBeEnabled();
+  }
+  const amount = review.getByLabel("Recipe servings", { exact: true });
+  await expect(amount).toHaveValue("1");
+  for (const invalid of ["", "0", "-1"]) { await amount.fill(invalid); await expect(add).toBeDisabled(); }
+  await amount.fill("0.5");
+  for (const macro of ["≈280 kcal", "≈22.5 g protein", "≈29 g carbs", "≈8 g fat"]) await expect(review.getByText(macro, { exact: true })).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect(await review.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await review.screenshot({ path: `output/saved-meal-planning/review-${info.project.name}.png` });
+  await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+  const snack = page.getByRole("region", { name: "Snack", exact: true });
+  const beforeEaten = await page.getByRole("region", { name: "Planned", exact: true }).getByText("Eaten", { exact: true }).count();
+  const beforePlanned = await snack.getByText(/^Planned(?: ·|$)/).count();
+  const response = nextRpcResponse(page, "add_planned_meal");
+  await add.click(); const result = await response;
+  expect(result.ok()).toBe(true);
+  const payload = result.request().postDataJSON().p_payload;
+  expect(payload.plannedMeal).toMatchObject({ slot: "snack", mealId: "meal-korean-beef-bowl", servings: 0.5 });
+  expect(payload.newMeal).toBeUndefined();
+  await expect(review).toHaveCount(0); await expect(trigger).toBeFocused();
+  const planned = snack.getByRole("listitem").filter({ has: page.locator(`[id="log-planned-${payload.plannedMeal.id}"]`) });
+  await expect(planned.getByText("≈280 kcal", { exact: true })).toBeVisible();
+  await expect(snack.getByText(/^Planned(?: ·|$)/)).toHaveCount(beforePlanned + 1);
+  await expect(page.getByRole("region", { name: "Planned", exact: true }).getByText("Eaten", { exact: true })).toHaveCount(beforeEaten);
+  await expect(card.getByText("≈560 kcal", { exact: true })).toBeVisible();
+  await expect(card.getByRole("img", { name: "Recipe yields 4 servings", exact: true })).toBeVisible();
+});
+
+test("Saved meals retain planning input and retry identity after pending and lost responses", async ({ page }) => {
+  await openNutritionPage(page);
+  const saved = page.getByRole("region", { name: "Recipes", exact: true });
+  const trigger = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) }).getByRole("button", { name: "Add to plan", exact: true });
+  await trigger.click();
+  const review = saved.getByRole("group", { name: "Add Korean Beef Bowl to plan", exact: true });
+  const slot = review.getByRole("combobox", { name: "Meal slot", exact: true });
+  await slot.selectOption("dinner");
+  const amount = review.getByLabel("Recipe servings", { exact: true }); await amount.fill("0.5");
+  let release!: () => void; let requested!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { requested = resolve; });
+  let original!: { idempotencyKey: string; plannedMeal: { id: string } };
+  await page.route("**/rest/v1/rpc/add_planned_meal", async route => {
+    original = route.request().postDataJSON().p_payload; requested(); await held;
+    const response = await route.fetch(); expect(response.ok()).toBe(true);
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "lost response after persisted plan" }) });
+  });
+  const failed = nextRpcResponse(page, "add_planned_meal");
+  await review.getByRole("button", { name: "Add to plan", exact: true }).click(); await started;
+  await expect(slot).toBeDisabled(); await expect(amount).toBeDisabled();
+  await expect(review.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+  await expect(trigger).toBeDisabled();
+  const releaseHeld = release; releaseHeld(); expect((await failed).ok()).toBe(false);
+  await expect(amount).toHaveValue("0.5"); await expect(slot).toHaveValue("dinner");
+  await expect(review.getByText(/plan change was not confirmed/)).toBeVisible();
+  await page.unroute("**/rest/v1/rpc/add_planned_meal");
+  const retry = nextRpcResponse(page, "add_planned_meal");
+  await review.getByRole("button", { name: "Add to plan", exact: true }).click(); const result = await retry;
+  expect(result.ok()).toBe(true);
+  expect(result.request().postDataJSON().p_payload.idempotencyKey).toBe(original.idempotencyKey);
+  expect(result.request().postDataJSON().p_payload.plannedMeal.id).toBe(original.plannedMeal.id);
+  expect((await result.json()).replayed).toBe(true);
+  await expect(review).toHaveCount(0); await expect(trigger).toBeFocused();
+  await expect(page.locator(`[id="log-planned-${original.plannedMeal.id}"]`)).toHaveCount(1);
 });
 
 test("saved recipe search plans an existing portion and retains stable failed-save identity", async ({ page }) => {
@@ -1780,4 +2436,247 @@ test("saved recipe search requires renewed review of stale or unavailable restor
   await expect(review.getByText(/archived or unavailable/)).toBeVisible();
   await expect(review.getByRole("button", { name: "Log meal", exact: true })).toBeDisabled();
   await expect(review.getByRole("button", { name: "Refresh recipes", exact: true })).toBeVisible();
+});
+
+test("daily Planned and Eaten summaries keep editable weeks independent", async ({ browser }, info) => {
+  const account = await createLocalAccount(`nutrition-weeks-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  await page.setViewportSize({ width: info.project.name === "mobile" ? 320 : 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  try {
+    await completeOnboarding(page, "Nutrition Weeks"); await openNutritionPage(page);
+    const mode = page.getByRole("group", { name: "Nutrition summary view" });
+    const navigation = page.getByRole("group", { name: "Choose a nutrition week", exact: true });
+    await expect(navigation.getByRole("group", { name: "Nutrition summary view", exact: true })).toBeVisible();
+    const modeBox = await mode.boundingBox();
+    const todayBox = await navigation.getByRole("button", { name: "Today", exact: true }).boundingBox();
+    const previousBox = (await navigation.getByRole("button", { name: "Previous week", exact: true }).boundingBox())!;
+    const nextBox = (await navigation.getByRole("button", { name: "Next week", exact: true }).boundingBox())!;
+    expect(previousBox.x + previousBox.width).toBeLessThanOrEqual(todayBox!.x + 1);
+    expect(todayBox!.x + todayBox!.width).toBeLessThanOrEqual(nextBox.x + 1);
+    expect(modeBox!.y).toBeGreaterThanOrEqual(todayBox!.y);
+    const toolbarHeights = await navigation.getByRole("button").evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height));
+    expect(toolbarHeights).toHaveLength(5);
+    for (const height of toolbarHeights) expect(height).toBeCloseTo(44, 1);
+    expect(modeBox!.height).toBeCloseTo(44, 1);
+    await expect(mode.getByRole("button", { name: "Eaten", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("No meals eaten", { exact: true })).toBeVisible();
+    for (const metric of ["Protein", "Carbs", "Fat"]) {
+      const track = page.getByRole("progressbar", { name: metric, exact: true });
+      await expect(track).toBeVisible(); await expect(track).not.toHaveAttribute("aria-valuenow");
+      await expect(track).toHaveAttribute("aria-valuetext", "No entry logged");
+      expect(await track.locator("div").evaluate(node => node.getBoundingClientRect().width)).toBe(0);
+    }
+    await page.screenshot({ path: `output/restricted-recipe-units/empty-summary-${info.project.name}.png` });
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+    await mode.getByRole("button", { name: "Planned", exact: true }).click();
+    await expect(page.getByText("No meals planned.", { exact: true })).toBeVisible();
+    const saved = page.getByRole("region", { name: "Recipes", exact: true });
+    const card = saved.getByRole("listitem").filter({ has: page.getByRole("button", { name: "View recipe: Korean Beef Bowl", exact: true }) });
+    async function addBeef() {
+      await card.getByRole("button", { name: "Add to plan", exact: true }).click();
+      const review = saved.getByRole("group", { name: "Add Korean Beef Bowl to plan", exact: true });
+      await review.getByRole("combobox", { name: "Meal slot", exact: true }).selectOption("lunch");
+      await review.getByLabel("Recipe servings", { exact: true }).fill("0.5");
+      let releaseSave!: () => void;
+      const saveHeld = new Promise<void>(resolve => { releaseSave = resolve; });
+      const holdSave = async (route: Route) => { await saveHeld; await route.continue(); };
+      await page.route("**/rest/v1/rpc/add_planned_meal", holdSave);
+      const response = nextRpcResponse(page, "add_planned_meal");
+      await review.getByRole("button", { name: "Add to plan", exact: true }).click();
+      try {
+        for (const name of ["Previous week", "Next week", "Today"]) await expect(navigation.getByRole("button", { name, exact: true })).toBeDisabled();
+      } finally {
+        releaseSave();
+        await response;
+        await page.unroute("**/rest/v1/rpc/add_planned_meal", holdSave);
+      }
+      expect((await response).ok()).toBe(true); await expect(review).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+    }
+    const summary = page.getByRole("region", { name: "Planned daily nutrition", exact: true });
+    const lunch = page.getByRole("region", { name: "Lunch", exact: true });
+    await addBeef();
+    await expect(summary.getByText("280 kcal planned", { exact: false })).toBeVisible();
+    await expect(summary.getByText(/22\.5 g/)).toBeVisible();
+    await expect(summary.getByRole("img", { name: /planned calories remaining/ })).toBeVisible();
+    await expect(summary.getByText("kcal to target", { exact: true })).toBeVisible();
+    await expect(summary.getByRole("progressbar")).toHaveCount(3);
+    await lunch.getByRole("button", { name: "Skip", exact: true }).click();
+    await expect(page.getByText("No active meals planned.", { exact: true })).toBeVisible();
+    await lunch.getByRole("button", { name: "Plan again", exact: true }).click();
+    await expect(summary.getByText(/280 kcal planned/)).toBeVisible();
+    await lunch.getByRole("button", { name: "Edit", exact: true }).click();
+    await lunch.getByLabel("Planned meal servings", { exact: true }).fill("1");
+    await lunch.getByRole("button", { name: "Save meal", exact: true }).click();
+    await expect(summary.getByText(/560 kcal planned/)).toBeVisible();
+    await lunch.getByRole("button", { name: "Edit", exact: true }).click();
+    await lunch.getByLabel("Planned meal servings", { exact: true }).fill("0.5");
+    await lunch.getByRole("button", { name: "Save meal", exact: true }).click();
+    await expect(summary.getByText(/280 kcal planned/)).toBeVisible();
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await expect(page.getByText("No meals planned.", { exact: true })).toBeVisible();
+    await addBeef();
+    await page.getByRole("button", { name: "Previous week", exact: true }).click();
+    await expect(summary.getByText(/280 kcal planned/)).toBeVisible();
+    await lunch.getByRole("button", { name: "Log", exact: true }).click();
+    await lunch.getByRole("button", { name: "Confirm log", exact: true }).click();
+    await expect(lunch.getByRole("button", { name: "Delete Korean Beef Bowl", exact: true })).toBeVisible();
+    await expect(summary.getByText(/280 kcal planned/)).toBeVisible();
+    await mode.getByRole("button", { name: "Eaten", exact: true }).click();
+    await expect(page.getByText(/Logged: 280 kcal/)).toBeVisible();
+    await expect(page.getByText("1 meal eaten", { exact: true })).toBeVisible();
+    const snack = page.getByRole("region", { name: "Snack", exact: true });
+    await snack.getByRole("button", { name: "Add meal", exact: true }).click();
+    await snack.getByRole("textbox", { name: "Search foods or saved recipes, or describe a meal." }).fill("egg");
+    await snack.getByRole("button", { name: /^Egg/ }).first().click();
+    const independentLog = nextRpcResponse(page, "save_nutrition_log");
+    await snack.getByRole("group", { name: "Review food quantity" }).getByRole("button", { name: "Log meal", exact: true }).click();
+    expect((await independentLog).ok()).toBe(true);
+    await expect(page.getByText("2 meals eaten", { exact: true })).toBeVisible();
+    const deletedFood = nextRpcResponse(page, "delete_nutrition_log");
+    await snack.getByRole("button", { name: "Delete Egg", exact: true }).click();
+    expect((await deletedFood).ok()).toBe(true);
+    await expect(page.getByText("1 meal eaten", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Log again", exact: true })).toHaveCount(0);
+    await mode.getByRole("button", { name: "Planned", exact: true }).click();
+    await summary.locator("..").screenshot({ path: `output/nutrition-week/summary-normal-${info.project.name}.png` });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    await expect.poll(async () => navigation.getByRole("button").evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height))).toEqual([88, 88, 88, 88, 88]);
+    const enlargedModeHeight = (await mode.boundingBox())!.height;
+    expect([88, 176]).toContain(enlargedModeHeight);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(info.project.name === "mobile" ? 321 : 1441);
+    await page.screenshot({ path: `output/nutrition-week/summary-${info.project.name}.png`, fullPage: true });
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await expect(summary.getByText(/280 kcal planned/)).toBeVisible();
+    await expect(lunch.getByRole("button", { name: "Log", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Today", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+    await page.reload();
+    await expect(mode.getByRole("button", { name: "Eaten", exact: true })).toHaveAttribute("aria-pressed", "true");
+  } finally { try { await context.close(); } finally { await deleteLocalAccount(account); } }
+});
+
+test("compact nutrition toolbar keeps equal heights and accessible navigation across year boundaries", async ({ page }, info) => {
+  await openNutritionPage(page);
+  await page.setViewportSize({ width: info.project.name === "mobile" ? 320 : 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const navigation = page.getByRole("group", { name: "Choose a nutrition week", exact: true });
+  const previous = navigation.getByRole("button", { name: "Previous week", exact: true });
+  const next = navigation.getByRole("button", { name: "Next week", exact: true });
+  const mode = navigation.getByRole("group", { name: "Nutrition summary view", exact: true });
+  const today = navigation.getByRole("button", { name: "Today", exact: true });
+  for (const button of [previous, next]) {
+    const bounds = await button.boundingBox();
+    expect(bounds!.width).toBeCloseTo(44, 1); expect(bounds!.height).toBeCloseTo(44, 1);
+  }
+  const saved = page.getByRole("region", { name: "Recipes", exact: true });
+  const archive = saved.getByRole("button", { name: /^Archive / }).first();
+  expect((await archive.boundingBox())!.height).toBeCloseTo(48, 1);
+  await previous.focus();
+  await expect(page.getByRole("tooltip", { name: "Previous week", exact: true })).toBeVisible();
+  await previous.press("Escape");
+  await expect(page.getByRole("tooltip", { name: "Previous week", exact: true })).toHaveCount(0);
+  await previous.press("Tab"); await expect(today).toBeFocused();
+  await today.press("Tab"); await expect(next).toBeFocused();
+  await next.press("Tab"); await expect(mode.getByRole("button", { name: "Planned", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab"); await expect(mode.getByRole("button", { name: "Eaten", exact: true })).toBeFocused();
+  const range = page.locator("#nutrition-week-range");
+  await expect(range).toHaveClass(/sr-only/);
+  const originalRange = await range.textContent();
+  await expect(navigation).toHaveAccessibleDescription(originalRange!);
+  await previous.click(); await expect(range).not.toHaveText(originalRange!);
+  await today.click(); await expect(range).toHaveText(originalRange!);
+  const year = Number(todayKey().slice(0, 4));
+  const boundary = startOfWeek(`${year}-12-31`);
+  const steps = Math.round((Date.parse(boundary) - Date.parse(startOfWeek(todayKey()))) / (7 * 86400000));
+  for (let index = 0; index < steps; index++) await next.click();
+  await expect(navigation).toContainText(addDays(boundary, 6).slice(0, 4));
+  const days = page.getByRole("group", { name: "Choose a day", exact: true });
+  const finalDay = addDays(boundary, 6);
+  await expect(days.getByRole("button", { name: formatFullDate(finalDay), exact: true })).toContainText(fromKey(finalDay).toLocaleDateString("en-US", { month: "short" }));
+  const monthLabels = await days.getByRole("button").evaluateAll(buttons => buttons.map(button => button.lastElementChild!.textContent));
+  const dayWeights = await days.getByRole("button").evaluateAll(buttons => buttons.map(button => [...button.children].map(label => getComputedStyle(label).fontWeight)));
+  for (const weights of dayWeights) expect(weights).toEqual(["400", "800", "400"]);
+  expect(monthLabels).toEqual(Array.from({ length: 7 }, (_, index) => fromKey(addDays(boundary, index)).toLocaleDateString("en-US", { month: "short" })));
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await expect.poll(async () => navigation.getByRole("button").evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height))).toEqual([88, 88, 88, 88, 88]);
+  expect([88, 176]).toContain((await mode.boundingBox())!.height);
+  await expect(range).toHaveClass(/sr-only/);
+  for (const button of await mode.getByRole("button").all()) expect(await button.evaluate(element => element.scrollWidth > element.clientWidth + 1)).toBe(false);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(info.project.name === "mobile" ? 321 : 1441);
+  await navigation.screenshot({ path: `output/nutrition-week/compact-toolbar-${info.project.name}.png` });
+  await today.click();
+  await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+  await page.evaluate(() => { document.documentElement.style.fontSize = "100%"; });
+  const todayPage = days.locator('button[aria-current="date"]');
+  await expect(todayPage).toHaveAttribute("aria-pressed", "true");
+  const selectedColors = await todayPage.evaluate(button => ({ paper: getComputedStyle(button).backgroundColor, header: getComputedStyle(button.firstElementChild!).backgroundColor, border: getComputedStyle(button).borderTopColor }));
+  expect(selectedColors).toEqual({ paper: "rgb(255, 255, 255)", header: "rgb(38, 40, 54)", border: "rgb(38, 40, 54)" });
+  const inactiveLabel = (await days.locator('button[aria-pressed="false"]').first().getAttribute("aria-label"))!;
+  const unselectedPage = days.getByRole("button", { name: inactiveLabel, exact: true });
+  const inactiveHeader = await unselectedPage.evaluate(button => getComputedStyle(button.firstElementChild!).backgroundColor);
+  expect(inactiveHeader).toBe("rgb(249, 221, 224)");
+  await unselectedPage.hover();
+  expect(await unselectedPage.evaluate(button => getComputedStyle(button.firstElementChild!).backgroundColor)).toBe(info.project.name === "mobile" ? "rgb(249, 221, 224)" : "rgb(244, 198, 204)");
+  await unselectedPage.click();
+  await expect(unselectedPage).toHaveAttribute("aria-pressed", "true");
+  await expect(todayPage).toHaveAttribute("aria-pressed", "false");
+  await expect(todayPage.locator("span.bg-lav-100")).toBeVisible();
+  await unselectedPage.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(unselectedPage).toBeFocused();
+  expect(await unselectedPage.evaluate(button => getComputedStyle(button).outlineStyle)).toBe("solid");
+  const pagesFit = await days.getByRole("button").evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().width >= 44 && button.getBoundingClientRect().height >= 44));
+  expect(pagesFit).toBe(true);
+  const flatPages = await days.getByRole("button").evaluateAll(buttons => buttons.map(button => ({ shadow: getComputedStyle(button).boxShadow, decorations: ["::before", "::after"].map(pseudo => getComputedStyle(button, pseudo).content) })));
+  expect(flatPages).toEqual(Array.from({ length: 7 }, () => ({ shadow: "none", decorations: ["none", "none"] })));
+  if (info.project.name === "mobile") {
+    expect(await days.evaluate(strip => strip.scrollWidth > strip.clientWidth)).toBe(true);
+    await days.getByRole("button").last().focus();
+    await expect.poll(() => days.evaluate(strip => strip.scrollLeft)).toBeGreaterThan(0);
+    await todayPage.focus();
+  }
+  await days.screenshot({ path: `output/nutrition-week/calendar-pages-${info.project.name}.png` });
+});
+
+test("weekly nutrition read failures offer recovery without showing an empty day", async ({ page }) => {
+  await page.route("**/rest/v1/rpc/get_nutrition_week", route => route.abort("failed"));
+  await page.goto("/nutrition");
+  await expect(page.getByRole("button", { name: "Retry week", exact: true })).toBeVisible();
+  await expect(page.getByText("Nothing planned or logged.", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeDisabled();
+  await page.unroute("**/rest/v1/rpc/get_nutrition_week");
+  await page.getByRole("button", { name: "Retry week", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Retry week", exact: true })).toHaveCount(0);
+});
+
+test("rapid week navigation ignores an older delayed response", async ({ page }) => {
+  await openNutritionPage(page);
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let arrived!: () => void;
+  const requested = new Promise<void>(resolve => { arrived = resolve; });
+  const olderWeek = startOfWeek(addDays(todayKey(), 7));
+  await page.route("**/rest/v1/rpc/get_nutrition_week", async route => {
+    if (route.request().postDataJSON().p_week_of === olderWeek) {
+      const response = await route.fetch(); arrived(); await held;
+      await route.fulfill({ response });
+    } else await route.continue();
+  });
+  try {
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await requested;
+    await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeDisabled();
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Add meal", exact: true }).first()).toBeEnabled();
+    await page.getByRole("group", { name: "Nutrition summary view" }).getByRole("button", { name: "Planned", exact: true }).click();
+    await expect(page.getByText(addDays(todayKey(), 14), { exact: true })).toBeVisible();
+    release();
+    await expect(page.getByText(addDays(todayKey(), 14), { exact: true })).toBeVisible();
+    await expect(page.getByText("No meals planned.", { exact: true })).toBeVisible();
+  } finally { release(); await page.unroute("**/rest/v1/rpc/get_nutrition_week"); }
 });

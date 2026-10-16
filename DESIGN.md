@@ -526,6 +526,67 @@ header and the avatar, not from the bottom nav.
 
 ### Nutrition day card
 
+The existing pastel summary has Previous week / Today / Next week controls above
+the day strip. The week range is assistive-only text describing this navigation
+group. A wrapping Planned / Eaten segmented control sits in the upper-right action group, with Eaten
+selected on entry and accessible pressed states. On narrow layouts that action
+group wraps below week navigation while retaining its own control order.
+Toolbar arrows, both toggle buttons and Today share a 44px height at normal text
+size, using relative sizing that scales consistently with enlarged text. Arrows
+use the shared icon control's compact 44px option; its default elsewhere remains
+48px. The toggle has no outer padding, so its visible height matches the buttons.
+Text buttons use compact horizontal padding with unchanged typography and at
+least 44px touch targets. Navigation wraps in Previous / Today / Next order when
+space is limited, including enlarged-text layouts. The toggle can stack its equal-height options
+when both labels cannot fit on one row. Labels remain fully visible without
+clipping or horizontal overflow.
+Switching it changes only the summary. Navigation preserves the weekday and is
+disabled while saving. Loading and retry feedback precede totals; values from
+another week never appear beneath the newly selected date.
+Day buttons show weekday, number and abbreviated month vertically (WED / 14 /
+Oct), with normal-weight weekday/month labels and an emphasized date number.
+Each date uses its own month across boundaries. Accessible names include the
+full local date and year; selected and Today indications remain available.
+The calendar treatment uses one flat page per day, with a blush weekday header,
+a fine dashed perforation divider and a white paper body. A selected page has
+a navy header with white normal-weight weekday text,
+a thin navy border and dark date text on white. Existing Today markers remain.
+Modest corners and a single outline keep the calendar shape clear, without
+stacked paper edges or shadows. No raster assets or baked-in date text are used.
+Scroll padding accommodates the keyboard focus
+outline, and narrow/enlarged-text layouts retain horizontal day-strip scrolling.
+Unlogged Eaten summaries retain the empty macro tracks when targets exist,
+“No meals eaten” and “Not logged” labels, and no colored fill. Empty tracks omit
+numeric current values for assistive technology and never imply zero intake.
+
+Eaten's supporting line uses “No meals eaten”, “1 meal eaten” or “N meals eaten,” counting grouped
+meals once and standalone food rows separately. “No meals eaten” describes no saved
+entries, while the ring/macros and contextual help continue to distinguish unknown
+intake from recorded zero nutrition.
+
+Editing a saved-recipe Eaten row opens a compact servings review rather than
+ingredient selectors. The recipe name and saved date/slot provide context above
+one Recipe servings input, which receives focus. Nutrition pills preview the
+corrected historical portion (whole calories and at most one macro decimal).
+Save correction and Cancel wrap without clipping at narrow widths or enlarged
+text; both return focus to the row's Edit control after closing. Pending saves
+disable inputs, dismissal and competing row actions. Errors retain the portion.
+Older history with no reliable portion adds a labeled Previously logged recipe
+servings input; it never substitutes a guessed one-serving basis.
+
+Planned and Eaten share one summary layout: date/status/help beside a 96px
+remaining-calorie ring, a calorie/target line, then the three macro progress rows.
+Planned labels its ring “kcal to target” and its totals “kcal planned”; Eaten keeps
+its intake wording. Their values and statuses remain independent. Context describes active and skipped counts
+and explains that logged planned meals remain included. Empty and fully skipped
+states show text instead of zero totals. Unknown metrics display Unavailable;
+known incomplete subtotals carry Partial total and no complete progress bar.
+Incomplete planned calories leave the ring unavailable; a known calorie total
+can still drive the ring when only another metric is incomplete. Over-target
+plans show zero remaining with the excess stated below the ring.
+Macros retain one decimal where needed in both summary modes. Controls and labels
+wrap at 320px and enlarged text, with existing focus and reduced-motion treatment.
+
 A single Planned card follows the daily summary for every selected day. Each
 Breakfast, Lunch, Dinner and Snack heading has a right-aligned Plus + Add meal
 control. It opens one inline editor beneath that heading with the slot fixed;
@@ -552,12 +613,16 @@ the summary when space is limited; expanded details/editors remain inside the ro
 Planned rows retain Edit and Skip/Plan again and add Log, which opens an in-place
 actual-serving confirmation. A successful linked log hides its Planned row to
 avoid repetition while keeping the plan snapshot intact. Linked Eaten rows
-offer Log again with the same confirmation; deleting the last linked Eaten row
+offer Edit and Delete without Log again; deleting the last linked Eaten row
 reveals Planned again. Eaten rows retain expand, edit, and delete.
-Saved meals use Log with a required slot and confirmation. Actions have
+Saved meals use Add to plan with a required slot and portion review. Actions have
 44px or larger touch targets and wrap on narrow screens. Meal entry focuses its
 search field after draft recovery, or the portion field for a restored selection.
-Saved-card logging retains its separate required slot selector.
+Saved-card planning retains its separate required slot selector. The shared
+review appears above the Saved card grid, shows the selected date and portion
+nutrition, and defaults to one serving. It focuses the slot selector on opening
+and returns to the originating card action after cancellation or confirmed success.
+Planning is primary in this review; direct Log meal remains in meal-entry reviews.
 
 ### Saved-recipe authoring
 
@@ -577,9 +642,9 @@ complexity shows Easy, Medium, or Hard, defaulting missing recipe values to Medi
 Descriptions are omitted. The Planned section uses compact meal rows instead
 of recipe cards, including food-only, skipped and unresolved entries.
 
-Saved footers place flexible Log with a trailing plus beside 48px Pencil/Edit
+Saved footers place flexible Add to plan with a trailing plus beside 48px Pencil/Edit
 and Archive icon buttons with contextual accessible labels and dismissible
-hover/focus tooltips. They wrap with Log first and secondary controls together.
+hover/focus tooltips. They wrap with Add to plan first and secondary controls together.
 Meal duplication is removed; ordinary Create and Edit draft recovery remains.
 Planned rows retain Edit, Skip/Plan again, and Log beside the summary. Expanded
 editors and confirmations follow the summary. Opening Planned Edit focuses its
@@ -599,35 +664,90 @@ square covers that shrink to available space, and zero-minimum grid columns to
 prevent native input widths from expanding the phone layout.
 
 Create and Edit preserve the Option C authoring controls within the approved
-Option 1 composition. The first field group contains name/servings/time/complexity with
-no visible Recipe basics heading. Ingredients contains entry methods, included
-rows, and review; Details contains per-serving nutrition and optional Reference;
+Option 1 composition. Details contains name/servings/time/complexity with
+no visible Recipe basics heading, per-serving nutrition and optional Reference.
+Ingredients contains cooking measurements, entry methods, included rows, and review;
 Instructions contains the required multiline method. Save actions stay in
 the modal footer. Persistent numeric
 labels accompany “Servings” and “Quantity” placeholders; new fields start blank.
 The approved Option 1 extends this editor with a centered square cover in a
-lavender surface above the existing name/servings/time fields. The shared
+lavender surface above the tabs. The shared
 `RecipeCover`, `RecipeImagePicker`, and `RecipeTabs` components keep creation,
 editing, overview, and saved-meal thumbnails consistent. The generated generic
-rice-and-vegetable bowl is decorative fallback media, not a depiction of the
-saved ingredients. “Change image” expands Upload, Use image URL, and Reset to
+cartoon chicken, vegetable and rice bowl uses pronounced dark outlines,
+simplified food shapes and flatter shading on a pale lavender background. It is
+decorative fallback media, not a depiction of the saved ingredients. The shared
+asset retains its square proportions and existing cover/thumbnail sizing;
+uploaded, external and predefined recipe covers remain independent. “Change image” expands Upload, Use image URL, and Reset to
 default actions without introducing another dialog.
+Change image contains Upload, Use image URL and Reset to default, without a
+preset gallery. Previously saved cartoon assets remain supported. Details
+contains “Use this recipe for” native checkboxes, two columns on narrow screens
+and four where space permits, with 44px labels and visible keyboard focus.
+At least one assignment and a whole recipe yield from 1 to 10,000 are required.
+The overview lists these assignments in Details; artwork does not select meals.
 
-Details, Ingredients, and Instructions use a pill-shaped tab bar. Ingredients
-opens first; recipe name, servings, and time remain above every panel. Panel
+Sticky Teriyaki Chicken and Chicken Burrito Protein Boxes use square illustrative
+food photographs matching the existing predefined covers: glazed chicken/rice,
+and sliced chicken with beans, corn and peppers, respectively. They use the shared
+cover loading/fallback path. Original cooking measurements stay in Ingredients;
+Details contains ingredient-calculated nutrition, quoted source macros for
+comparison, the reference, conversion proxies and confirmed tin-weight/garnish
+assumptions. No alternate image picker or new authoring control is introduced.
+
+The Nutrition recipe section is labeled “Recipes”, including its region and
+contextual help. Generate in the Planned header uses the shared navy primary
+button with a leading WandSparkles icon; Create in the Recipes header uses the
+soft/light button with a leading plus icon. Generate opens “Generate plan”. The
+visible range is compact, for example “Mon, Oct 12 - Sun, Oct 18”; assistive text
+retains both full dates and years. The one-batch explanation lives in the shared
+header help popover. Selectable compact cards reuse recipe covers and the pastel
+surfaces, showing name, assigned meals, yield, already-planned and remaining
+servings. Each whole-card label owns a native checkbox with a recipe-name label,
+associated planning details, a thin navy selected border and visible focus.
+The square cover fills its image well inside a 15px background inset on every
+side; the checkbox sits beside the recipe name below the unobstructed image.
+Every displayed card is selectable, including exhausted or restricted recipes.
+Select all checks every displayed card; generation eligibility remains separate
+from selection. Cards end at the yield/planned/remaining counters, with no
+restriction or exclusion messages in their content or checkbox descriptions.
+Unused-serving explanations remain in the preview. The Choose recipes heading
+has right-aligned Select all (navy primary) and Clear (soft) text buttons with
+leading ListChecks/ListX icons and 44px targets. Their visible labels supply their
+accessible names without redundant tooltips. The header and action group wrap
+with the actions right-aligned when needed. Interaction freezes
+during loading, stale review and saving.
+The container-based grid uses two columns at normal mobile text size and up to
+four in the desktop dialog; enlarged text reduces columns to keep content readable.
+Cards omit calories, time, complexity, favorites and extra actions. Select all and Clear change an
+immediate preview; Shuffle rearranges valid entries. The dated preview lists one
+serving per meal. Unused portions require an explicit acknowledgment before Save
+plan. Closing retains the preview and returns focus to Generate. Stale data
+requires Review updated preview; failed saves retain the same retry intent.
+During submission, dismissal, date navigation and surrounding mutations are
+disabled. Content wraps at 320px and enlarged text without horizontal page overflow.
+
+
+Details, Ingredients, and Instructions use a pill-shaped tab bar. Details
+opens first on every view, Create, Edit, reopening and recovered draft. Only
+the cover and title remain above the panels. Panel
 buttons wrap into readable rows when enlarged text exceeds the available width.
 Panel changes retain all entered values and review results. Arrow keys and Home/End
 move tab focus; only the active panel enters the accessibility tree. A footer
 message identifies missing required input and offers a link to the relevant
 inactive panel. New recipes use “Save”; editing uses “Save changes”.
+The modal heading wraps within its allocated width at enlarged text sizes;
+its separate 44px close target retains room without overlapping the title.
 
 Clicking a saved-meal name or thumbnail opens a read-only “Recipe overview”
 using the same cover and tabs. Its footer offers Close and Edit for owned and
 predefined recipes. The predefined editor explains that saving creates a
 personal version and retains existing planned/logged references. Saved cards
 offer Edit and Archive for predefined recipes as well as personal recipes.
-Ingredients show whole-recipe quantities, source and preparation
-basis, with nutrition labeled as per-serving estimates. Missing instructions
+Ingredients show whole-recipe cooking names, original quantities and units,
+including ranges, optional ingredients and unmeasured seasonings. Nutrition,
+yield, time and complexity appear only in Details. Nutrition basis in Details
+shows sources, preparation and confirmed conversions. Missing instructions
 stay visibly unspecified. Edit returns to the overview after successful saving
 or cancellation. Nutrition, references, and instructions remain in the overview
 and editor. Meal logging actions remain available in the card footer.
@@ -647,11 +767,11 @@ total preparation/cooking/serving time for the entire recipe. There are no
 time stepper buttons or visible native spinner arrows. Blank means unknown;
 zero is a valid explicit value. Invalid whole-minute input shows labeled inline
 guidance and disables Save, without changing the nutrition preview.
-Saved recipe details show a clock and “X mins total” only when time is known.
+Saved recipe details show a clock and “X mins” only when time is known.
 Search ingredients, Describe ingredients, and Add custom ingredient offer
 trusted autofill, explicit AI review, and labeled manual values. Review appends
 confirmed ingredients without replacing the existing list. Sources, preparation,
-serving bases, and assumptions remain visible. Trash icon buttons have descriptive
+serving bases, and assumptions remain in Details. Trash icon buttons have descriptive
 labels and at least 44px targets, including when removing the final ingredient.
 Per-serving pills use the shared calorie/protein/carbs/fat palette and wrap on
 narrow screens and enlarged text. Incomplete inputs show guidance instead of
@@ -669,6 +789,32 @@ existing recoverable browser draft. Successful saving clears the draft and
 closes only after authoritative state and draft cleanup complete. Discard resets
 the form explicitly. The name field receives focus after draft restoration;
 ingredient selection moves focus to the new quantity field.
+Successful and fallback covers have no visible “Recipe image” caption;
+accessible descriptions remain. Loading status is announced and actual image
+failure retains visible feedback and Retry. Nutrition pills are confined to
+Details, where they update after ingredient edits. Normal cooking rows omit
+nutrition-record serving/source lines. A range has separate lower/upper fields;
+unknown unit conversions link to Nutrition basis rather than guessing a weight.
+Recipe authoring selectors contain exactly g, kg, mg, oz, ml, tsp, tbsp, cups and
+piece/s, including provider review and recovered drafts. Excluded source units
+convert by measurement type; unresolved amounts remain labeled as original
+quantities beside confirmation controls, without additional picker options.
+The overview keeps saved cooking units.
+Create/Edit unit selection preserves the amount: the number changes together
+with the unit. Unavailable conversions open an inline Confirm conversion section
+beside the cooking row, retaining the original amount and labeling the required
+grams per unit. The conversion input receives focus; Confirm conversion or
+Cancel conversion returns focus to that ingredient's quantity. Recovered
+confirmations receive focus when Ingredients is opened, while the initial
+Details/name focus stays unchanged. The preview rounds for readability while
+the converted quantities retain calculation precision. Controls wrap within
+the existing ingredient layout at 320px and enlarged text sizes.
+The overview keeps saved cooking units. A stale predefined recipe shows a
+loading message before opening; failed refresh offers Retry recipe and Cancel
+without adding a success toast or discarding drafts.
+Seasonings and unmeasured items have their own editable cooking rows, with
+exclusions explained in Details. Validation offers a direct route to Details,
+Ingredients or Instructions without clearing any input.
 Switching entry methods prefills only an empty destination from the active
 search text, description, or custom name. Existing destination input and review
 remain intact; changing methods triggers no provider action. These fields remain

@@ -1186,3 +1186,311 @@ preserved; browser automation used its disposable local server on port 3030.
 Direct inspection of the user's in-app tab was blocked by its URL security policy,
 so no live-tab or hosted-client acceptance is claimed. Source changes remain
 uncommitted, with no Git repository push or hosted client deployment.
+
+## 14. Daily Planned/Eaten summaries and editable weeks — 2026-10-13
+
+The client implementation remains local and uncommitted. After the user's explicit
+instruction to deploy the pending set and grant standing migration authorization,
+the linked database now has **74 matching local/remote migrations**. Fresh preflight
+confirmed the 70-version baseline and exactly these four forward migrations,
+which were then deployed:
+
+- `20261013050000_nutrition_week_read_model.sql`: authenticated, security-invoker
+  `get_nutrition_week(date)` with complete seven-day logs, latest selected-week
+  prescription, targets, references and matching groceries.
+- `20261013050100_week_scoped_nutrition_mutations.sql`: selected-week edits,
+  additions and linked logging; stored unchanged prescription values and inherited
+  constraints survive versioning. Other weeks and Eaten history are unaffected.
+- `20261013050200_serialize_week_logging_and_skip_retries.sql`: shared week lock
+  for linked logging and preserved public Skip operation/retry receipts.
+- `20261013050300_order_week_mutation_locks.sql`: profile-first lock order aligned
+  with existing profile/target/log mutations before selected-week locks.
+
+All 70 existing migration files match their tracked content. A clean **74-file
+local replay** succeeds; **25 database suites / 881 assertions** pass. Database
+lint has only the existing unused `p_payload` warning in image cleanup. The local
+concurrency gate passes duplicate replay, mismatched intents, stale profile/meal
+edits, explicit reapply, workout/grocery preservation and account isolation.
+Regenerated local public types agree structurally with canonical types after
+normalizing existing generator-only `NonNullable<Json>` and parenthesized-array
+formatting. Canonical PostgREST metadata/formatting remain; the only new public
+signature is `get_nutrition_week`.
+
+These migrations contain no historical backfill. The deployed history matches all
+74 local versions; the final dry run reports no pending migrations, seeds or roles.
+All **12 schema fingerprint groups**, function definitions and function grants
+match the tested local database. All 70 original migration files retain their
+tracked contents; no history repairs or force flags were used. Immediate
+before/after count-and-digest checks matched across 12 categories: meal plans,
+planned rows, nutrition logs, grouped eaten meals, recipes including supplied
+nutrition, ingredients, groceries/items, workout plans, profiles, targets and
+retry receipts.
+
+A disposable, fully rolled-back linked transaction verified complete weekly reads
+with 110 logs, ownership/anonymous/direct-write denial, selected-week edits,
+unchanged other-week/history data, edit/Skip retries and source-provided half
+portions (**280 kcal / 22.5g protein / 29g carbs / 8g fat**). No test fixtures remain.
+Later aggregate changes reflect subsequent application mutations, so the immediate
+post-deployment preservation checkpoint must not be confused with a permanent
+freeze of live account data. Sanitized activity evidence records the later
+planning/logging operations separately.
+
+Fresh linked public types agree structurally with the canonical generated file;
+existing generator formatting and PostgREST metadata are retained. TypeScript and
+the fresh local database suite (**25 files / 881 assertions**) pass. Linked database
+lint has no errors and only the existing unused image-cleanup parameter warning.
+The platform advisor reports 49 existing authenticated SECURITY DEFINER wrappers
+and disabled leaked-password protection; all flagged wrappers were already in the
+pre-deployment baseline. These are recorded follow-ups, not new weekly-read grants.
+
+`AGENTS.md` and `ARCHITECTURE.md` now record standing authorization for verified
+forward migrations to the configured linked project, without another per-deployment
+approval request. Local tests, exact history/schema preflight, preservation and
+post-deployment checks remain mandatory. Raw evidence is local under ignored
+`output/nutrition-week/deploy/`. No Git commit/push or hosted client deployment
+occurred. The database is ready for this client; hosted-client acceptance remains
+separate from the verified linked backend.
+
+### Logged recipe serving corrections — 2026-10-14
+
+The linked project now has **75 matching local/remote migrations** after deploying
+only `20261014021719_logged_recipe_serving_corrections.sql` under the standing
+authorization. The immediate preflight proved the existing 74-file baseline,
+all 12 schema fingerprint groups and the exact one-file pending set. All 74
+previous migration files retain their contents; no repairs or force flags were
+used.
+
+The migration adds nullable `logged_meals.recipe_servings` and extends the existing
+logging/correction endpoints. New saved-recipe logs store the actual recipe
+portion. Servings corrections scale saved child snapshots atomically with
+ownership, original revision and stable retry checks. Private helpers and older
+ingredient-editor compatibility handlers remain inaccessible to clients. There
+is no historical backfill or new public RPC.
+
+A clean local 75-migration replay passed. Fresh verification includes **26
+database suites / 916 assertions**, **364 application tests across 56 files**,
+**16 authenticated repository tests**, TypeScript, lint and a production build.
+Desktop and mobile browser checks cover whole-meal portions, cancellation/focus,
+linked recipe corrections, failed/lost-response retries, fractions, 320px,
+200% text and reduced motion. Final servings-editor checks passed with strict
+descendant-overflow assertions. Database lint reports only the existing unused
+image-cleanup parameter warning.
+
+Post-deployment history agrees on all 75 entries and the dry run is up to date.
+All 12 schema groups, function definitions and grants match the tested local
+database. Immediate count/digest preservation checks match across 12 categories,
+excluding only the newly added nullable serving column from legacy-row digests.
+An isolated linked transaction verified saved portions, recipe corrections,
+Korean Beef Bowl's half portion (**280 kcal / 22.5g protein / 29g carbs / 8g fat**),
+correction and original-log retries, stale revisions, direct-write denial and
+cross-user denial. The transaction and both temporary identities were rolled
+back; subsequent preservation checks still match.
+
+Local and linked generated public types agree structurally with canonical
+metadata/formatting retained. Raw evidence remains ignored under
+`output/recipe-serving-correction/`. Application changes remain uncommitted;
+no Git push or hosted client deployment occurred.
+
+### Recipe cooking measurements delivery — 2026-10-15
+
+Forward migration `20261014025818_recipe_cooking_measurements.sql` was applied
+to the configured linked project under standing authorization after local
+verification. The fresh preview identified exactly this one pending migration;
+all 75 earlier files were unchanged, all 12 deployed schema fingerprint groups
+matched the verified baseline, and the two catalog recipes matched their known
+original instructions and ordered canonical ingredient quantities.
+
+The migration adds nullable ordered cooking measurements, recipe unmeasured
+ingredients and nutrition notes. The existing authorized saved-meal transaction
+validates measurements and canonical quantities atomically, using upper range
+values and explicit confirmations for unsupported units. Its compatibility
+implementation and validators remain private with controlled search paths and
+restricted execution. No new public mutation entry point or direct client write
+was added. Only the matching Creamy Lemon Chicken and Korean Beef Bowl originals
+received restored cooking lists and separated preparation/nutrition text.
+
+Local replay passed all 76 migrations. Database tests passed 27 suites / 950
+assertions; lint retained only the existing unused image-cleanup parameter
+warning. Post-delivery history matches all 76 entries and the linked preview is
+up to date. All 12 schema groups, function definitions and grants match local.
+Generated local and linked public types agree with the canonical application
+types; metadata and unrelated formatting were retained.
+
+Aggregate preservation verified all 12 categories: plans, planned rows, Eaten
+logs/groups, recipe facts including supplied macros, canonical ingredients,
+groceries/items, workouts, profiles, targets and retry receipts. The expected
+catalog text/metadata/revision changes were checked separately against the
+reviewed source. Ingredient metadata updates also touched the existing update
+timestamps on exactly 17 catalog ingredient rows. Reconstructing only those
+original timestamps reproduced the complete before-migration ingredient digest,
+proving all canonical IDs, quantities, ordering and other fields were preserved.
+Personal versions and existing nutrition snapshots were unchanged.
+
+An isolated linked transaction verified range persistence, seasonings and notes,
+supplied macros, same-intent retries, unknown-conversion and mismatched-quantity
+rejection, confirmed conversion, atomic failure, direct-write/ownership/anonymous
+denial and Korean Beef Bowl's half portion (280 kcal / 22.5g protein / 29g carbs /
+8g fat). Both temporary identities and all test data were rolled back. Raw
+evidence is local and ignored under `output/recipe-measurements/`; application
+changes remain uncommitted and no Git push or hosted client deployment occurred.
+
+The final client checks passed TypeScript, ESLint, 373 application tests,
+17 authenticated repository integration tests and a production build. All 20
+affected desktop/mobile recipe scenario checks passed across the verification
+runs; two initial navigation timeouts passed on rerun. The final changed flows
+were checked again for range-upper calculations, unresolved/confirmed conversions,
+supplied-macro preservation after cooking edits, Details-first draft reopening,
+failed-save retry identity, keyboard/modal focus, 320px layout, 200% text,
+reduced motion, image failure and Retry. Raw logs/screenshots remain local.
+
+### Built-in recipe image presets — 2026-10-15
+
+Migration `20261015022745_recipe_image_presets.sql` was deployed to the configured
+linked project under standing authorization. A fresh preflight verified all 76
+prior migration hashes, matching deployed baseline schema/function fingerprints,
+and exactly this one pending file. No history repairs, force flags, roles or
+seeds were included.
+
+The migration extends `meals_image_shape` and the existing private image handler
+with breakfast-egg-salad, snack-sandwich and dinner-curry-omelette. Lunch remains
+null/default. Existing catalog assets, URLs and owned uploads remain compatible.
+No table, column, public RPC or direct client write permission was added. There
+is no backfill or change to existing recipe images or nutrition history.
+
+Post-deployment history matches all 77 migrations and the dry run is up to date.
+All 12 schema groups and complete function definitions/privileges match the
+tested local database. Count/digest preservation matches across all 12 checked
+categories, including entire recipes with supplied macros/cooking metadata,
+ingredients, plans, groceries and Eaten records. An isolated linked transaction
+verified the three presets, null reset, supplied macros, retries, stale conflicts,
+unknown IDs, ownership and direct-write/anonymous denial, then rolled back both
+temporary identities and all test data. Final preservation digests still match.
+
+Clean local replay passed 77 migrations; database verification passed 28 suites
+and 974 assertions. Database lint retains only the existing unused image-cleanup
+parameter warning. Fresh local and linked public types match their verified
+baseline; canonical and fresh linked types are structurally identical despite
+property-order/format differences, so canonical metadata and formatting remain.
+Client checks cover the four-option gallery, keyboard behavior, custom URL,
+upload failure/pending controls, reset, saving and reopening, draft recovery,
+failed-save retry identity, image fallback/Retry, 320px, 200% text and reduced
+motion. Evidence remains ignored under `output/recipe-image-presets/`.
+Application changes remain uncommitted; no Git push or hosted client deployment
+was performed.
+
+### Recipe meal assignments and weekly generation — 2026-10-16
+
+Migration `20261015070911_recipe_meal_assignments_and_week_generation.sql` is
+deployed under standing authorization. Fresh preflight confirmed all 77 applied
+migration hashes and the deployed schema/function/grant baseline. The dry run
+contained only this forward migration, without seeds, roles or history repairs.
+
+`meals.meal_slots` stores validated, distinct meal assignments. Original catalog
+recipes default to Lunch/Dinner; personal legacy records remain unassigned.
+Explicit authoring requires assignments and a whole yield from 1 to 10,000;
+older callers omitting assignments preserve the saved value. Fractional recipe
+definitions round up, with supplied per-serving macros scaled by old/new yield
+and revisions advanced. Whole ingredients and historical nutrition are retained.
+The retired image gallery does not remove existing asset IDs or saved covers.
+
+`generate_nutrition_week` is the deliberate authenticated wrapper around a
+private transaction. It verifies selected recipe revisions, profile/plan/grocery
+versions, one-serving assignments, empty slots, remaining weekly allowance and
+planning restrictions, then invokes the existing plan/grocery reconciliation
+inside one transaction. Existing prescriptions cannot be removed or edited by
+the generation payload. Direct table writes and private execution remain denied.
+Recipe authoring's grocery revision check is scoped to the submitted grocery
+week, preserving stale-save protection after a future week is generated.
+
+Clean local replay applied all 78 migrations. Verification passed 29 database
+suites / 1,005 assertions, 19 authenticated repository tests and 404 local
+application tests. TypeScript, ESLint and the production build passed. Desktop
+and mobile scenarios verified meal assignments, whole-yield validation, drafts,
+same-key retries after failed saves, navigation locks, stale-preview review,
+partial-result acknowledgment and original-unit conversions. Layout checks
+covered 320px, 200% text and reduced motion. Database lint retains the existing
+unused `p_payload` warning in the image-cleanup helper; the new functions have
+no lint findings.
+
+Post-deployment history matches all 78 versions and the dry run is up to date.
+The complete local/linked schema and routine/grant fingerprints match. Public
+generated types agree structurally; generator formatting and its existing Json
+nullability notation are normalized for comparison. A pre/post transformation
+digest verified all 17 recipe definitions against the exact expected changes,
+normalizing numeric scale and excluding update timestamps. Whole-row digests
+matched for all 11 other preservation categories: plan versions/rows, intake and
+grouped logs, ingredients, grocery lists/items, workout plans, profiles, targets
+and retry receipts. An isolated linked transaction verified authenticated
+generation, authoritative supplied macros, replay, stale denial, meal assignments
+and denied private/direct writes, then rolled back its identity and data. Final
+preservation checks still matched. Local evidence is ignored under
+`output/weekly-generation/`. Application changes remain uncommitted, with no Git
+push or hosted client deployment. `HANDOVER.md` remains retired and deleted.
+
+### Selectable generation cards and reviewed legacy assignments — 2026-10-16
+
+Migration `20261016022847_assign_reviewed_legacy_recipe_meals.sql` is deployed
+under standing authorization. Fresh history/schema preflight verified the 78
+applied migrations and exactly this pending data-only correction. Exact owner,
+recipe IDs, revisions, recipe contents and ordered ingredient quantities guard
+the three reviewed records: Toast receives Breakfast/Lunch/Snack, Fried Rice
+receives Lunch/Dinner, and test11 receives Breakfast/Snack. Different owners,
+changed contents or existing incompatible assignments abort the correction.
+Missing records are skipped for clean installations; replay is idempotent.
+Only meal assignments and their normal revision/update metadata change.
+
+All 79 migrations replayed cleanly. Verification passed 30 database suites /
+1,023 assertions, 19 authenticated repository tests and 411 local application
+tests. TypeScript, ESLint, the production build and authenticated desktop/mobile
+generation scenarios passed. Browser coverage includes every-card Select all,
+exhausted-card selection without additional occurrences, 15px image insets,
+keyboard focus, recovery/retry, stale review, partial-result acknowledgment,
+320px, 200% text, reduced motion and failed covers. Database lint retains only
+the pre-existing unused image-cleanup parameter warning.
+
+Post-deployment history matches all 79 versions and the dry run is up to date.
+Schema, routines and privileges are unchanged; fresh local/linked public types
+remain structurally consistent. Full recipe transformation checks verify only
+the three intended assignments and revision advances, preserving all other
+recipe fields and canonical ingredients. Whole-row preservation digests match
+for all 11 other checked categories, including plans, groceries, intake and
+workout/profile/target records. Evidence remains ignored under
+`output/recipe-card-selection/`. Application changes remain uncommitted, with
+no Git push or hosted client deployment. `HANDOVER.md` remains deleted.
+
+### Reviewed chicken meal-prep catalog — 2026-10-16
+
+Migration `20261016070737_chicken_meal_prep_catalog.sql` is deployed under
+standing authorization. Fresh preflight verified all 79 applied migration hashes,
+the linked schema/routine/privilege baseline and exactly this pending migration.
+No seeds, roles or history repairs were included.
+
+It adds Sticky Teriyaki Chicken and Chicken Burrito Protein Boxes, nine separately
+identified USDA foods and fourteen quantified ingredient rows. Both recipes yield
+four servings with their original cooking measurements, meal assignments, times,
+methods and references. Their active nutrition is ingredient-calculated; quoted
+source macros remain comparisons in nutrition notes. Confirmed tin weights and
+unmeasured exclusions are explicit. Existing foods and recipes are not updated.
+The registered asset constraint/private authoring allowlist accept the two new
+covers. Existing generation/strict-plan guards recognize the new raw chicken ID,
+and unmeasured allergens remain relevant despite exclusion from macro totals.
+There is no new table, column, public RPC or client write privilege.
+
+Clean replay applied all 80 migrations. Verification passed 31 database suites /
+1,052 assertions, 19 authenticated repository tests and 416 application tests.
+Four authenticated desktop/mobile catalog and generation scenarios passed,
+including metadata, original units, Details-only nutrition, covers, personal
+save/reopen, serving allowances, retries, stale review, 320px, 200% text and reduced
+motion. TypeScript, ESLint and production build passed. Database lint retains only
+the existing unused image-cleanup parameter warning. Fresh local/linked public
+types remain structurally consistent with the checked-in contract.
+
+Post-deployment history matches all 80 versions and the dry run is up to date.
+The deployed schema/routine definitions and grants match the tested local state.
+Exact new recipe/ingredient and USDA food records match locally. Full-row digests
+verify that all prior recipes, ingredients and foods are unchanged, alongside
+the ten other checked planning, grocery, nutrition, workout, profile, target and
+retry categories. Evidence and the nutrition/source/image-prompt report remain
+ignored under `output/chicken-recipe-catalog/`. Application changes remain
+uncommitted, with no Git push or hosted client deployment. `HANDOVER.md` stays
+deleted.
