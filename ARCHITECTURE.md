@@ -879,6 +879,12 @@ points remain compatible; private implementations are not directly executable
 by clients. Migration rollout uses the standing authorization and still requires
 the complete linked schema/history preflight and post-deployment verification.
 
+The RPC smoke runner edits the latest owner/week plan with its authoritative
+plan and grocery versions, and checks the latest prescription row after a skip.
+Its recipe fixture includes authoring instructions, complexity and meal slots;
+the result uses the distinct `save_recipe` operation. The runner continues to
+verify original plan preservation, retry replay and two-account isolation.
+
 The main app snapshot should contain only the compact state required to render
 the authenticated user's current profile, active targets, current plan, and
 today's summary. It should not become an unbounded transport for every

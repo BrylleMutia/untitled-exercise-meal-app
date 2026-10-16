@@ -82,7 +82,7 @@ async function rpc(client, name, payload, context, calls) {
   const result = await rawRpc(client, name, payload, calls);
   assertOk(result, context);
   assert(result.data, `${context}: RPC returned no data`);
-  const expectedOperation = name === "save_recipe" ? "save_saved_meal" : name;
+  const expectedOperation = name;
   assert(
     result.data.operation === expectedOperation,
     `${context}: expected operation ${expectedOperation}, received ${result.data.operation ?? "none"}`
@@ -398,29 +398,29 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
       `${label} reset plan did not preserve earlier plan versions`
     );
 
-    const skippedPlan = bundle(id("skip"), {
-      units: "imperial",
-      name: "RPC Smoke Skip",
-      effectiveDate: "2026-09-10",
-      mealSkipped: true,
-      planId: baseA.plan.id,
-      mealPlanId: baseA.mealPlan.id,
-    });
+    // Week edits operate on the latest prescription; they do not create workouts.
+    const skippedPlan = structuredClone(resetPlan);
+    skippedPlan.mealPlan.meals[0].skipped = true;
+    const selectedPlan = await userA.client.from("meal_plans").select("app_id, version")
+      .eq("user_id", userA.userId).eq("week_of", skippedPlan.mealPlan.weekOf)
+      .order("version", { ascending: false }).order("row_id", { ascending: false }).limit(1).single();
+    assertOk(selectedPlan, `${label} selected plan before skip`);
+    assert(selectedPlan.data.app_id === skippedPlan.mealPlan.id, `${label} reset plan is not the current prescription`);
+    const selectedGrocery = await userA.client.from("grocery_lists").select("app_id, revision")
+      .eq("user_id", userA.userId).eq("week_of", skippedPlan.grocery.weekOf).single();
+    assertOk(selectedGrocery, `${label} selected grocery before skip`);
+    skippedPlan.grocery.id = selectedGrocery.data.app_id;
     await rpc(
       userA.client,
       "skip_planned_meal",
-      { ...skippedPlan, idempotencyKey: id("skip-meal") },
+      { ...skippedPlan, expectedVersions: { mealPlanVersion: selectedPlan.data.version, groceryRevision: selectedGrocery.data.revision }, idempotencyKey: id("skip-meal") },
       `${label} skip planned meal`,
       calls
     );
-    const skippedMeal = await selectOne(
-      userA.client,
-      "planned_meals",
-      "skipped",
-      "app_id",
-      skippedPlan.mealPlan.meals[0].id,
-      `${label} skipped meal`
-    );
+    const skippedMealResult = await userA.client.from("planned_meals").select("skipped")
+      .eq("app_id", skippedPlan.mealPlan.meals[0].id).order("row_id", { ascending: false }).limit(1).single();
+    assertOk(skippedMealResult, `${label} skipped meal`);
+    const skippedMeal = skippedMealResult.data;
     assert(skippedMeal.skipped === true, `${label} skip_planned_meal did not persist skipped state`);
     const originalMeal = await selectOne(
       userA.client,
@@ -938,12 +938,15 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
         id: id("recipe"),
         name: "Smoke-test recipe",
         servings: 1,
+        notes: "Prepare the egg and serve.",
+        complexity: "easy",
+        mealSlots: ["breakfast"],
         ingredients: [{ foodId: "food-egg", servings: 1 }],
       },
       idempotencyKey: id("recipe"),
     };
     const recipeResult = await rpc(userA.client, "save_recipe", recipePayload, `${label} recipe`, calls);
-    assert(recipeResult.operation === "save_saved_meal", `${label} save_recipe alias changed unexpectedly`);
+    assert(recipeResult.operation === "save_recipe", `${label} save_recipe returned the wrong operation`);
     const recipeReplay = await rpc(userA.client, "save_recipe", recipePayload, `${label} recipe replay`, calls);
     assert(recipeReplay.replayed === true, `${label} recipe replay was not marked replayed`);
 
@@ -985,7 +988,7 @@ export async function runRpcSmoke({ url, key, createSession, label = "local" }) 
       },
       expectedVersions: {
         mealPlanVersion: currentMealPlan.data.version,
-        groceryRevision: currentGrocery.revision,
+        groceryRevision: currentGrocery.data.revision,
       },
       idempotencyKey: id("edit-meal-plan"),
     };
