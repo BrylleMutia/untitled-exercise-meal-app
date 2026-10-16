@@ -6,6 +6,10 @@ import { FOODS } from "@/constants/foods";
 
 let snapshot: AppSnapshot;
 vi.mock("@/contexts/AppContext", () => ({ useApp: () => ({ snapshot, actions: {} }) }));
+vi.mock("@/components/nutrition/useNutritionWeek", () => ({ useNutritionWeek: (weekOf: string) => ({
+  data: { weekOf, mealPlan: snapshot.mealPlan, targets: snapshot.nutritionWeekTargets, nutritionLogs: snapshot.nutritionLogs,
+    loggedMeals: snapshot.loggedMeals, grocery: snapshot.grocery, recipes: [], foods: snapshot.foods }, loading: false, refresh: vi.fn(),
+}) }));
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -32,6 +36,9 @@ describe("Nutrition day slots", () => {
     expect(html).toContain("0 mins</span>");
     expect(html).toContain("45 mins</span>");
     expect(html.match(/Total recipe time:/g)).toHaveLength(2);
+    expect(html.match(/id="plan-saved-/g)).toHaveLength(3);
+    expect(html).not.toContain('id="log-it-');
+    expect(html).toContain("Add to plan");
   });
   it("shows all four slots and keeps per-slot Add meal available without a plan", () => {
     const html = renderToStaticMarkup(<NutritionPage />);
@@ -51,7 +58,7 @@ describe("Nutrition day slots", () => {
     const food = FOODS[0];
     snapshot.savedMeals = [{ id: "beef", name: "Beef bowl", servings: 4, ingredients: [{ foodId: food.id, servings: 1 }], providedNutrition: { calories: 560, proteinG: 45, carbsG: 58, fatG: 16 } }];
     snapshot.mealPlan = { id: "plan", version: 1, targetId: "target", weekOf: "2026-10-05", meals: [
-      { id: "beef-plan", date: "2026-10-05", slot: "lunch", mealId: "beef", label: "Beef bowl", servings: 0.5 },
+      { id: "beef-plan", date: "2026-10-05", slot: "lunch", mealId: "beef", label: "Beef bowl", servings: 0.5, expectedCalories: 280, expectedProteinG: 22.5, expectedCarbsG: 29, expectedFatG: 8 },
       { id: "unresolved", date: "2026-10-05", slot: "dinner", label: "Choose a meal", servings: 1, skipped: true, expectedCalories: 0 },
     ] };
     snapshot.nutritionLogs = [{ id: "eaten", date: "2026-10-05", slot: "lunch", customName: "Eaten food", servings: 1, calories: 100, proteinG: 10, carbsG: 15, fatG: 3, estimated: false, confidence: "high", source: "user", valueSource: "user_provided", createdAt: "2026-10-05T12:00:00Z" }];
@@ -70,5 +77,34 @@ describe("Nutrition day slots", () => {
     expect(plannedHtml).not.toContain("Recipe yields");
     expect(html).toContain("View recipe image: Beef bowl");
     expect(html).toContain("Recipe yields 4 servings");
+    expect(html).toContain('id="saved-meals-heading" class="font-extrabold">Recipes</h2>');
+    expect(html).toContain('aria-label="About Recipes"');
+    expect(html).not.toContain('aria-label="About Saved meals"');
+    expect(html).toMatch(/<button[^>]*bg-ink text-white[^>]*><svg[^>]*lucide-wand-sparkles[^>]*aria-hidden="true"[\s\S]*?<\/svg>Generate<\/button>/);
+    expect(html).toMatch(/<button[^>]*bg-white\/70 text-ink[^>]*><svg[^>]*lucide-plus[^>]*aria-hidden="true"[\s\S]*?<\/svg> Create<\/button>/);
+  });
+  it("places Today between the week arrows, counts Eaten rows, and omits Log again", () => {
+    const food = FOODS[0];
+    snapshot.mealPlan = { id: "plan", version: 1, targetId: "target", weekOf: "2026-10-05", meals: [{ id: "linked", date: "2026-10-05", slot: "lunch", foodId: food.id, label: food.name, servings: 1 }] };
+    snapshot.nutritionLogs = [{ id: "actual", date: "2026-10-05", slot: "lunch", foodId: food.id, plannedMealId: "linked", servings: 1, calories: 100, proteinG: 10, carbsG: 15, fatG: 3, estimated: false, confidence: "high", source: "user", valueSource: "user_provided", createdAt: "2026-10-05T12:00:00Z" }];
+    const html = renderToStaticMarkup(<NutritionPage />);
+    expect(html.indexOf('aria-label="Previous week"')).toBeLessThan(html.indexOf(">Today</button>"));
+    expect(html.indexOf(">Today</button>")).toBeLessThan(html.indexOf('aria-label="Next week"'));
+    expect(html.indexOf('aria-label="Next week"')).toBeLessThan(html.indexOf('aria-label="Nutrition summary view"'));
+    expect(html.indexOf(">Today</button>")).toBeLessThan(html.indexOf('aria-label="Choose a day"'));
+    expect(html).not.toContain("Log again");
+    expect(html).toContain(`aria-label="Edit ${food.name}"`);
+    expect(html).toContain("1 meal eaten");
+    snapshot.nutritionLogs.push({ ...snapshot.nutritionLogs[0], id: "another", servings: 2 });
+    expect(renderToStaticMarkup(<NutritionPage />)).toContain("2 meals eaten");
+    snapshot.loggedMeals = [{ id: "group", date: "2026-10-05", slot: "lunch", name: "Mixed meal", mealId: "recipe", sourceMode: "saved_meal", revision: 1, createdAt: "2026-10-05T12:00:00Z" }];
+    snapshot.nutritionLogs = snapshot.nutritionLogs.map(log => ({ ...log, loggedMealId: "group" }));
+    expect(renderToStaticMarkup(<NutritionPage />)).toContain("1 meal eaten");
+    snapshot.nutritionLogs = [];
+    snapshot.loggedMeals = [];
+    const empty = renderToStaticMarkup(<NutritionPage />);
+    expect(empty).toContain("No meals eaten");
+    expect(empty).toContain(">Not logged</span>");
+    expect(empty).not.toContain("Partially logged — missing slots are not zero");
   });
 });
