@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { addDays, todayKey } from "@/utility/dates";
+import { addDays, startOfWeek, todayKey } from "@/utility/dates";
+import { nutritionWeekSnapshot } from "@/utility/nutritionWeek";
+import { foodMacros } from "@/utility/nutrition";
+import { generateWeeklyMeals, weeklyRecipeOptions } from "@/utility/weeklyMealGeneration";
+import { recipeIngredientDraft, recipePreview, recipeUnitConversion } from "@/utility/recipeEditor";
+import { providedRecipeLogEntry } from "@/utility/providedRecipeNutrition";
 import { createSupabaseRepository } from "@/services/supabaseRepository";
 import type { Database } from "@/types/database.generated";
 import type { AppSnapshot, UserProfile, WorkoutSession } from "@/types/domain";
@@ -126,10 +131,200 @@ describe("Supabase repository against the disposable local stack", () => {
   let userB: TestAccount;
   let initialA: AppSnapshot;
 
+  it("generates the reviewed week atomically, preserves grocery edits and history, and rejects stale competing previews", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    let base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Weekly generator"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const source = base.savedMeals.find(meal => meal.id === "meal-korean-beef-bowl")!;
+    const id = `generation-${randomUUID()}`;
+    base = (await account.repository.saveRecipe({ meal: { ...source, id, isSystem: false, revision: undefined, name: "Weekly assigned bowl", mealSlots: ["breakfast", "snack"] }, newFoods: [], currentSnapshot: base, idempotencyKey: randomUUID() })).snapshot;
+    const saved = base.savedMeals.find(meal => meal.id === id)!;
+    expect(saved.mealSlots).toEqual(["breakfast", "snack"]);
+    const weekOf = startOfWeek(addDays(todayKey(), 21));
+    let week = await account.repository.loadNutritionWeek(weekOf);
+    let current = nutritionWeekSnapshot(base, week);
+    const manual = { id: `manual-${randomUUID()}`, date: weekOf, slot: "breakfast" as const, mealId: id, label: saved.name, servings: 1 };
+    await account.repository.addPlannedMeal({ plannedMeal: manual, currentSnapshot: current, idempotencyKey: randomUUID() });
+    week = await account.repository.loadNutritionWeek(weekOf);
+    current = nutritionWeekSnapshot(base, week);
+    await account.repository.addCustomGrocery({ name: "Keep my grocery", quantity: 2, unit: "item", currentSnapshot: current, idempotencyKey: randomUUID() });
+    week = await account.repository.loadNutritionWeek(weekOf);
+    current = nutritionWeekSnapshot(base, week);
+    const preview = generateWeeklyMeals(current, weekOf, [id], "repository-preview");
+    expect(preview.assignments).toHaveLength(3);
+    expect(preview.unused).toEqual([]);
+    const input = { weekOf, recipes: [{ id, revision: saved.revision! }], assignments: preview.assignments, currentSnapshot: current,
+      expectedVersions: { profileRevision: base.profile!.revision, mealPlanVersion: week.mealPlan!.version, groceryRevision: week.grocery!.revision }, idempotencyKey: randomUUID() };
+    const outcomes = await Promise.all([account.repository.generateNutritionWeek(input), account.repository.generateNutritionWeek(input)]);
+    expect(outcomes[0].snapshot.mealPlan).toEqual(base.mealPlan);
+    expect(outcomes[0].snapshot.nutritionLogs).toEqual(base.nutritionLogs);
+    expect(outcomes[0].snapshot.sessions).toEqual(base.sessions);
+    const after = await account.repository.loadNutritionWeek(weekOf);
+    expect(after.mealPlan!.meals).toHaveLength(4);
+    expect(after.mealPlan!.version).toBe(week.mealPlan!.version + 1);
+    expect(after.mealPlan!.meals.find(row => row.id === manual.id)).toEqual(week.mealPlan!.meals.find(row => row.id === manual.id));
+    expect(after.mealPlan!.meals.every(row => row.expectedCalories === 560 && row.expectedProteinG === 45)).toBe(true);
+    expect(after.grocery!.items.find(item => item.name === "Keep my grocery")).toEqual(week.grocery!.items.find(item => item.name === "Keep my grocery"));
+    expect(weeklyRecipeOptions(nutritionWeekSnapshot(base, after), weekOf).find(option => option.recipe.id === id)?.capacity).toBe(0);
+    await expect(account.repository.generateNutritionWeek({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    expect((await account.repository.load())!.mealPlan).toEqual(base.mealPlan);
+    const edited = await account.repository.saveRecipe({ meal: { ...saved, servings: 40 }, newFoods: [], currentSnapshot: base,
+      expectedVersions: { recordRevision: saved.revision, groceryRevision: base.grocery!.revision }, idempotencyKey: randomUUID() });
+    expect(edited.snapshot.savedMeals.find(meal => meal.id === id)?.servings).toBe(40);
+    expect((await account.repository.loadNutritionWeek(weekOf)).mealPlan).toEqual(after.mealPlan);
+    expect((await account.repository.loadNutritionWeek(weekOf)).grocery).toEqual(after.grocery);
+    const exported = await account.repository.exportData({ idempotencyKey: randomUUID() });
+    expect(JSON.stringify(exported.data)).toContain('"meal_slots":["breakfast","snack"]');
+  });
+
+  it("round-trips original cooking measurements, ranges and seasonings without rewriting plans or history", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Cooking Units"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const recipe = { id: `cooking-${randomUUID()}`, name: "Cooking units", mealSlots: ["breakfast" as const], servings: 2, complexity: "easy" as const, notes: "Prepare and serve.",
+      nutritionNotes: "Upper range amount used.", unmeasuredIngredients: [{ name: "Salt", measurement: "To taste" }],
+      ingredients: [{ foodId: "food-egg", servings: 2, cookingMeasurement: { kind: "range" as const, name: "Eggs", quantity: 1, upperQuantity: 2, unit: "piece" } }] };
+    const input = { meal: recipe, newFoods: [], currentSnapshot: base, idempotencyKey: randomUUID() };
+    const saved = await account.repository.saveRecipe(input);
+    const loaded = saved.snapshot.savedMeals.find(meal => meal.id === recipe.id)!;
+    expect(loaded.ingredients[0].cookingMeasurement).toEqual(recipe.ingredients[0].cookingMeasurement);
+    expect(loaded.unmeasuredIngredients).toEqual(recipe.unmeasuredIngredients);
+    expect(loaded.nutritionNotes).toBe(recipe.nutritionNotes);
+    expect(saved.snapshot.nutritionLogs).toEqual(base.nutritionLogs);
+    expect(saved.snapshot.mealPlan).toEqual(base.mealPlan);
+    const replay = await account.repository.saveRecipe(input);
+    expect(replay.snapshot.savedMeals.find(meal => meal.id === recipe.id)).toEqual(loaded);
+    const source = recipeIngredientDraft(loaded.ingredients[0], saved.snapshot.foods.find(food => food.id === "food-egg")!, "egg-conversion");
+    const conversion = recipeUnitConversion(source, source.food!, "cup", { unit: "cup", gramsPerUnit: 200 });
+    if (conversion.status !== "converted") throw new Error("Expected a confirmed cooking conversion");
+    const convertedIngredients = recipePreview([{ ...source, ...conversion.patch }], String(loaded.servings), saved.snapshot.foods)!.ingredients;
+    const converted = await account.repository.saveRecipe({ meal: { ...loaded, ingredients: convertedIngredients }, newFoods: [], currentSnapshot: saved.snapshot, expectedVersions: { recordRevision: loaded.revision, groceryRevision: saved.snapshot.grocery?.revision }, idempotencyKey: randomUUID() });
+    const convertedRecipe = converted.snapshot.savedMeals.find(meal => meal.id === recipe.id)!;
+    expect(convertedRecipe.ingredients[0]).toMatchObject({ servings: 2, cookingMeasurement: { quantity: 0.25, upperQuantity: 0.5, unit: "cup", gramsPerUnit: 200 } });
+    expect(converted.snapshot.mealPlan).toEqual(saved.snapshot.mealPlan); expect(converted.snapshot.nutritionLogs).toEqual(saved.snapshot.nutritionLogs); expect(converted.snapshot.grocery).toEqual(saved.snapshot.grocery);
+    const week = await account.repository.loadNutritionWeek(startOfWeek(todayKey()));
+    expect(week.recipes.find(meal => meal.id === "meal-creamy-lemon-chicken")?.ingredients[3].cookingMeasurement).toMatchObject({ quantity: 300, unit: "ml", gramsPerUnit: 1.03 });
+    const exported = await account.repository.exportData({ idempotencyKey: randomUUID() });
+    if (!exported.data) throw new Error("Account export returned no data");
+    expect(JSON.stringify(exported.data.savedMealIngredients)).toContain('"upperQuantity":0.5');
+    expect(JSON.stringify(exported.data.savedMeals)).toContain('"unmeasured_ingredients"');
+    const edit = { ...convertedRecipe, providedNutrition: { calories: 560, proteinG: 45, carbsG: 58, fatG: 16 }, ingredients: [{ foodId: "food-egg", servings: 3, cookingMeasurement: { kind: "range" as const, quantity: 1, upperQuantity: 3, unit: "piece" } }] };
+    const changed = await account.repository.saveRecipe({ meal: edit, newFoods: [], currentSnapshot: converted.snapshot, expectedVersions: { recordRevision: convertedRecipe.revision, groceryRevision: converted.snapshot.grocery?.revision }, idempotencyKey: randomUUID() });
+    expect(changed.snapshot.savedMeals.find(meal => meal.id === recipe.id)).toMatchObject({ providedNutrition: edit.providedNutrition, ingredients: [{ servings: 3 }] });
+    await expect(account.repository.saveRecipe({ ...input, meal: { ...recipe, ingredients: [{ foodId: "food-egg", servings: 2, cookingMeasurement: { kind: "amount", quantity: 1, unit: "cup" } }] }, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+  });
+
+  it("corrects whole saved-recipe portions atomically and preserves plans, supplied macros and retries", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    const current = (await account.repository.completeOnboarding({ profile: profile(account.id, "Recipe Portions"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const date = todayKey();
+    const chicken = current.savedMeals.find(meal => meal.id === "meal-creamy-lemon-chicken")!;
+    const ingredients = chicken.ingredients.map(ingredient => {
+      const food = current.foods.find(food => food.id === ingredient.foodId)!;
+      const servings = ingredient.servings * 3 / chicken.servings;
+      return { ...eggEntry(date), slot: "snack" as const, foodId: food.id, servings, ...foodMacros(food, servings), source: food.source, valueSource: food.valueSource };
+    });
+    const logged = await account.repository.saveSavedMealLog({ date, slot: "snack", entries: ingredients, meal: chicken, recipeServings: 3, idempotencyKey: randomUUID() });
+    const group = logged.snapshot.loggedMeals.find(meal => meal.mealId === chicken.id)!;
+    expect(group.recipeServings).toBe(3);
+    const oldEntries = logged.snapshot.nutritionLogs.filter(entry => entry.loggedMealId === group.id);
+    const input = { loggedMeal: group, ingredients: [], recipeServings: 0.5, currentSnapshot: logged.snapshot, idempotencyKey: randomUUID() };
+    const corrected = await account.repository.updateLoggedMeal(input);
+    const replayed = await account.repository.updateLoggedMeal(input);
+    expect(corrected.snapshot.loggedMeals.find(meal => meal.id === group.id)).toMatchObject({ recipeServings: 0.5, revision: group.revision + 1 });
+    for (const entry of replayed.snapshot.nutritionLogs.filter(entry => entry.loggedMealId === group.id)) {
+      const before = oldEntries.find(old => old.id === entry.id)!;
+      expect(entry.calories).toBeCloseTo(before.calories / 6, 1);
+      expect(Math.abs(entry.servings - before.servings / 6)).toBeLessThanOrEqual(0.00051); // Stored food quantities have three decimal places.
+      expect(entry.source).toBe(before.source);
+    }
+    expect(replayed.snapshot.mealPlan).toEqual(current.mealPlan);
+    expect(replayed.snapshot.grocery).toEqual(current.grocery);
+    expect(replayed.snapshot.savedMeals).toEqual(current.savedMeals);
+    expect((await account.repository.loadNutritionWeek(startOfWeek(date))).loggedMeals.find(meal => meal.id === group.id)?.recipeServings).toBe(0.5);
+    await expect(account.repository.updateLoggedMeal({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    await expect(userB.repository.updateLoggedMeal({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "not_found" } });
+    const beef = current.savedMeals.find(meal => meal.id === "meal-korean-beef-bowl")!;
+    const provided = await account.repository.saveSavedMealLog({ date, slot: "dinner", entries: [providedRecipeLogEntry(beef, 3, date, "dinner")!], meal: beef, recipeServings: 3, idempotencyKey: randomUUID() });
+    const beefGroup = provided.snapshot.loggedMeals.find(meal => meal.mealId === beef.id)!;
+    const half = await account.repository.updateLoggedMeal({ loggedMeal: beefGroup, ingredients: [], recipeServings: 0.5, currentSnapshot: provided.snapshot, idempotencyKey: randomUUID() });
+    expect(half.snapshot.nutritionLogs.find(entry => entry.loggedMealId === beefGroup.id)).toMatchObject({ calories: 280, proteinG: 22.5, carbsG: 29, fatG: 8 });
+  });
+
+  it("reads and edits independent weeks without switching the global current plan", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Week Integration"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const currentWeek = base.mealPlan!.weekOf;
+    const weeks = [startOfWeek(addDays(todayKey(), 7)), startOfWeek(addDays(todayKey(), 14))];
+    for (const weekOf of weeks) {
+      const context = await account.repository.loadNutritionWeek(weekOf);
+      const result = await account.repository.addPlannedMeal({ plannedMeal: { id: `beef-${weekOf}`, date: weekOf, slot: "lunch", mealId: "meal-korean-beef-bowl", label: "Korean Beef Bowl", servings: 0.5 }, currentSnapshot: nutritionWeekSnapshot(base, context), idempotencyKey: randomUUID() });
+      expect(result.snapshot.mealPlan?.weekOf).toBe(currentWeek);
+      expect((await account.repository.loadNutritionWeek(weekOf)).mealPlan?.meals[0]).toMatchObject({ expectedCalories: 280, expectedProteinG: 22.5, expectedCarbsG: 29, expectedFatG: 8 });
+    }
+    const older = await account.repository.loadNutritionWeek(weeks[0]);
+    const newer = await account.repository.loadNutritionWeek(weeks[1]);
+    const input = { id: older.mealPlan!.meals[0].id, currentSnapshot: nutritionWeekSnapshot(base, older), idempotencyKey: randomUUID() };
+    await account.repository.skipPlannedMeal(input);
+    const skipped = await account.repository.loadNutritionWeek(weeks[0]);
+    expect(skipped.mealPlan?.version).toBe(2);
+    expect(skipped.mealPlan?.meals[0]).toMatchObject({ skipped: true, expectedCalories: 280 });
+    expect((await account.repository.loadNutritionWeek(weeks[1])).mealPlan).toEqual(newer.mealPlan);
+    await expect(account.repository.skipPlannedMeal({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    await account.repository.skipPlannedMeal({ ...input, currentSnapshot: nutritionWeekSnapshot(base, skipped), idempotencyKey: randomUUID() });
+    const restored = await account.repository.loadNutritionWeek(weeks[0]);
+    expect(restored.mealPlan?.meals[0]).toMatchObject({ expectedProteinG: 22.5 });
+    expect(restored.mealPlan?.meals[0].skipped).not.toBe(true);
+    const otherAccountWeek = await userB.repository.loadNutritionWeek(weeks[0]);
+    expect(otherAccountWeek.mealPlan).toBeNull();
+    expect((await account.repository.load())?.mealPlan?.weekOf).toBe(currentWeek);
+    const competing = [1, 1.5].map(servings => ({
+      mealPlan: { ...restored.mealPlan!, meals: restored.mealPlan!.meals.map(meal => ({ ...meal, servings })) },
+      currentSnapshot: nutritionWeekSnapshot(base, restored), idempotencyKey: randomUUID(),
+    }));
+    const results = await Promise.allSettled(competing.map(input => account.repository.editMealPlan(input)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find(result => result.status === "rejected") as PromiseRejectedResult;
+    expect(rejected.reason).toMatchObject({ repositoryError: { code: "stale_version" } });
+    const winner = results.findIndex(result => result.status === "fulfilled");
+    await account.repository.editMealPlan(competing[winner]);
+    expect((await account.repository.loadNutritionWeek(weeks[0])).mealPlan?.version).toBe(restored.mealPlan!.version + 1);
+    expect((await account.repository.loadNutritionWeek(weeks[1])).mealPlan).toEqual(newer.mealPlan);
+  });
+
+  it("round trips all recipe presets and preserves nutrition, groceries and history during image-only edits", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    let current = (await account.repository.completeOnboarding({ profile: profile(account.id, "Image Presets"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const source = current.savedMeals.find(meal => meal.id === "meal-korean-beef-bowl")!;
+    const id = `preset-${randomUUID()}`;
+    for (const image of [{ kind: "asset", id: "breakfast-egg-salad" }, { kind: "asset", id: "snack-sandwich" }, { kind: "asset", id: "dinner-curry-omelette" }, null] as const) {
+      const recipe = current.savedMeals.find(meal => meal.id === id);
+      const input = { meal: { ...(recipe ?? source), id, isSystem: false, revision: recipe?.revision, name: "Preset recipe", image }, newFoods: [], currentSnapshot: current, expectedVersions: { recordRevision: recipe?.revision }, idempotencyKey: randomUUID() };
+      const result = await account.repository.saveRecipe(input);
+      const saved = result.snapshot.savedMeals.find(meal => meal.id === id)!;
+      expect(saved.image ?? null).toEqual(image);
+      expect(saved.providedNutrition).toEqual(source.providedNutrition);
+      expect(saved.ingredients).toEqual(source.ingredients);
+      expect(result.snapshot.mealPlan).toEqual(current.mealPlan);
+      if (recipe) expect(result.snapshot.grocery).toEqual(current.grocery);
+      else expect(result.snapshot.grocery?.items).toEqual(current.grocery?.items);
+      expect(result.snapshot.nutritionLogs).toEqual(current.nutritionLogs);
+      expect(result.snapshot.loggedMeals).toEqual(current.loggedMeals);
+      expect((await account.repository.saveRecipe(input)).snapshot.savedMeals.find(meal => meal.id === id)?.revision).toBe(saved.revision);
+      expect((await account.repository.load())!.savedMeals.find(meal => meal.id === id)?.image ?? null).toEqual(image);
+      current = result.snapshot;
+    }
+    const exported = await account.repository.exportData({ idempotencyKey: randomUUID() });
+    expect(JSON.stringify(exported.data)).toContain(id);
+  });
+
   it("loads the replacement catalog and saves a personal copy with its bundled cover", async () => {
     const snapshot = (await userA.repository.load())!;
     const catalog = snapshot.savedMeals.filter(meal => meal.isSystem && !meal.archivedAt);
-    expect(catalog.map(meal => meal.id)).toEqual(["meal-creamy-lemon-chicken", "meal-korean-beef-bowl"]);
+    expect(catalog.map(meal => meal.id)).toEqual(["meal-creamy-lemon-chicken", "meal-korean-beef-bowl", "meal-sticky-teriyaki-chicken", "meal-chicken-burrito-protein-boxes"]);
     const source = catalog[0];
     expect(source).toMatchObject({ complexity: "easy", totalTimeMinutes: 30, servings: 2, image: { kind: "asset", id: "creamy-lemon-chicken" } });
     const id = `recipe-copy-${randomUUID()}`;
@@ -169,7 +364,7 @@ describe("Supabase repository against the disposable local stack", () => {
   it("saves authored recipe details and new foods atomically with retry and history preservation", async () => {
     const current = (await userA.repository.load())!;
     const food = { ...current.foods[0], id: `recipe-food-${randomUUID()}`, name: "Recipe custom food", valueSource: "user_provided" as const, source: "User entered", sourceVersion: "1", fdcId: undefined, recordType: undefined, calories: 100, proteinG: 10, carbsG: 10, fatG: 2 };
-    const meal = { id: `recipe-${randomUUID()}`, name: "Authored recipe", complexity: "medium" as const, notes: "Stir and serve.", reference: "Cookbook, p. 12", totalTimeMinutes: 45, servings: 2, ingredients: [{ foodId: food.id, servings: 1 }] };
+    const meal = { id: `recipe-${randomUUID()}`, name: "Authored recipe", mealSlots: ["lunch" as const], complexity: "medium" as const, notes: "Stir and serve.", reference: "Cookbook, p. 12", totalTimeMinutes: 45, servings: 2, ingredients: [{ foodId: food.id, servings: 1 }] };
     const input = { meal, newFoods: [food], currentSnapshot: current, expectedVersions: { groceryRevision: current.grocery?.revision }, idempotencyKey: randomUUID() };
     const saved = await userA.repository.saveRecipe(input);
     const replayed = await userA.repository.saveRecipe(input);
@@ -226,7 +421,7 @@ describe("Supabase repository against the disposable local stack", () => {
     const onboarded = await account.repository.completeOnboarding({ profile: profile(account.id, "Recipe groceries"), currentSnapshot: empty, idempotencyKey: randomUUID() });
     const logged = await account.repository.saveNutrition({ entry: eggEntry(todayKey()), idempotencyKey: randomUUID() });
     const food = { ...onboarded.snapshot.foods[0], id: `recipe-grocery-food-${randomUUID()}`, name: "Recipe grocery ingredient", unit: "g" as const, servingGrams: 100, servingLabel: "100 g", valueSource: "user_provided" as const, source: "User entered", sourceVersion: "1", fdcId: undefined, recordType: undefined };
-    const meal = { id: `recipe-grocery-${randomUUID()}`, name: "Recipe groceries", complexity: "easy" as const, notes: "Combine and serve.", servings: 1, ingredients: [{ foodId: food.id, servings: 1 }] };
+    const meal = { id: `recipe-grocery-${randomUUID()}`, name: "Recipe groceries", mealSlots: ["breakfast" as const], complexity: "easy" as const, notes: "Combine and serve.", servings: 1, ingredients: [{ foodId: food.id, servings: 1 }] };
     const saved = await account.repository.saveRecipe({ meal, newFoods: [food], currentSnapshot: logged.snapshot, idempotencyKey: randomUUID() });
     const planned = await account.repository.addPlannedMeal({ plannedMeal: { id: `planned-${randomUUID()}`, date: todayKey(), slot: "breakfast", label: meal.name, mealId: meal.id, servings: 1 }, currentSnapshot: saved.snapshot, idempotencyKey: randomUUID() });
     const item = planned.snapshot.grocery!.items.find(item => item.name === food.name)!;

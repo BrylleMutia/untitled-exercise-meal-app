@@ -16,6 +16,8 @@ import type {
   TrainingProgram,
   CustomWorkoutDefinition,
   CustomWorkoutSession,
+  DailyTarget,
+  GroceryList,
 } from "@/types/domain";
 
 export type MutationErrorCode =
@@ -247,6 +249,14 @@ export type EditMealPlanInput = IdempotentInput & {
   expectedVersions?: ExpectedVersions;
 };
 
+export type GenerateNutritionWeekInput = IdempotentInput & {
+  weekOf: string;
+  recipes: Array<{ id: string; revision: number }>;
+  assignments: PlannedMeal[];
+  expectedVersions: ExpectedVersions;
+  currentSnapshot: AppSnapshot;
+};
+
 export type AddPlannedMealInput = IdempotentInput & {
   plannedMeal: PlannedMeal;
   newFoods?: Food[];
@@ -261,6 +271,7 @@ export type ResetPlanInput = IdempotentInput & {
 };
 
 export type SavedMealLogInput = IdempotentInput & {
+  recipeServings?: number;
   date: string;
   slot: NutritionLog["slot"];
   entries: Array<Omit<NutritionLog, "id" | "createdAt">>;
@@ -309,6 +320,17 @@ export type HistoryQuery = {
   sessionsCursor?: string;
   nutritionCursor?: string;
   weightsCursor?: string;
+};
+
+export type NutritionWeekReadModel = {
+  weekOf: string;
+  mealPlan: MealPlan | null;
+  targets: DailyTarget[];
+  nutritionLogs: NutritionLog[];
+  loggedMeals: LoggedMeal[];
+  grocery: GroceryList | null;
+  recipes: Meal[];
+  foods: Food[];
 };
 
 export type HistoryReadModel = {
@@ -363,6 +385,7 @@ export type ReviewedMealIngredientInput = Omit<NutritionLog, "id" | "createdAt" 
 };
 
 export type SaveReviewedMealInput = IdempotentInput & {
+  recipeServings?: number;
   plannedMealId?: string;
   expectedMealPlanVersion?: number;
   date: string;
@@ -375,6 +398,8 @@ export type SaveReviewedMealInput = IdempotentInput & {
 };
 
 export type UpdateLoggedMealInput = IdempotentInput & {
+  recipeServings?: number;
+  previousRecipeServings?: number;
   loggedMeal: LoggedMeal;
   ingredients: ReviewedMealIngredientInput[];
   currentSnapshot: AppSnapshot;

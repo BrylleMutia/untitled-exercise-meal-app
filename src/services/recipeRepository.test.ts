@@ -29,6 +29,15 @@ beforeEach(() => {
 });
 
 describe("recipe repository intent", () => {
+  it("omits grocery writes and grocery revisions for unchanged canonical recipe quantities", async () => {
+    const currentSnapshot = { ...snapshot, savedMeals: [{ ...input.meal, revision: 2 }], grocery: { id: "grocery", weekOf: "2026-10-12", revision: 4, items: [] } };
+    const expectedVersions = { recordRevision: 2, groceryRevision: 4 };
+    const outcome = await repository.saveRecipe({ ...input, meal: { ...input.meal, ingredients: [{ foodId: "food-egg", servings: 1, cookingMeasurement: { kind: "amount", quantity: 0.5, unit: "cup", gramsPerUnit: 100 } }] }, currentSnapshot, expectedVersions });
+    const payload = rpc.mock.calls[0][1].p_payload;
+    expect(payload).not.toHaveProperty("grocery"); expect(payload.expectedVersions).toEqual({ recordRevision: 2 });
+    expect(expectedVersions).toEqual({ recordRevision: 2, groceryRevision: 4 });
+    expect(outcome.events).toEqual([{ type: "meal-saved", mealId: input.meal.id }]);
+  });
   it("sends catalog identity and separate concurrency version with a new personal identity", async () => {
     const catalog = { mealId: "meal-korean-beef-bowl", recordRevision: 1, preferenceRevision: 0 };
     await repository.saveRecipe({ ...input, catalog });

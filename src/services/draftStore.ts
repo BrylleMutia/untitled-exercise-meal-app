@@ -65,7 +65,8 @@ function isFresh<T>(value: unknown, userId?: string, draftType?: string): value 
     return false;
   }
   return Object.values(candidate.baseVersions as Record<string, unknown>).every(
-    (version) => typeof version === "number" && Number.isInteger(version) && version >= 1,
+    // Zero is the concurrency token for a plan or grocery list that does not exist yet.
+    (version) => typeof version === "number" && Number.isInteger(version) && version >= 0,
   );
 }
 

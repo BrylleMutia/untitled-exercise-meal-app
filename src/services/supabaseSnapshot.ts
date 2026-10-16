@@ -1,4 +1,6 @@
+import { parseMealSlots } from "@/utility/recipeMealSlots";
 import { parseProvidedRecipeNutrition } from "@/utility/providedRecipeNutrition";
+import { parseCookingMeasurement, parseUnmeasuredIngredients } from "@/utility/cookingMeasurement";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.generated";
 import type {
@@ -28,8 +30,8 @@ import type {
   CustomWorkoutDefinition,
   CustomMovementLog,
 } from "@/types/domain";
-import type { HistoryQuery, HistoryReadModel } from "@/types/backend";
-import { addDays, todayKey } from "@/utility/dates";
+import type { HistoryQuery, HistoryReadModel, NutritionWeekReadModel } from "@/types/backend";
+import { addDays, todayKey, startOfWeek } from "@/utility/dates";
 import { targetsForNutritionWeek } from "@/utility/targetHistory";
 import { parseRecipeImage } from "@/utility/recipeImage";
 
@@ -261,6 +263,9 @@ function mapMealPlan(
     id: row.app_id,
     version: row.version,
     weekOf: row.week_of,
+    dietaryPattern: row.dietary_pattern,
+    allergies: row.allergies,
+    totalCarbLimit: row.total_carb_limit === null ? null : Number(row.total_carb_limit),
     targetId: target?.app_id ?? "",
     meals: meals
       .filter((meal) => meal.meal_plan_row_id === row.row_id)
@@ -403,12 +408,15 @@ function mapMeal(
     id: row.app_id,
     name: row.name,
     servings: Number(row.servings),
+    mealSlots: parseMealSlots((row as MealRow & { meal_slots?: unknown }).meal_slots),
     ...(row.is_system ? { isSystem: true } : {}),
     ...(row.notes ? { notes: row.notes } : {}),
     ...(reference ? { reference } : {}),
     ...(row.total_time_minutes != null ? { totalTimeMinutes: row.total_time_minutes } : {}),
     ...(image ? { image } : {}),
     ...(providedNutrition ? { providedNutrition } : {}),
+    ...(row.unmeasured_ingredients == null ? {} : { unmeasuredIngredients: parseUnmeasuredIngredients(row.unmeasured_ingredients) ?? [] }),
+    ...(row.nutrition_notes ? { nutritionNotes: row.nutrition_notes } : {}),
     ...(complexity === "easy" || complexity === "medium" || complexity === "hard" ? { complexity } : {}),
     revision: row.revision,
     ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
@@ -416,7 +424,8 @@ function mapMeal(
       .sort((a, b) => a.ingredient_order - b.ingredient_order)
       .flatMap((ingredient) => {
         const food = foodsByRow.get(ingredient.food_row_id);
-        return food ? [{ foodId: food.app_id, servings: Number(ingredient.servings) }] : [];
+        const cookingMeasurement = parseCookingMeasurement(ingredient.cooking_measurement);
+        return food ? [{ foodId: food.app_id, servings: Number(ingredient.servings), ...(cookingMeasurement ? { cookingMeasurement } : {}) }] : [];
       }),
   };
 }
@@ -500,7 +509,7 @@ export async function loadAppSnapshot(
       required(client.from("meals").select("*").or(`is_system.eq.true,owner_user_id.eq.${userId}`)),
       required(client.from("meal_ingredients").select("*")),
       required(client.from("workout_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
-      required(client.from("meal_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
+      required(client.from("meal_plans").select("*").eq("user_id", userId).eq("week_of", startOfWeek(todayKey())).order("version", { ascending: false }).order("row_id", { ascending: false }).limit(1)),
       required(client.from("workout_sessions").select("*").eq("user_id", userId).gte("session_date", historyFrom).order("session_date", { ascending: false }).limit(100)),
       required(client.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", historyFrom).order("log_date", { ascending: false }).limit(100)),
       required(client.from("weight_entries").select("*").eq("user_id", userId).gte("entry_date", historyFrom).order("entry_date", { ascending: false }).limit(100)),
@@ -659,6 +668,7 @@ export async function loadAppSnapshot(
     name: row.name,
     mealId: mealsByRow.get(row.meal_row_id)?.app_id ?? "",
     sourceMode: row.source_mode as LoggedMeal["sourceMode"],
+    ...(row.recipe_servings == null ? {} : { recipeServings: row.recipe_servings }),
     ...(row.assumptions ? { assumptions: row.assumptions } : {}),
     revision: row.revision,
     createdAt: row.created_at,
@@ -669,8 +679,9 @@ export async function loadAppSnapshot(
     date: row.entry_date,
     weightKg: Number(row.weight_kg),
   }));
-  snapshot.grocery = groceryListRows[0]
-    ? mapGrocery(groceryListRows[0], groceryItemRows)
+  const currentGrocery = groceryListRows.find(row => row.week_of === startOfWeek(todayKey()));
+  snapshot.grocery = currentGrocery
+    ? mapGrocery(currentGrocery, groceryItemRows)
     : null;
   snapshot.savedMeals = mealRows
     .map(row => {
@@ -688,6 +699,46 @@ export async function loadAppSnapshot(
     }));
 
   return snapshot;
+}
+
+export async function loadNutritionWeekReadModel(client: AppSupabaseClient, weekOf: string): Promise<NutritionWeekReadModel> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf) || startOfWeek(weekOf) !== weekOf) throw new Error("Choose a valid Monday week date.");
+  const { data, error } = await client.rpc("get_nutrition_week", { p_week_of: weekOf });
+  if (error) throw new Error(error.code === "PGRST202" || error.code === "42883"
+    ? "Weekly nutrition needs the database update. Retry after it is applied; your drafts are retained."
+    : error.message);
+  return mapNutritionWeek(data, weekOf);
+}
+
+/** Map the focused RPC with the same durable-row contracts as the main snapshot. */
+export function mapNutritionWeek(data: unknown, weekOf: string): NutritionWeekReadModel {
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Weekly nutrition returned an invalid response.");
+  const raw = data as Record<string, unknown>;
+  if (raw.weekOf !== weekOf) throw new Error("Weekly nutrition returned a different week.");
+  function rows<T>(key: string): T[] {
+    if (!Array.isArray(raw[key])) throw new Error(`Weekly nutrition is missing ${key}.`);
+    return raw[key] as T[];
+  }
+  const foods = rows<FoodRow>("foods"), recipes = rows<MealRow>("recipes"), targets = rows<TargetRow>("targets");
+  const groups = rows<LoggedMealRow>("loggedMeals");
+  const foodsByRow = new Map(foods.map(row => [row.row_id, row]));
+  const mealsByRow = new Map(recipes.map(row => [row.row_id, row]));
+  const ingredientsByMeal = new Map<number, IngredientRow[]>();
+  for (const row of rows<IngredientRow>("ingredients")) ingredientsByMeal.set(row.meal_row_id, [...(ingredientsByMeal.get(row.meal_row_id) ?? []), row]);
+  const options = rows<FoodServingOptionRow>("servingOptions");
+  return {
+    weekOf,
+    mealPlan: raw.mealPlan ? mapMealPlan(raw.mealPlan as MealPlanRow, new Map(targets.map(row => [row.row_id, row])), rows<PlannedMealRow>("plannedMeals"), mealsByRow, foodsByRow) : null,
+    targets: targets.map(mapTarget),
+    nutritionLogs: rows<NutritionRow>("nutritionLogs").map(row => mapNutrition(row, foodsByRow, new Map(groups.map(group => [group.row_id, group])))),
+    loggedMeals: groups.map(row => ({ id: row.app_id, date: row.log_date, slot: row.meal_slot as LoggedMeal["slot"], name: row.name,
+      mealId: mealsByRow.get(row.meal_row_id)?.app_id ?? "", sourceMode: row.source_mode as LoggedMeal["sourceMode"], revision: row.revision,
+      ...(row.recipe_servings == null ? {} : { recipeServings: row.recipe_servings }),
+      createdAt: row.created_at, ...(row.planned_meal_app_id ? { plannedMealId: row.planned_meal_app_id } : {}), ...(row.assumptions ? { assumptions: row.assumptions } : {}) })),
+    recipes: recipes.map(row => mapMeal(row, ingredientsByMeal, foodsByRow)),
+    foods: foods.map(row => mapFood(row, options.filter(option => option.food_row_id === row.row_id))),
+    grocery: raw.grocery ? mapGrocery(raw.grocery as GroceryListRow, rows<GroceryItemRow>("groceryItems")) : null,
+  };
 }
 
 /**

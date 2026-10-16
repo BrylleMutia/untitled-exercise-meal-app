@@ -109,11 +109,11 @@ describe("draftStore", () => {
       userId: "user-a",
       draftType: "profile",
       payload: { name: "A" },
-      baseVersions: { profileRevision: 2, goalVersion: undefined },
+      baseVersions: { profileRevision: 2, goalVersion: undefined, mealPlanVersion: 0, groceryRevision: 0 },
       ttlMs: 60_000,
     });
     expect(await writeDraft(envelope)).toBe(true);
-    expect((await readDraft<{ name: string }>("user-a", "profile"))?.baseVersions).toEqual({ profileRevision: 2 });
+    expect((await readDraft<{ name: string }>("user-a", "profile"))?.baseVersions).toEqual({ profileRevision: 2, mealPlanVersion: 0, groceryRevision: 0 });
 
     values.set(
       "calicoach:draft:v1:user-a:broken",

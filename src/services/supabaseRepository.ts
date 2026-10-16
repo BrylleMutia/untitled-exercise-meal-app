@@ -1,4 +1,5 @@
 import { parseProvidedRecipeNutrition } from "@/utility/providedRecipeNutrition";
+import { parseCookingMeasurement, parseUnmeasuredIngredients } from "@/utility/cookingMeasurement";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FOODS, foodById } from "@/constants/foods";
 import { SAVED_MEALS } from "@/constants/meals";
@@ -12,6 +13,7 @@ import { validateCustomWorkout } from "@/utility/customWorkouts";
 import { validRecipeTimeMinutes } from "@/utility/recipeTime";
 import { parseRecipeImage } from "@/utility/recipeImage";
 import { isRecipeComplexity } from "@/utility/recipeCard";
+import { parseMealSlots, validRecipeYield } from "@/utility/recipeMealSlots";
 import { loadRecipeCardMetadata, setRecipeFavorite } from "./recipeCardMetadata";
 import { startOfWeek, todayKey, weekDates } from "@/utility/dates";
 import type {
@@ -31,6 +33,7 @@ import type {
   DeleteAccountInput,
   DeleteNutritionInput,
   EditMealPlanInput,
+  GenerateNutritionWeekInput,
   AddPlannedMealInput,
   ExportInput,
   ExportOutcome,
@@ -63,6 +66,7 @@ import type {
   ProgressionDecisionInput,
   HistoryQuery,
   HistoryReadModel,
+  NutritionWeekReadModel,
   RecipeCardReadModel,
   SetRecipeFavoriteInput,
   SaveDailyStepsInput,
@@ -74,10 +78,11 @@ import type {
   StartCustomWorkoutInput,
   SaveCustomSessionInput,
 } from "@/types/backend";
-import { loadAppSnapshot, loadHistoryReadModel } from "@/services/supabaseSnapshot";
+import { loadAppSnapshot, loadHistoryReadModel, loadNutritionWeekReadModel } from "@/services/supabaseSnapshot";
 import type { SnapshotRepository } from "@/services/repository";
 
 type RpcName =
+  | "generate_nutrition_week"
   | "save_custom_workout"
   | "start_custom_workout"
   | "save_custom_workout_session"
@@ -420,6 +425,10 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
 
   loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel> {
     return loadRecipeCardMetadata(this.client, asOfDate);
+  }
+
+  loadNutritionWeek(weekOf: string): Promise<NutritionWeekReadModel> {
+    return loadNutritionWeekReadModel(this.client, weekOf);
   }
 
   setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel> {
@@ -782,21 +791,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         meal.id === input.id ? { ...meal, skipped: !meal.skipped } : meal,
       ),
     };
-    const bundle = profileBundle(
-      input.currentSnapshot.profile,
-      todayKey(),
-      input.currentSnapshot.grocery,
-      mealPlan,
-      undefined,
-      input.currentSnapshot.workoutOverrides,
-      input.currentSnapshot.savedMeals,
-      input.currentSnapshot.foods,
-    );
-    return this.mutate(
-      "skip_planned_meal",
-      { ...bundle, expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot), idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
-      [{ type: "grocery-list-updated", listId: bundle.grocery.id }],
-    );
+    return this.editMealPlan({ ...input, mealPlan });
   }
 
   async resetPlan(input: ResetPlanInput): Promise<MutationOutcome> {
@@ -839,6 +834,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         slot: input.slot,
         name: input.meal.name,
         sourceMode: "saved_meal",
+        recipeServings: input.recipeServings,
         meal: input.meal,
         ingredients: entries,
         idempotencyKey: mutationKey,
@@ -867,6 +863,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         slot: input.slot,
         name: input.name,
         sourceMode: input.sourceMode,
+        ...(input.recipeServings === undefined ? {} : { recipeServings: input.recipeServings }),
         ...(input.assumptions ? { assumptions: input.assumptions } : {}),
         loggedMealId,
         meal: input.meal,
@@ -883,6 +880,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       "update_logged_meal",
       {
         loggedMeal: input.loggedMeal,
+        ...(input.recipeServings === undefined ? {} : { recipeServings: input.recipeServings }),
+        ...(input.previousRecipeServings === undefined ? {} : { previousRecipeServings: input.previousRecipeServings }),
         ingredients: input.ingredients.map((entry, index) => ({ ...entry, ingredientOrder: index + 1 })),
         expectedVersions: input.expectedVersions ?? { recordRevision: input.loggedMeal.revision },
         idempotencyKey: mutationKey,
@@ -918,8 +917,9 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       [...foodsById.values()],
       input.mealPlan.weekOf,
     );
-    const grocery = input.currentSnapshot.grocery
-      ? mergeGroceryLists(input.currentSnapshot.grocery, generatedGrocery)
+    const existingGrocery = input.currentSnapshot.grocery?.weekOf === input.mealPlan.weekOf ? input.currentSnapshot.grocery : null;
+    const grocery = existingGrocery
+      ? mergeGroceryLists(existingGrocery, generatedGrocery)
       : generatedGrocery;
     return this.mutate(
       "edit_meal_plan",
@@ -928,7 +928,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         grocery,
         expectedVersions: input.expectedVersions ?? {
           mealPlanVersion: input.currentSnapshot.mealPlan.version,
-          groceryRevision: input.currentSnapshot.grocery?.revision,
+          groceryRevision: existingGrocery?.revision ?? 0,
         },
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
       },
@@ -937,6 +937,25 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         { type: "grocery-list-updated", listId: grocery.id },
       ],
     );
+  }
+
+  async generateNutritionWeek(input: GenerateNutritionWeekInput): Promise<MutationOutcome> {
+    const current = input.currentSnapshot;
+    if (!input.assignments.length || input.assignments.length > 28 || startOfWeek(input.weekOf) !== input.weekOf) {
+      throw repositoryException(toRepositoryError("validation_failed: Review the selected week and generated meals."));
+    }
+    const existing = current.mealPlan?.weekOf === input.weekOf ? current.mealPlan : null;
+    const target = targetForDate(current.nutritionWeekTargets ?? (current.target ? [current.target] : []), input.assignments[0].date);
+    if (!existing && (!target || target.safetyOutcome === "unsupported_population")) {
+      throw repositoryException(toRepositoryError("validation_failed: Set an eligible daily goal before generating a plan."));
+    }
+    const mealPlan: MealPlan = { ...(existing ?? { id: `mp-${input.weekOf}`, version: 1, weekOf: input.weekOf, targetId: target!.id, meals: [] }),
+      meals: [...(existing?.meals ?? []), ...input.assignments] };
+    const generated = generateGroceryList(mealPlan, current.savedMeals, current.foods, input.weekOf);
+    const grocery = current.grocery?.weekOf === input.weekOf ? mergeGroceryLists(current.grocery, generated) : generated;
+    return this.mutate("generate_nutrition_week", { weekOf: input.weekOf, recipes: input.recipes, assignments: input.assignments,
+      mealPlan, grocery, expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
+      [{ type: "plan-edited", planId: mealPlan.id }, { type: "grocery-list-updated", listId: grocery.id }]);
   }
 
   async addPlannedMeal(input: AddPlannedMealInput): Promise<MutationOutcome> {
@@ -1079,6 +1098,24 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   private async persistMeal(input: SaveMealInput | SaveRecipeInput, operation: "save_recipe" | "save_saved_meal", newFoods: Food[] = []): Promise<MutationOutcome> {
+    if (!validRecipeYield(input.meal.servings) || input.meal.mealSlots !== undefined &&
+      (!input.meal.mealSlots.length || parseMealSlots(input.meal.mealSlots).length !== input.meal.mealSlots.length)) {
+      throw repositoryException(toRepositoryError("validation_failed: Use a whole recipe yield from 1 to 10,000 and select at least one meal."));
+    }
+    if (input.meal.ingredients.some(item => item.cookingMeasurement !== undefined && !parseCookingMeasurement(item.cookingMeasurement))
+      || input.meal.unmeasuredIngredients !== undefined && !parseUnmeasuredIngredients(input.meal.unmeasuredIngredients)
+      || input.meal.nutritionNotes !== undefined && (typeof input.meal.nutritionNotes !== "string" || input.meal.nutritionNotes.length > 10000)) {
+      throw repositoryException(toRepositoryError("validation_failed: Check recipe cooking measurements and nutrition notes."));
+    }
+    if (input.meal.ingredients.some(item => item.cookingMeasurement !== undefined) || input.meal.unmeasuredIngredients !== undefined || input.meal.nutritionNotes !== undefined) {
+      const checks = await Promise.all([
+        this.client.from("meals").select("unmeasured_ingredients,nutrition_notes").limit(0),
+        this.client.from("meal_ingredients").select("cooking_measurement").limit(0),
+      ]);
+      for (const { error, status } of checks) if (error) throw repositoryException(toRepositoryError(error.code === "42703" || error.code === "PGRST204"
+        ? "validation_failed: Cooking measurements need the database update. Your draft is retained; retry after the update is applied."
+        : error.message, status, error.details));
+    }
     if (input.meal.complexity !== undefined && !isRecipeComplexity(input.meal.complexity)) {
       throw repositoryException(toRepositoryError("validation_failed: Choose a supported recipe complexity."));
     }
@@ -1102,12 +1139,24 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     }
     const savedMeals = [...input.currentSnapshot.savedMeals.filter((meal) => meal.id !== input.meal.id), input.meal];
     const foods = [...new Map([...FOODS, ...input.currentSnapshot.foods, ...newFoods].map((food) => [food.id, food])).values()];
-    const grocery = input.currentSnapshot.mealPlan
+    const previousMeal = input.currentSnapshot.savedMeals.find(meal => meal.id === input.meal.id);
+    // Cooking-unit metadata alone must not rewrite grocery rows or revisions.
+    const unchangedGroceryBasis = previousMeal && newFoods.length === 0 && previousMeal.servings === input.meal.servings
+      && previousMeal.ingredients.length === input.meal.ingredients.length && previousMeal.ingredients.every((item, index) => {
+        const next = input.meal.ingredients[index];
+        return item.foodId === next.foodId && Math.round(item.servings * 1000) === Math.round(next.servings * 1000);
+      });
+    const grocery = unchangedGroceryBasis ? null : input.currentSnapshot.mealPlan
       ? mergeGroceryLists(
           input.currentSnapshot.grocery ?? generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, foods, input.currentSnapshot.mealPlan.weekOf),
           generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, foods, input.currentSnapshot.mealPlan.weekOf),
         )
       : input.currentSnapshot.grocery;
+    const expectedVersions = { ...(input.expectedVersions ?? {
+      recordRevision: input.meal.revision,
+      groceryRevision: input.currentSnapshot.grocery?.revision,
+    }) };
+    if (unchangedGroceryBasis) delete expectedVersions.groceryRevision;
     return this.mutate(
       operation,
       {
@@ -1116,11 +1165,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
           : input.meal,
         ...(operation === "save_recipe" ? { newFoods } : {}),
         ...("catalog" in input && input.catalog ? { catalog: input.catalog } : {}),
-        grocery,
-        expectedVersions: input.expectedVersions ?? {
-          recordRevision: input.meal.revision,
-          groceryRevision: input.currentSnapshot.grocery?.revision,
-        },
+        ...(unchangedGroceryBasis ? {} : { grocery }),
+        expectedVersions,
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
       },
       [

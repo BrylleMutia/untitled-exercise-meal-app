@@ -6,6 +6,7 @@ import type {
   DeleteAccountInput,
   DeleteNutritionInput,
   EditMealPlanInput,
+  GenerateNutritionWeekInput,
   AddPlannedMealInput,
   ExportInput,
   ExportOutcome,
@@ -35,6 +36,7 @@ import type {
   RemoveWorkoutOverrideInput,
   ProgressionDecisionInput,
   HistoryQuery,
+  NutritionWeekReadModel,
   HistoryReadModel,
   RecipeCardReadModel,
   SetRecipeFavoriteInput,
@@ -62,6 +64,7 @@ export interface SnapshotRepository {
   setDailyStepTarget(input: DailyStepTargetInput): Promise<MutationOutcome>;
   load(): Promise<AppSnapshot | null>;
   loadHistory(query?: HistoryQuery): Promise<HistoryReadModel>;
+  loadNutritionWeek(weekOf: string): Promise<NutritionWeekReadModel>;
   completeOnboarding(input: OnboardingInput): Promise<MutationOutcome>;
   updateProfile(input: ProfileUpdateInput): Promise<MutationOutcome>;
   updateUnits(input: UpdateUnitsInput): Promise<MutationOutcome>;
@@ -84,6 +87,7 @@ export interface SnapshotRepository {
   regenerateGrocery(input: RegenerateGroceryInput): Promise<MutationOutcome>;
   skipPlannedMeal(input: SkipPlannedMealInput): Promise<MutationOutcome>;
   editMealPlan(input: EditMealPlanInput): Promise<MutationOutcome>;
+  generateNutritionWeek(input: GenerateNutritionWeekInput): Promise<MutationOutcome>;
   addPlannedMeal(input: AddPlannedMealInput): Promise<MutationOutcome>;
   resetPlan(input: ResetPlanInput): Promise<MutationOutcome>;
   applyWorkoutOverride(input: WorkoutPlanOverrideInput): Promise<MutationOutcome>;
