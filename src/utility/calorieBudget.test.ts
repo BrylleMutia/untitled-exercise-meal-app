@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { calorieBudgetState } from "./calorieBudget";
 
 describe("remaining calorie budget", () => {
+  it("uses planned amounts with plan-specific remaining and excess descriptions", () => {
+    expect(calorieBudgetState({ target: 2000, logged: 280, status: "complete", mode: "planned" })).toMatchObject({ remaining: 1720, fraction: 0.86, summary: "1720 planned calories remaining to the estimated target" });
+    expect(calorieBudgetState({ target: 2000, logged: 2300, status: "complete", mode: "planned" })).toMatchObject({ remaining: 0, over: true, summary: "About 300 planned calories above the estimated target" });
+  });
+  it("keeps empty and incomplete planned calories unknown while allowing a saved zero", () => {
+    expect(calorieBudgetState({ target: 2000, logged: 280, status: "partial", mode: "planned" })).toMatchObject({ remaining: null, fraction: 0, over: false, summary: "Planned calorie total is incomplete" });
+    expect(calorieBudgetState({ target: 2000, logged: 0, status: "unlogged", mode: "planned" }).remaining).toBeNull();
+    expect(calorieBudgetState({ target: 2000, logged: 0, status: "complete", mode: "planned" }).remaining).toBe(2000);
+  });
   it("keeps an unlogged day unknown, while an explicitly logged zero has a budget", () => {
     expect(calorieBudgetState({ target: 2000, logged: 0, status: "unlogged" })).toMatchObject({ remaining: null, summary: "No meals logged; intake is unknown" });
     expect(calorieBudgetState({ target: 2000, logged: 0, status: "partial" })).toMatchObject({ remaining: 2000, fraction: 1 });

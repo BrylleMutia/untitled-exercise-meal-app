@@ -36,11 +36,20 @@ export function weekdayShort(key: string): string {
   return fromKey(key).toLocaleDateString("en-US", { weekday: "short" });
 }
 
+export function formatFullDate(key: string): string {
+  return fromKey(key).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
 export function formatDay(key: string): string {
   return fromKey(key).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
+}
+
+export function formatCompactWeekRange(weekOf: string): string {
+  const end = addDays(weekOf, 6);
+  return `${weekdayShort(weekOf)}, ${formatDay(weekOf)} - ${weekdayShort(end)}, ${formatDay(end)}`;
 }
 
 export function formatLong(key: string): string {

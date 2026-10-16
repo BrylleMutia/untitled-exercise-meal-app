@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { parseRecipeImage, restoredRecipeImage, safeRecipeImageUrl } from "./recipeImage";
+import { parseRecipeImage, recipeImagePresets, restoredRecipeImage, safeRecipeImageUrl } from "./recipeImage";
 
 describe("recipe image boundary", () => {
+  it("registers the four presets while retaining Lunch as the default", () => {
+    expect(recipeImagePresets.map(preset => preset.label)).toEqual(["Lunch", "Breakfast", "Snack", "Dinner"]);
+    expect(recipeImagePresets[0].image).toBeNull();
+    for (const preset of recipeImagePresets) {
+      expect(parseRecipeImage(preset.image)).toEqual(preset.image);
+      expect(restoredRecipeImage(preset.image, null)).toEqual(preset.image);
+    }
+    expect(parseRecipeImage({ kind: "asset", id: "__proto__" })).toBeNull();
+    expect(parseRecipeImage({ kind: "asset", id: "toString" })).toBeNull();
+  });
   it("accepts only registered catalog assets and preserves them in recovered drafts", () => {
     const cover = { kind: "asset" as const, id: "creamy-lemon-chicken" as const };
     expect(parseRecipeImage(cover)).toEqual(cover);

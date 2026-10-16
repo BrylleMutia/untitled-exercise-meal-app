@@ -298,10 +298,24 @@ export interface ProgressionDecision {
 export interface RecipeIngredient {
   foodId: string;
   servings: number;
+  cookingMeasurement?: CookingMeasurement;
 }
 
+export interface CookingMeasurement {
+  kind: "amount" | "range" | "unmeasured";
+  name?: string;
+  text?: string;
+  quantity?: number;
+  upperQuantity?: number;
+  unit?: string;
+  gramsPerUnit?: number;
+  optional?: boolean;
+  note?: string;
+}
+export interface UnmeasuredIngredient { name: string; measurement: string; optional?: boolean }
+
 export type RecipeImage = { kind: "url"; url: string } | { kind: "upload"; path: string }
-  | { kind: "asset"; id: "creamy-lemon-chicken" | "korean-beef-bowl" };
+  | { kind: "asset"; id: "creamy-lemon-chicken" | "korean-beef-bowl" | "breakfast-egg-salad" | "snack-sandwich" | "dinner-curry-omelette" | "sticky-teriyaki-chicken" | "chicken-burrito-protein-boxes" };
 
 export type RecipeComplexity = "easy" | "medium" | "hard";
 export type ProvidedRecipeNutrition = { calories: number; proteinG: number; carbsG: number; fatG: number };
@@ -310,6 +324,7 @@ export interface Meal {
   id: string;
   name: string;
   servings: number;
+  mealSlots?: MealSlot[];
   isSystem?: boolean;
   notes?: string;
   reference?: string;
@@ -318,6 +333,8 @@ export interface Meal {
   image?: RecipeImage | null;
   providedNutrition?: ProvidedRecipeNutrition | null;
   ingredients: RecipeIngredient[];
+  unmeasuredIngredients?: UnmeasuredIngredient[];
+  nutritionNotes?: string;
   revision?: number;
   archivedAt?: string;
   catalogPreferenceRevision?: number;
@@ -332,6 +349,8 @@ export interface LoggedMeal {
   name: string;
   mealId: string;
   sourceMode: "saved_meal" | "ai_assisted";
+  /** Actual recipe portion; optional for legacy ingredient-only logs. */
+  recipeServings?: number;
   assumptions?: string;
   revision: number;
   createdAt: string;
@@ -366,6 +385,9 @@ export interface MealPlan {
   weekOf: string; // YYYY-MM-DD (Monday)
   targetId: string;
   meals: PlannedMeal[];
+  dietaryPattern?: string;
+  allergies?: string[];
+  totalCarbLimit?: number | null;
 }
 
 export interface WeightEntry {

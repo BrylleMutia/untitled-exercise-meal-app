@@ -2,6 +2,7 @@ import type { Food } from "@/types/domain";
 import { MVP3_TRUSTED_FOODS } from "./mvp3Catalog";
 import { CREAMY_LEMON_CHICKEN_FOODS } from "./creamyLemonChicken";
 import { KOREAN_BEEF_BOWL_FOODS } from "./koreanBeefBowl";
+import { CHICKEN_MEAL_PREP_FOODS } from "./chickenMealPrep";
 
 export const FOOD_SOURCE = "Starter Food Catalog";
 export const FOOD_SOURCE_VERSION = "2026.09";
@@ -75,6 +76,7 @@ export const FOODS: Food[] = [
   ...MVP3_TRUSTED_FOODS,
   ...CREAMY_LEMON_CHICKEN_FOODS,
   ...KOREAN_BEEF_BOWL_FOODS,
+  ...CHICKEN_MEAL_PREP_FOODS,
 ];
 
 export function foodById(id: string): Food | undefined {

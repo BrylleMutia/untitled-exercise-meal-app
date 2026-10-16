@@ -29,7 +29,7 @@ export function generateGroceryList(
       for (const ing of meal.ingredients) {
         const food = foods.find((f) => f.id === ing.foodId);
         if (!food) continue;
-        addTo(totals, food, ing.servings * planned.servings);
+        addTo(totals, food, ing.servings * planned.servings / meal.servings);
       }
     } else if (planned.foodId) {
       const food = foods.find((f) => f.id === planned.foodId);
@@ -85,5 +85,5 @@ export function mergeGroceryLists(previous: GroceryList, next: GroceryList): Gro
     });
 
   const customs = previous.items.filter((i) => i.custom && !i.removed);
-  return { ...next, items: [...merged, ...customs] };
+  return { ...next, id: previous.id, revision: previous.revision, items: [...merged, ...customs] };
 }

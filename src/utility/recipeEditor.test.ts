@@ -5,14 +5,15 @@ import { recipeMethodPrefill, recipePreview, recipeServingPlan, recipeServingsCo
 const food = FOODS[0];
 const ingredient = (quantity: string, unit = "serving"): RecipeIngredientDraft => ({ id: "item", name: food.name, food, quantity, unit, included: true, assumptions: [] });
 describe("recipe servings controls", () => {
-  it("starts blank or zero at one and prevents decrementing them", () => {
-    for (const value of ["", " ", "0"]) expect(recipeServingsControl(value)).toMatchObject({ minusDisabled: true, plusDisabled: false, increment: "1" });
+  it("starts blank at one and prevents decrementing below one", () => {
+    for (const value of ["", " "]) expect(recipeServingsControl(value)).toMatchObject({ minusDisabled: true, plusDisabled: false, increment: "1" });
+    expect(recipeServingsControl("1")).toMatchObject({ minusDisabled: true, increment: "2", decrement: "1" });
   });
-  it("preserves fractions and clamps boundaries without enabling a zero preview", () => {
-    expect(recipeServingsControl("1.5")).toMatchObject({ increment: "2.5", decrement: "0.5" });
-    expect(recipeServingsControl("0.5").decrement).toBe("0");
-    expect(recipeServingsControl("0.0001")).toMatchObject({ increment: "1.0001", decrement: "0" });
-    expect(recipeServingsControl("9999.5").increment).toBe("10000");
+  it("requires whole yields without enabling a fractional preview", () => {
+    for (const value of ["0", "0.5", "1.5", "9999.5"]) {
+      expect(recipeServingsControl(value)).toMatchObject({ minusDisabled: true, plusDisabled: true });
+      expect(recipePreview([ingredient("1")], value, FOODS)).toBeNull();
+    }
     expect(recipeServingsControl("10000")).toMatchObject({ minusDisabled: false, plusDisabled: true });
     expect(recipePreview([ingredient("1")], "0", FOODS)).toBeNull();
   });
@@ -42,7 +43,7 @@ describe("recipe method prefill", () => {
 describe("recipe preview", () => {
   it("updates fractions and serving count using the selected serving basis", () => {
     const preview = recipePreview([ingredient("1.5")], "2", FOODS)!;
-    expect(preview.ingredients).toEqual([{ foodId: food.id, servings: 1.5 }]);
+    expect(preview.ingredients).toMatchObject([{ foodId: food.id, servings: 1.5, cookingMeasurement: { quantity: 1.5, unit: "serving" } }]);
     expect(preview.perServing.calories).toBeCloseTo(food.calories * .75, 1);
     expect(recipePreview([ingredient("3")], "2", FOODS)!.perServing.calories).toBeCloseTo(preview.perServing.calories * 2, 1);
   });

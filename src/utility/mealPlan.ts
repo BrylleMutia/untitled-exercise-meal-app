@@ -8,7 +8,7 @@ import { MVP3_MEAL_COST, MVP3_MEAL_PREP } from "@/constants/mvp3Catalog";
 
 type MealPlanCatalog = { savedMeals?: Meal[]; foods?: Food[]; dailyCalories?: number };
 
-function plannedMealMetadata(mealId: string | undefined, foodId: string | undefined, servings: number, savedMeals: Meal[], foods: Food[]) {
+export function plannedMealMetadata(mealId: string | undefined, foodId: string | undefined, servings: number, savedMeals: Meal[], foods: Food[]) {
   if (mealId) {
     const meal = savedMeals.find((candidate) => candidate.id === mealId);
     if (meal) {
@@ -160,7 +160,7 @@ export function generateMealPlan(
   return { id: `mp-${weekOf}`, version: 1, weekOf, targetId, meals };
 }
 
-function mealAllowed(
+export function mealAllowed(
   mealId: string | undefined,
   constraints?: Pick<UserProfile, "dietaryPattern" | "allergies" | "foodPreferences" | "cookingTimeMinutes" | "mealBudget">,
   savedMeals: Meal[] = SAVED_MEALS,
@@ -187,9 +187,9 @@ function mealAllowed(
     "food-honey",
     "food-mvp3-173424",
     "food-mvp3-171477",
-    "food-lemon-chicken-172385", "food-lemon-chicken-173410", "food-lemon-chicken-171265", "food-lemon-chicken-169640", "food-korean-beef-171790",
+    "food-lemon-chicken-172385", "food-lemon-chicken-173410", "food-lemon-chicken-171265", "food-lemon-chicken-169640", "food-korean-beef-171790", "food-chicken-prep-171077",
   ]);
-  const vegetarianForbidden = new Set(["food-chicken", "food-salmon", "food-mvp3-171477", "food-lemon-chicken-172385", "food-korean-beef-171790"]);
+  const vegetarianForbidden = new Set(["food-chicken", "food-salmon", "food-mvp3-171477", "food-lemon-chicken-172385", "food-korean-beef-171790", "food-chicken-prep-171077"]);
   const forbidden = pattern.includes("vegan")
     ? veganForbidden
     : pattern.includes("vegetarian")
@@ -197,7 +197,8 @@ function mealAllowed(
       : new Set<string>();
   if (foods.some((food) => forbidden.has(food.id))) return false;
   const allergies = constraints?.allergies.map((a) => a.trim().toLowerCase()).filter(Boolean) ?? [];
-  return !foods.some((food) => allergies.some((allergy) => foodMatchesAllergy(food, allergy)));
+  return !foods.some((food) => allergies.some((allergy) => foodMatchesAllergy(food, allergy)))
+    && !(meal.unmeasuredIngredients ?? []).some(item => allergies.some(allergy => foodMatchesAllergy({ name: item.name, category: "Other" }, allergy)));
 }
 
 function chooseFood(
@@ -230,6 +231,8 @@ function chooseFood(
 const MEAL_COST_UNITS: Record<string, number> = {
   "meal-creamy-lemon-chicken": 7,
   "meal-korean-beef-bowl": 7,
+  "meal-sticky-teriyaki-chicken": 7,
+  "meal-chicken-burrito-protein-boxes": 7,
   ...MVP3_MEAL_COST,
   "meal-yogurt-bowl": 6,
   "meal-pb-toast": 4,
@@ -239,6 +242,8 @@ const MEAL_COST_UNITS: Record<string, number> = {
 
 const MEAL_PREP_MINUTES: Record<string, number> = {
   "meal-creamy-lemon-chicken": 30,
+  "meal-sticky-teriyaki-chicken": 30,
+  "meal-chicken-burrito-protein-boxes": 20,
   ...MVP3_MEAL_PREP,
   "meal-yogurt-bowl": 5,
   "meal-pb-toast": 8,
@@ -270,7 +275,7 @@ function foodPreferenceScore(foodId: string, constraints: Pick<UserProfile, "foo
   return preferences.reduce((score, preference) => score + (searchable.includes(preference) ? 1 : 0), 0);
 }
 
-function mealFitsTimeAndBudget(
+export function mealFitsTimeAndBudget(
   mealId: string,
   constraints?: Pick<UserProfile, "cookingTimeMinutes" | "mealBudget">,
 ) {
@@ -281,7 +286,7 @@ function mealFitsTimeAndBudget(
   return true;
 }
 
-function foodMatchesAllergy(food: (typeof FOODS)[number], allergy: string): boolean {
+function foodMatchesAllergy(food: Pick<Food, "name" | "category">, allergy: string): boolean {
   const name = food.name.toLowerCase();
   if (allergy.includes("dairy") || allergy.includes("milk")) return food.category === "Dairy";
   if (allergy.includes("nut")) return /peanut|almond|nut/.test(name);

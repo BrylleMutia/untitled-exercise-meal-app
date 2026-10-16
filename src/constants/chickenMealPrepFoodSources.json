@@ -1,0 +1,343 @@
+{
+  "source": "USDA FoodData Central",
+  "reviewedOn": "2026-10-16",
+  "downloadUrl": "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_sr_legacy_food_csv_2018-04.zip",
+  "foundationNote": "FDC 2644285 (Foundation, 2023-10-26); energy uses Atwater Specific Factors (2048). Values normalized to existing catalog two-decimal storage; original values retained. Fiber not supplied, not invented.",
+  "foods": [
+    {
+      "fdcId": 171077,
+      "name": "Chicken breast, skinless, boneless",
+      "category": "Protein",
+      "preparationBasis": "raw",
+      "description": "Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/171077/nutrients",
+      "nutrientsPer100g": {
+        "fatG": 2.62,
+        "calories": 120,
+        "proteinG": 22.5,
+        "carbsG": 0,
+        "fiberG": 0
+      },
+      "sourceMeasures": [
+        {
+          "amount": 4,
+          "unit": "oz",
+          "grams": 113
+        },
+        {
+          "amount": 1,
+          "unit": "piece",
+          "grams": 272
+        },
+        {
+          "amount": 1,
+          "unit": "package",
+          "grams": 926
+        }
+      ]
+    },
+    {
+      "fdcId": 171167,
+      "name": "Teriyaki sauce (soy and wheat)",
+      "category": "Pantry",
+      "preparationBasis": "as_labeled",
+      "description": "Sauce, teriyaki, ready-to-serve",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/171167/nutrients",
+      "nutrientsPer100g": {
+        "proteinG": 5.93,
+        "fiberG": 0.1,
+        "fatG": 0.02,
+        "carbsG": 15.56,
+        "calories": 89
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "tbsp",
+          "grams": 18
+        },
+        {
+          "amount": 1,
+          "unit": "fl oz",
+          "grams": 36
+        },
+        {
+          "amount": 1,
+          "unit": "cup",
+          "grams": 288
+        }
+      ]
+    },
+    {
+      "fdcId": 169214,
+      "name": "Sweetcorn, canned, drained",
+      "category": "Produce",
+      "preparationBasis": "prepared",
+      "description": "Corn, sweet, yellow, canned, whole kernel, drained solids",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/169214/nutrients",
+      "nutrientsPer100g": {
+        "fatG": 1.22,
+        "carbsG": 14.34,
+        "calories": 67,
+        "fiberG": 2,
+        "proteinG": 2.29
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "cup",
+          "grams": 164
+        },
+        {
+          "amount": 1,
+          "unit": "can (12 oz) yields",
+          "grams": 211
+        },
+        {
+          "amount": 1,
+          "unit": "can (303 x 406)",
+          "grams": 298
+        }
+      ]
+    },
+    {
+      "fdcId": 170108,
+      "name": "Red pepper",
+      "category": "Produce",
+      "preparationBasis": "raw",
+      "description": "Peppers, sweet, red, raw",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/170108/nutrients",
+      "nutrientsPer100g": {
+        "fiberG": 2.1,
+        "calories": 26,
+        "carbsG": 6.03,
+        "proteinG": 0.99,
+        "fatG": 0.3
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "cup, chopped",
+          "grams": 149
+        },
+        {
+          "amount": 1,
+          "unit": "cup, sliced",
+          "grams": 92
+        },
+        {
+          "amount": 1,
+          "unit": "tablespoon",
+          "grams": 9.3
+        },
+        {
+          "amount": 1,
+          "unit": "large (2-1/4 per pound, approx 3-3/4\" long, 3\" dia.)",
+          "grams": 164
+        },
+        {
+          "amount": 1,
+          "unit": "medium (approx 2-3/4\" long, 2-1/2 dia.)",
+          "grams": 119
+        },
+        {
+          "amount": 1,
+          "unit": "small",
+          "grams": 74
+        },
+        {
+          "amount": 1,
+          "unit": "ring (3\" dia., 1/4\" thick)",
+          "grams": 10
+        }
+      ]
+    },
+    {
+      "fdcId": 169383,
+      "name": "Yellow pepper",
+      "category": "Produce",
+      "preparationBasis": "raw",
+      "description": "Peppers, sweet, yellow, raw",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/169383/nutrients",
+      "nutrientsPer100g": {
+        "fiberG": 0.9,
+        "carbsG": 6.32,
+        "calories": 27,
+        "proteinG": 1,
+        "fatG": 0.21
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "pepper, large (3-3/4\" long, 3\" dia)",
+          "grams": 186
+        },
+        {
+          "amount": 10,
+          "unit": "strips",
+          "grams": 52
+        }
+      ]
+    },
+    {
+      "fdcId": 170000,
+      "name": "Red onion (generic onion proxy)",
+      "category": "Produce",
+      "preparationBasis": "raw",
+      "description": "Onions, raw",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/170000/nutrients",
+      "nutrientsPer100g": {
+        "fatG": 0.1,
+        "carbsG": 9.34,
+        "calories": 40,
+        "proteinG": 1.1,
+        "fiberG": 1.7
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "cup, chopped",
+          "grams": 160
+        },
+        {
+          "amount": 1,
+          "unit": "cup, sliced",
+          "grams": 115
+        },
+        {
+          "amount": 1,
+          "unit": "tbsp chopped",
+          "grams": 10
+        },
+        {
+          "amount": 1,
+          "unit": "large",
+          "grams": 150
+        },
+        {
+          "amount": 1,
+          "unit": "slice, large (1/4\" thick)",
+          "grams": 38
+        },
+        {
+          "amount": 1,
+          "unit": "medium (2-1/2\" dia)",
+          "grams": 110
+        },
+        {
+          "amount": 1,
+          "unit": "slice, medium (1/8\" thick)",
+          "grams": 14
+        },
+        {
+          "amount": 1,
+          "unit": "small",
+          "grams": 70
+        },
+        {
+          "amount": 1,
+          "unit": "slice, thin",
+          "grams": 9
+        },
+        {
+          "amount": 10,
+          "unit": "rings",
+          "grams": 60
+        }
+      ]
+    },
+    {
+      "fdcId": 171325,
+      "name": "Garlic powder",
+      "category": "Pantry",
+      "preparationBasis": "dry",
+      "description": "Spices, garlic powder",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/171325/nutrients",
+      "nutrientsPer100g": {
+        "fiberG": 9,
+        "proteinG": 16.55,
+        "fatG": 0.73,
+        "carbsG": 72.73,
+        "calories": 331
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "tsp",
+          "grams": 3.1
+        },
+        {
+          "amount": 1,
+          "unit": "tbsp",
+          "grams": 9.7
+        }
+      ]
+    },
+    {
+      "fdcId": 171329,
+      "name": "Smoked paprika (paprika proxy)",
+      "category": "Pantry",
+      "preparationBasis": "dry",
+      "description": "Spices, paprika",
+      "recordType": "SR Legacy",
+      "publicationDate": "2019-04-01",
+      "url": "https://fdc.nal.usda.gov/food-details/171329/nutrients",
+      "nutrientsPer100g": {
+        "fiberG": 34.9,
+        "proteinG": 14.14,
+        "fatG": 12.89,
+        "carbsG": 53.99,
+        "calories": 282
+      },
+      "sourceMeasures": [
+        {
+          "amount": 1,
+          "unit": "tsp",
+          "grams": 2.3
+        },
+        {
+          "amount": 1,
+          "unit": "tbsp",
+          "grams": 6.8
+        }
+      ]
+    },
+    {
+      "fdcId": 2644285,
+      "name": "Black beans, canned, drained and rinsed",
+      "category": "Pantry",
+      "preparationBasis": "prepared",
+      "description": "Beans, black, canned, sodium added, drained and rinsed",
+      "recordType": "Foundation",
+      "publicationDate": "10/26/2023",
+      "url": "https://fdc.nal.usda.gov/food-details/2644285/nutrients",
+      "nutrientsPer100g": {
+        "calories": 115.28,
+        "proteinG": 6.91,
+        "fatG": 1.27,
+        "carbsG": 19.81
+      },
+      "sourceNutrientsPer100g": {
+        "calories": 115.28233,
+        "proteinG": 6.9125,
+        "fatG": 1.273,
+        "carbsG": 19.8135
+      },
+      "sourceMeasures": []
+    }
+  ]
+}

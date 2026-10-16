@@ -21,8 +21,8 @@ describe("Korean Beef Bowl", () => {
     const nutrition = mealNutrition(KOREAN_BEEF_BOWL, FOODS);
     expect(nutrition.perServing).toEqual({ calories: 560, proteinG: 45, carbsG: 58, fatG: 16 });
     expect(nutrition.calories).toBe(2240);
-    expect(KOREAN_BEEF_BOWL.notes).toContain("560 kcal, 45 g protein, 58 g carbs, 16 g fat");
-    expect(KOREAN_BEEF_BOWL.notes).toContain("without recalculating");
+    expect(KOREAN_BEEF_BOWL.nutritionNotes).toContain("560 kcal, 45 g protein, 58 g carbs, 16 g fat");
+    expect(KOREAN_BEEF_BOWL.nutritionNotes).toContain("without recalculating");
   });
   it("excludes beef and soy, wheat or sesame conflicts from new plans", () => {
     for (const constraint of [{ dietaryPattern: "Vegan", allergies: [] }, { dietaryPattern: "Vegetarian", allergies: [] },

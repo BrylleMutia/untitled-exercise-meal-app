@@ -1,0 +1,38 @@
+{
+  "meal-creamy-lemon-chicken": {
+    "unmeasuredIngredients": [
+      { "name": "Salt", "measurement": "To taste" },
+      { "name": "Pepper", "measurement": "To taste" },
+      { "name": "Chicken bouillon powder", "measurement": "To taste" },
+      { "name": "MSG", "measurement": "To taste" }
+    ],
+    "nutritionNotes": "Nutrition estimate: 2 equal servings; 400 g raw boneless skin-on thigh meat, the upper butter amount of 30 g, whole milk, 8 g flour, 47 g lemon juice and 21 g honey. Milk conversion: 1 ml ≈ 1.03 g. Counts all chicken fat and sauce as eaten. Milk type, butter quantity and discarded rendered fat change the result. Salt, pepper, chicken bouillon powder and MSG are unmeasured and excluded from nutrition and grocery quantities; sodium is not estimated. Rice and other sides are not included. The generated image is illustrative.",
+    "measurements": [
+      { "foodId": "food-lemon-chicken-172385", "servings": 4, "cookingMeasurement": { "kind": "amount", "name": "Chicken thigh fillet", "quantity": 400, "unit": "g", "note": "Marinate with salt and pepper" } },
+      { "foodId": "food-lemon-chicken-173410", "servings": 0.3, "cookingMeasurement": { "kind": "range", "name": "Butter", "quantity": 25, "upperQuantity": 30, "unit": "g" } },
+      { "foodId": "food-lemon-chicken-169761", "servings": 0.08, "cookingMeasurement": { "kind": "amount", "name": "All-purpose flour", "quantity": 1, "unit": "tbsp", "gramsPerUnit": 8 } },
+      { "foodId": "food-lemon-chicken-171265", "servings": 3.09, "cookingMeasurement": { "kind": "amount", "name": "Milk", "quantity": 300, "unit": "ml", "gramsPerUnit": 1.03 } },
+      { "foodId": "food-lemon-chicken-167747", "servings": 0.47, "cookingMeasurement": { "kind": "amount", "name": "Lemon juice", "text": "Juice of 1 lemon", "quantity": 1, "unit": "lemon", "gramsPerUnit": 47 } },
+      { "foodId": "food-lemon-chicken-169640", "servings": 0.21, "cookingMeasurement": { "kind": "amount", "name": "Honey", "quantity": 1, "unit": "tbsp", "gramsPerUnit": 21 } }
+    ],
+    "instructions": "1. Marinate the chicken with salt and pepper. Pan-fry skin-side down over medium heat without oil, letting the natural fat render until the skin is golden brown and crispy.\n2. Flip and cook for another 5–10 minutes, or until fully cooked through. Check that the thickest part reaches 74°C (165°F); time varies with thickness. Remove the chicken and keep it aside.\n3. In the same pan, melt the butter. Add the flour and cook briefly to form a roux. Slowly pour in the milk while stirring continuously to avoid lumps.\n4. Stir in the lemon juice and honey. Season to taste with salt, pepper, chicken bouillon powder and MSG.\n5. Return the chicken to the sauce and simmer for 1–2 minutes so everything comes together."
+  },
+  "meal-korean-beef-bowl": {
+    "unmeasuredIngredients": [],
+    "nutritionNotes": "Source-reported macros per serving: approximately 560 kcal, 45 g protein, 58 g carbs, 16 g fat. These are reference estimates supplied with the recipe and have not been independently verified. The app uses these source-provided macros without recalculating them from ingredients. Ingredient records support groceries and ingredient information. Confirmed recipe assumptions: 16 g per tbsp soy sauce, 21 g per tbsp honey, 4.5 g per tsp sesame oil, 3 g per garlic clove, 2 g per tsp ginger, 61 g per carrot and 300 g per whole cucumber. Optional ginger is included in grocery quantities. The source did not quantify sesame seeds or spring onion; the existing 3 g and 15 g garnish assumptions are retained for groceries. Soy sauce contains soy and wheat; sesame oil and seeds contain sesame. Cooking time was not supplied. The generated cover is illustrative.",
+    "measurements": [
+      { "foodId": "food-korean-beef-171790", "servings": 6, "cookingMeasurement": { "kind": "amount", "name": "Beef mince, 5% fat", "quantity": 600, "unit": "g" } },
+      { "foodId": "food-korean-beef-168877", "servings": 2.5, "cookingMeasurement": { "kind": "amount", "name": "Jasmine rice", "quantity": 250, "unit": "g", "note": "Uncooked" } },
+      { "foodId": "food-korean-beef-174277", "servings": 0.32, "cookingMeasurement": { "kind": "amount", "name": "Soy sauce", "quantity": 2, "unit": "tbsp", "gramsPerUnit": 16 } },
+      { "foodId": "food-lemon-chicken-169640", "servings": 0.21, "cookingMeasurement": { "kind": "amount", "name": "Honey", "quantity": 1, "unit": "tbsp", "gramsPerUnit": 21 } },
+      { "foodId": "food-korean-beef-171016", "servings": 0.045, "cookingMeasurement": { "kind": "amount", "name": "Sesame oil", "quantity": 1, "unit": "tsp", "gramsPerUnit": 4.5 } },
+      { "foodId": "food-korean-beef-169230", "servings": 0.06, "cookingMeasurement": { "kind": "amount", "name": "Garlic", "text": "2 cloves", "quantity": 2, "unit": "clove", "gramsPerUnit": 3 } },
+      { "foodId": "food-korean-beef-169231", "servings": 0.02, "cookingMeasurement": { "kind": "amount", "name": "Ginger", "quantity": 1, "unit": "tsp", "gramsPerUnit": 2, "optional": true } },
+      { "foodId": "food-korean-beef-170393", "servings": 0.61, "cookingMeasurement": { "kind": "amount", "name": "Carrot", "text": "1 carrot", "quantity": 1, "unit": "carrot", "gramsPerUnit": 61, "note": "Julienned" } },
+      { "foodId": "food-korean-beef-168409", "servings": 1.5, "cookingMeasurement": { "kind": "amount", "name": "Cucumber", "text": "½ cucumber", "quantity": 0.5, "unit": "cucumber", "gramsPerUnit": 300, "note": "Sliced" } },
+      { "foodId": "food-korean-beef-170150", "servings": 0.03, "cookingMeasurement": { "kind": "unmeasured", "name": "Sesame seeds", "text": "For garnish", "note": "Amount not specified" } },
+      { "foodId": "food-korean-beef-170005", "servings": 0.15, "cookingMeasurement": { "kind": "unmeasured", "name": "Spring onion", "text": "For garnish", "note": "Amount not specified" } }
+    ],
+    "instructions": "1. Cook the rice according to its package instructions.\n2. Brown the mince and drain excess liquid. Cook ground beef through to 71°C (160°F).\n3. Add garlic, soy sauce, honey, sesame oil, and ginger if using.\n4. Simmer until glossy.\n5. Divide the beef and cooked rice equally into 4 portions.\n6. Add fresh carrot and cucumber on the side. Finish with sesame seeds and spring onion."
+  }
+}

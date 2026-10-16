@@ -10,7 +10,7 @@ describe("predefined recipe replacement", () => {
   it("keeps Creamy Lemon Chicken active while keeping retired identities readable", () => {
     expect(SAVED_MEALS).toContain(CREAMY_LEMON_CHICKEN);
     expect(CREAMY_LEMON_CHICKEN).toMatchObject({ servings: 2, complexity: "easy", totalTimeMinutes: 30, isSystem: true });
-    expect(CREAMY_LEMON_CHICKEN.notes).toContain("Salt, pepper, chicken bouillon powder and MSG, to taste");
+    expect(CREAMY_LEMON_CHICKEN.unmeasuredIngredients?.map(item => item.name)).toEqual(["Salt", "Pepper", "Chicken bouillon powder", "MSG"]);
     expect(CREAMY_LEMON_CHICKEN.reference).toContain("7647909556240076033");
     expect(parseRecipeImage(CREAMY_LEMON_CHICKEN.image)).toEqual(CREAMY_LEMON_CHICKEN.image);
     expect(RETIRED_SAVED_MEALS).toHaveLength(8);
@@ -23,7 +23,7 @@ describe("predefined recipe replacement", () => {
     const nutrition = mealNutrition(CREAMY_LEMON_CHICKEN, FOODS);
     expect(nutrition.perServing).toEqual({ calories: 695, proteinG: 39, carbsG: 21, fatG: 50 });
     expect(nutrition.calories).toBeCloseTo(1390.8, 1);
-    expect(CREAMY_LEMON_CHICKEN.notes).toContain("Counts all chicken fat and sauce as eaten");
+    expect(CREAMY_LEMON_CHICKEN.nutritionNotes).toContain("Counts all chicken fat and sauce as eaten");
   });
   it("excludes retired recipes and honors dairy, wheat, vegetarian and cooking-time constraints", () => {
     const catalog = { savedMeals: [...SAVED_MEALS, ...RETIRED_SAVED_MEALS], foods: FOODS };
