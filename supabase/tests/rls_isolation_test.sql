@@ -144,9 +144,9 @@ values
 
 set local role anon;
 select is((select count(*)::int from public.exercises), 21, 'anonymous users can read system exercises');
-select is((select count(*)::int from public.foods), 44, 'anonymous users can read system foods');
-select is((select count(*)::int from public.meals), 10, 'anonymous users can read system meals');
-select is((select count(*)::int from public.meal_ingredients), 45, 'anonymous users can read system meal ingredients');
+select is((select count(*)::int from public.foods), 53, 'anonymous users can read system foods');
+select is((select count(*)::int from public.meals), 12, 'anonymous users can read system meals');
+select is((select count(*)::int from public.meal_ingredients), 59, 'anonymous users can read system meal ingredients');
 select is((select count(*)::int from public.foods where not is_system), 0, 'anonymous users cannot read custom foods');
 select is((select count(*)::int from public.meals where not is_system), 0, 'anonymous users cannot read saved meals');
 select throws_ok($$select count(*) from public.profiles$$, '42501', null, 'anonymous users cannot read durable profiles');

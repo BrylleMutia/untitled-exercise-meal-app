@@ -1,0 +1,50 @@
+begin;
+select no_plan();
+insert into auth.users(id,email) values ('00000000-0000-0000-0000-000000001601','cooking-a@example.test'),('00000000-0000-0000-0000-000000001602','cooking-b@example.test');
+create function pg_temp.cooking_recipe(key text, recipe_id text default 'cooking-recipe', measurement jsonb default '{"kind":"range","name":"Egg","quantity":1,"upperQuantity":2,"unit":"piece"}') returns jsonb language sql as $$
+select jsonb_build_object('meal',jsonb_build_object('id',recipe_id,'name','Cooking recipe','servings',2,'complexity','medium','notes','Prepare and serve.','nutritionNotes','Upper range amount used.',
+ 'unmeasuredIngredients',jsonb_build_array(jsonb_build_object('name','Salt','measurement','To taste')),
+ 'ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',2,'cookingMeasurement',measurement))),
+ 'newFoods','[]'::jsonb,'idempotencyKey',key);
+$$;
+select is((select cooking_measurement->>'quantity' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='meal-creamy-lemon-chicken' and ingredient_order=1),'400','chicken original grams stored');
+select is((select cooking_measurement->>'upperQuantity' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='meal-creamy-lemon-chicken' and ingredient_order=2),'30','butter upper amount preserved');
+select is((select cooking_measurement->>'unit' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='meal-creamy-lemon-chicken' and ingredient_order=4),'ml','milk cooking volume retained');
+select is((select i.servings from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='meal-creamy-lemon-chicken' and ingredient_order=4),3.09::numeric,'milk canonical nutrition unchanged');
+select is((select jsonb_array_length(unmeasured_ingredients) from public.meals where app_id='meal-creamy-lemon-chicken'),4,'whole original seasoning list retained');
+select ok((select notes not like '%Nutrition estimate:%' and nutrition_notes like '%upper butter amount of 30 g%' from public.meals where app_id='meal-creamy-lemon-chicken'),'instructions and nutrition assumptions separated');
+select is((select cooking_measurement->>'text' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='meal-korean-beef-bowl' and ingredient_order=9),'½ cucumber','original fraction retained');
+select is((select provided_nutrition from public.meals where app_id='meal-korean-beef-bowl'),'{"calories":560,"proteinG":45,"carbsG":58,"fatG":16}'::jsonb,'provided macros unaffected');
+select ok(private.valid_cooking_measurement(null),'legacy null metadata accepted');
+select ok(not private.valid_cooking_measurement('{"kind":"range","quantity":30,"upperQuantity":25,"unit":"g"}'),'reversed range denied');
+select ok(not private.valid_cooking_measurement('{"kind":"amount","quantity":"3","unit":"g"}'),'string quantities denied');
+select ok(not private.valid_cooking_measurement('{"kind":"unmeasured","text":"To taste","quantity":1}'),'unmeasured quantities cannot silently enter calculations');
+set local role authenticated;
+set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001601';
+select lives_ok($$select public.save_recipe(pg_temp.cooking_recipe('cooking-save'))$$,'recipe measurement and seasoning save together');
+select is((select cooking_measurement->>'upperQuantity' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='cooking-recipe'),'2','range retained after authoritative save');
+select is((select unmeasured_ingredients->0->>'name' from public.meals where app_id='cooking-recipe'),'Salt','seasoning retained');
+select is((public.save_recipe(pg_temp.cooking_recipe('cooking-save'))->>'replayed'),'true','authoring retry preserves original intent');
+select throws_ok($$select public.save_recipe(pg_temp.cooking_recipe('invalid-range','invalid-range','{"kind":"range","quantity":3,"upperQuantity":2,"unit":"piece"}'))$$,'P0001',null,'bad ranges fail atomically');
+select is((select count(*)::integer from public.meals where app_id='invalid-range'),0,'bad measurement leaves no recipe');
+select throws_ok($$select public.save_recipe(pg_temp.cooking_recipe('unknown-unit','unknown-unit','{"kind":"amount","quantity":1,"unit":"cup"}'))$$,'P0001',null,'unknown conversions require confirmation');
+select lives_ok($$select public.save_recipe(pg_temp.cooking_recipe('confirmed-unit','confirmed-unit','{"kind":"amount","quantity":1,"unit":"cup","gramsPerUnit":100}'))$$,'confirmed conversion persists');
+select throws_ok($$select public.save_recipe(pg_temp.cooking_recipe('wrong-upper','wrong-upper','{"kind":"range","quantity":1,"upperQuantity":3,"unit":"piece"}'))$$,'P0001',null,'nutrition quantity must use upper range');
+select throws_ok($$select public.save_recipe(jsonb_set(pg_temp.cooking_recipe('bad-extra','bad-extra'),'{meal,unmeasuredIngredients}','[{"name":"","measurement":"To taste"}]'))$$,'P0001',null,'blank seasonings denied');
+select lives_ok($$select public.save_saved_meal('{"meal":{"id":"cooking-recipe","name":"Cooking recipe","servings":2,"ingredients":[{"foodId":"food-egg","servings":2}]},"idempotencyKey":"legacy-unchanged"}')$$,'older client unchanged save stays compatible');
+select is((select cooking_measurement->>'unit' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='cooking-recipe'),'piece','unchanged legacy save preserves measurement');
+select is((select unmeasured_ingredients->0->>'name' from public.meals where app_id='cooking-recipe'),'Salt','unchanged legacy save preserves seasoning');
+select ok((select public.export_account_data('{"idempotencyKey":"cooking-export"}')->'data'->'savedMealIngredients' @> '[{"cooking_measurement":{"kind":"range"}}]'),'export includes cooking metadata');
+select lives_ok($$select public.save_saved_meal('{"meal":{"id":"cooking-recipe","name":"Cooking recipe","servings":2,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"legacy-changed"}')$$,'older changed ingredient save remains compatible');
+select ok((select cooking_measurement is null from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id='cooking-recipe'),'changed legacy ingredients invalidate incompatible measurements');
+select ok((select unmeasured_ingredients is null and nutrition_notes is null from public.meals where app_id='cooking-recipe'),'changed legacy source list clears incompatible context');
+select throws_ok($$update public.meal_ingredients set cooking_measurement=null$$,'42501',null,'direct ingredient measurement writes denied');
+set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001602';
+select throws_ok($$select public.save_recipe(pg_temp.cooking_recipe('foreign-edit'))$$,'P0001',null,'cross-user recipe mutation denied');
+select is((select count(*)::integer from public.meals where app_id='cooking-recipe'),0,'other account cannot read personal measurements');
+set local role anon;
+select throws_ok($$select public.save_recipe(pg_temp.cooking_recipe('anon-edit'))$$,'42501',null,'anonymous authoring denied');
+reset role;
+select ok(not has_function_privilege('authenticated','private.save_saved_meal_before_cooking_measurements(jsonb)','execute'),'compatibility handler remains private');
+select * from finish();
+rollback;

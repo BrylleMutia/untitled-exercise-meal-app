@@ -7,7 +7,7 @@ select jsonb_build_object('name','Korean Beef Bowl','date','2026-10-12','slot','
  'ingredients',jsonb_build_array(jsonb_build_object('customName','Client label','servings',quantity,'calories',9999,'proteinG',9999,'carbsG',9999,'fatG',9999,'valueSource','user_provided')),'idempotencyKey',key);
 $$;
 select is((select provided_nutrition from public.meals where app_id='meal-korean-beef-bowl'),'{"calories":560,"proteinG":45,"carbsG":58,"fatG":16}'::jsonb,'original provided macros stored');
-select ok((select notes like '%without recalculating them from the ingredients%' from public.meals where app_id='meal-korean-beef-bowl'),'provided macro basis visible');
+select ok((select nutrition_notes like '%without recalculating%' from public.meals where app_id='meal-korean-beef-bowl'),'provided macro basis visible in Details');
 select throws_ok($$update public.meals set provided_nutrition='{"calories":"560","proteinG":45,"carbsG":58,"fatG":16}' where app_id='meal-korean-beef-bowl'$$,'23514',null,'nonnumeric macros rejected');
 select throws_ok($$update public.meals set provided_nutrition='{"calories":-1,"proteinG":45,"carbsG":58,"fatG":16}' where app_id='meal-korean-beef-bowl'$$,'23514',null,'negative macros rejected');
 set local role authenticated;

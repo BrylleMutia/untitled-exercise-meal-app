@@ -683,6 +683,7 @@ export type Database = {
           meal_slot: string
           name: string
           planned_meal_app_id: string | null
+          recipe_servings: number | null
           revision: number
           row_id: number
           source_mode: string
@@ -698,6 +699,7 @@ export type Database = {
           meal_slot: string
           name: string
           planned_meal_app_id?: string | null
+          recipe_servings?: number | null
           revision?: number
           row_id?: never
           source_mode: string
@@ -713,6 +715,7 @@ export type Database = {
           meal_slot?: string
           name?: string
           planned_meal_app_id?: string | null
+          recipe_servings?: number | null
           revision?: number
           row_id?: never
           source_mode?: string
@@ -731,6 +734,7 @@ export type Database = {
       }
       meal_ingredients: {
         Row: {
+          cooking_measurement: Json | null
           created_at: string
           food_row_id: number
           ingredient_order: number
@@ -740,6 +744,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cooking_measurement?: Json | null
           created_at?: string
           food_row_id: number
           ingredient_order: number
@@ -749,6 +754,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cooking_measurement?: Json | null
           created_at?: string
           food_row_id?: number
           ingredient_order?: number
@@ -833,6 +839,9 @@ export type Database = {
       }
       meals: {
         Row: {
+          meal_slots: string[]
+          nutrition_notes: string | null
+          unmeasured_ingredients: Json | null
           app_id: string
           archived_at: string | null
           complexity: string
@@ -852,6 +861,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          meal_slots?: string[]
+          nutrition_notes?: string | null
+          unmeasured_ingredients?: Json | null
           app_id: string
           archived_at?: string | null
           complexity?: string
@@ -871,6 +883,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          meal_slots?: string[]
+          nutrition_notes?: string | null
+          unmeasured_ingredients?: Json | null
           app_id?: string
           archived_at?: string | null
           complexity?: string
@@ -1748,6 +1763,14 @@ export type Database = {
       }
     }
     Functions: {
+      generate_nutrition_week: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      get_nutrition_week: {
+        Args: { p_week_of: string }
+        Returns: Json
+      }
       abandon_workout_session: { Args: { p_payload: Json }; Returns: Json }
       add_custom_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       add_planned_meal: { Args: { p_payload: Json }; Returns: Json }
