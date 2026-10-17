@@ -19,7 +19,7 @@ import { providedNutritionKeys, parseProvidedRecipeNutrition } from "@/utility/p
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 import { matchNutritionMeal, parseNutritionTextWithProvider, searchNutritionProvider } from "@/services/nutritionProvider";
 import { createClient } from "@/lib/supabase/client";
-import { ingredientDraftServing, providerCandidateFood, recipeIngredientDraft, recipeMethodPrefill, recipePreview, recipeServingsControl, recipeUnitConversion, prepareRecipeIngredient, recipeAuthoringUnit, recipeAuthoringUnits, type RecipeIngredientDraft, type RecipeIngredientMethod } from "@/utility/recipeEditor";
+import { ingredientDraftServing, patchRecipeIngredient, providerCandidateFood, recipeIngredientDraft, recipeIngredientIssue, recipeMethodPrefill, recipePreview, recipeServingsControl, recipeUnitConversion, prepareRecipeIngredient, recipeAuthoringUnit, recipeAuthoringUnits, type RecipeIngredientDraft, type RecipeIngredientMethod } from "@/utility/recipeEditor";
 import { parseUnmeasuredIngredients } from "@/utility/cookingMeasurement";
 import { searchFoods } from "@/utility/foodSearch";
 import { maximumRecipeTimeMinutes, parseRecipeTime } from "@/utility/recipeTime";
@@ -78,6 +78,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   const nameInput = useRef<HTMLInputElement>(null);
   const [focusIngredient, setFocusIngredient] = useState<string | null>(null);
   const focusedIngredient = useRef<string | null>(null);
+  const basisReturn = useRef<{ id: string; review: boolean } | null>(null);
   const userId = snapshot.userId;
   const pendingIngredient = [...draft.ingredients, ...draft.review].find(item => item.pendingConversion);
   const pendingIngredientId = pendingIngredient?.id;
@@ -136,7 +137,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   }
   function updateIngredient(id: string, patch: Partial<RecipeIngredientDraft>, review = false) {
     const key = review ? "review" : "ingredients";
-    update({ [key]: draft[key].map(item => item.id === id ? prepareRecipeIngredient({ ...item, ...(patch.quantity !== undefined || patch.upperQuantity !== undefined || patch.unit !== undefined || patch.measurementKind !== undefined ? { cookingText: undefined } : {}), ...(patch.unit !== undefined || patch.food !== undefined ? { gramsPerUnit: undefined } : {}), ...(patch.food !== undefined ? { conversionBases: undefined, pendingConversion: undefined } : {}), ...(patch.measurementKind !== undefined ? { pendingConversion: undefined } : {}), ...patch }, patch.food ?? item.food, false) : item) }, !review && Object.keys(patch).some(key => !["pendingConversion", "conversionBases"].includes(key)));
+    update({ [key]: draft[key].map(item => item.id === id ? patchRecipeIngredient(item, patch) : item) }, !review && Object.keys(patch).some(key => !["pendingConversion", "conversionBases"].includes(key)));
   }
   function changeUnit(item: RecipeIngredientDraft, food: Food | null, unit: string, review: boolean) {
     const result = recipeUnitConversion(item, food, unit);
@@ -204,10 +205,48 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     setMethod("search");
   }
   const selectedReview = draft.review.filter(item => item.included);
-  const reviewValid = selectedReview.length > 0 && !selectedReview.some(item => item.pendingConversion) && Boolean(recipePreview(selectedReview, "1", foods));
+  const reviewIssues = selectedReview.flatMap(item => {
+    const issue = recipeIngredientIssue(item, foods);
+    return issue ? [{ item, issue }] : [];
+  });
+  const reviewValid = selectedReview.length > 0 && !reviewIssues.length && Boolean(recipePreview(selectedReview, "1", foods));
+  const reviewLimit = draft.ingredients.length + draft.unmeasuredIngredients.length + selectedReview.length > 100;
+  const reviewNeedsAddition = selectedReview.length > 0 || (!draft.ingredients.length && draft.review.length > 0);
+  function reviewNutritionBasis(item: RecipeIngredientDraft, review: boolean) {
+    basisReturn.current = { id: item.id, review };
+    setTab("details");
+    requestAnimationFrame(() => {
+      const row = root.current?.querySelector<HTMLElement>(`[data-nutrition-basis-id="${item.id}"]`);
+      (row?.querySelector<HTMLInputElement>("input") ?? row)?.focus();
+    });
+  }
+  function returnToIngredientReview() {
+    setTab("ingredients");
+    requestAnimationFrame(() => {
+      if (reviewValid && !reviewLimit) { root.current?.querySelector<HTMLButtonElement>("[data-add-reviewed]")?.focus(); return; }
+      const id = basisReturn.current?.review ? basisReturn.current.id : selectedReview[0]?.id ?? draft.review[0]?.id;
+      root.current?.querySelector<HTMLElement>(`[data-review-ingredient-id="${id}"] input`)?.focus();
+    });
+  }
+  function resolveReview(item: RecipeIngredientDraft, issue: ReturnType<typeof recipeIngredientIssue>) {
+    if (issue === "conversion") { reviewNutritionBasis(item, true); return; }
+    setTab("ingredients");
+    if (issue === "source") { setSearchTarget(item.id); setMethod("search"); update({ query: item.name }, false); }
+    requestAnimationFrame(() => {
+      const target = issue === "source" ? 'input[placeholder="e.g. cooked chicken breast"]' : issue === "pending-conversion" ? `[data-review-ingredient-id="${item.id}"] [data-conversion-confirmation] input` : `[data-review-ingredient-id="${item.id}"] input[data-ingredient-id]`;
+      root.current?.querySelector<HTMLInputElement>(target)?.focus();
+    });
+  }
   function appendReview() {
-    if (!reviewValid) return;
-    update({ ingredients: [...draft.ingredients, ...selectedReview], review: draft.review.filter(item => !item.included), questions: [] });
+    if (!reviewValid || reviewLimit) return;
+    setDraft(current => {
+      const selected = current.review.filter(item => item.included);
+      if (!selected.length || selected.some(item => recipeIngredientIssue(item, foods)) || !recipePreview(selected, "1", foods) || current.ingredients.length + current.unmeasuredIngredients.length + selected.length > 100) return current;
+      return { ...current, ingredients: [...current.ingredients, ...selected], review: current.review.filter(item => !item.included), questions: [], saveKey: uid("recipe-save") };
+    });
+    setMessage(""); setSaveFailed(false);
+    focusedIngredient.current = null;
+    setFocusIngredient(selectedReview[0].id);
   }
   async function discard() {
     if (busyRef.current || imageBusy) return;
@@ -219,7 +258,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     nameInput.current?.focus();
   }
   async function save() {
-    if (busyRef.current || imageBusy || recipeSettingsInvalid || pendingConversions || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || !recipeTime.valid) return;
+    if (busyRef.current || imageBusy || recipeSettingsInvalid || pendingConversions || reviewNeedsAddition || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || !recipeTime.valid) return;
     busyRef.current = true; setBusy("save"); setMessage(""); setSaveFailed(false);
     const newFoods = [...new Map(draft.ingredients.flatMap(item => item.food && !foods.some(food => food.id === item.food!.id) ? [[item.food.id, item.food] as const] : [])).values()];
     try {
@@ -243,7 +282,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     const food = foods.find(food => food.id === item.food?.id) ?? item.food;
     const serving = food ? ingredientDraftServing(item, food) : null;
     const sourceUnresolved = item.measurementKind !== "unmeasured" && recipeAuthoringUnit(item.unit, food) !== item.unit;
-    return <li key={item.id} className="grid min-w-0 gap-2 rounded-2xl bg-lav-50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-4">
+    return <li key={item.id} data-review-ingredient-id={review ? item.id : undefined} className="grid min-w-0 gap-2 rounded-2xl bg-lav-50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-4">
       <div className="flex min-w-0 items-center gap-2">
         {review ? <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.included} onChange={event => updateIngredient(item.id, { included: event.target.checked }, true)} /><span className="break-words">{item.name}</span></label> : <label className="grid min-w-0 w-full gap-1 text-xs font-bold">Cooking ingredient name<input className="input min-w-0" aria-label={`${item.name} cooking name`} maxLength={256} value={item.name} onChange={event => updateIngredient(item.id, { name: event.target.value })} /></label>}
       </div>
@@ -272,7 +311,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       </div>
       <label className="flex min-h-11 items-center gap-2 text-xs font-bold"><input type="checkbox" checked={item.optional ?? false} aria-label={`${item.name} optional`} onChange={event => updateIngredient(item.id, { optional: event.target.checked }, review)} />Optional</label>
       <label className="grid min-w-0 gap-1 text-xs font-bold">Preparation note<input className="input min-w-0" maxLength={1000} aria-label={`${item.name} preparation note`} value={item.preparationNote ?? ""} onChange={event => updateIngredient(item.id, { preparationNote: event.target.value }, review)} placeholder="e.g. julienned, uncooked" /></label>
-      {!serving && (item.quantity.trim() || item.measurementKind === "unmeasured") ? <div className="flex flex-wrap gap-2 text-xs font-semibold text-ink-soft sm:col-span-2"><p>Check this measurement or confirm its nutrition conversion in Details.</p><Button variant="ghost" className="!px-2 text-xs underline" onClick={() => setTab("details")}>Review nutrition basis</Button></div> : null}
+      {!serving && (item.quantity.trim() || item.measurementKind === "unmeasured") ? <div className="flex flex-wrap gap-2 text-xs font-semibold text-ink-soft sm:col-span-2"><p>Check this measurement or confirm its nutrition conversion in Details.</p><Button variant="ghost" className="!px-2 text-xs underline" onClick={() => reviewNutritionBasis(item, review)}>Review nutrition basis</Button></div> : null}
       {sourceUnresolved && !item.pendingConversion ? <div className="grid min-w-0 gap-2 text-xs sm:col-span-2"><p>Original measurement: {item.quantity} {item.unit}. Confirm a conversion before using an allowed unit.</p><Button variant="soft" className="w-fit !px-3 text-xs" onClick={() => changeUnit(item, food, recipeAuthoringUnit(item.unit, food), review)}>Confirm conversion</Button></div> : null}
       {item.pendingConversion ? <RecipeConversionConfirmation item={item} food={food} onChange={patch => {
         updateIngredient(item.id, patch, review);
@@ -283,8 +322,8 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     </li>;
   }
   const pendingConversions = draft.ingredients.some(item => item.pendingConversion);
-  const missingTab: RecipeTab | null = !draft.name.trim() || recipeSettingsInvalid || timeInvalid || providedInvalid || !isRecipeComplexity(draft.complexity) ? "details" : recipeSettingsInvalid || pendingConversions || !extrasValid || !preview || draft.ingredients.length + draft.unmeasuredIngredients.length > 100 ? "ingredients" : !draft.instructions.trim() ? "instructions" : null;
-  const missingMessage = !draft.name.trim() ? "Add a recipe name." : !validRecipeYield(Number(draft.servings)) || servingsBadInput ? "Enter a whole serving count from 1 to 10,000." : !draft.mealSlots.length ? "Choose at least one meal for this recipe." : timeInvalid ? "Check the recipe time." : !isRecipeComplexity(draft.complexity) ? "Choose a complexity before saving." : providedInvalid ? "Check all four provided macro values." : pendingConversions ? "Confirm or cancel the pending ingredient conversion before saving." : !extrasValid ? "Add names and measurements for seasonings or remove blank rows." : !preview ? "Add ingredients with valid quantities, confirm conversions in Details, and enter a serving count." : draft.ingredients.length + draft.unmeasuredIngredients.length > 100 ? "A recipe supports at most 100 ingredients." : !draft.instructions.trim() ? "Add instructions before saving." : "";
+  const missingTab: RecipeTab | null = !draft.name.trim() || recipeSettingsInvalid || timeInvalid || providedInvalid || !isRecipeComplexity(draft.complexity) ? "details" : recipeSettingsInvalid || pendingConversions || reviewNeedsAddition || !extrasValid || !preview || draft.ingredients.length + draft.unmeasuredIngredients.length > 100 ? "ingredients" : !draft.instructions.trim() ? "instructions" : null;
+  const missingMessage = !draft.name.trim() ? "Add a recipe name." : !validRecipeYield(Number(draft.servings)) || servingsBadInput ? "Enter a whole serving count from 1 to 10,000." : !draft.mealSlots.length ? "Choose at least one meal for this recipe." : timeInvalid ? "Check the recipe time." : !isRecipeComplexity(draft.complexity) ? "Choose a complexity before saving." : providedInvalid ? "Check all four provided macro values." : pendingConversions ? "Confirm or cancel the pending ingredient conversion before saving." : reviewNeedsAddition ? "Finish ingredient review, then choose Add selected ingredients before saving." : !extrasValid ? "Add names and measurements for seasonings or remove blank rows." : !preview ? "Add ingredients with valid quantities, confirm conversions in Details, and enter a serving count." : draft.ingredients.length + draft.unmeasuredIngredients.length > 100 ? "A recipe supports at most 100 ingredients." : !draft.instructions.trim() ? "Add instructions before saving." : "";
   const title = meal ? "Edit recipe" : "Create recipe";
   const detailsBasics = (<section className="grid min-w-0 gap-3" aria-label="Recipe basics">
         <fieldset><legend className="text-sm font-bold">Use this recipe for</legend><div className="grid grid-cols-2 gap-x-3 sm:grid-cols-4">{recipeMealSlots.map(slot => <label key={slot} className="flex min-h-11 items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={draft.mealSlots.includes(slot)} onChange={event => update({ mealSlots: recipeMealSlots.filter(value => value === slot ? event.target.checked : draft.mealSlots.includes(value)) })} />{mealSlotLabels[slot]}</label>)}</div><p className="text-xs text-ink-soft">Choose one or more meals for weekly generation.</p></fieldset>
@@ -342,7 +381,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       {!disabled && missingMessage ? <div className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink-soft"><span>{missingMessage}</span>{!isRecipeComplexity(draft.complexity) ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => complexityInput.current?.focus()}>Choose complexity</Button> : null}{missingTab && tab !== missingTab ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => { setTab(missingTab); requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden]) input, [role="tabpanel"]:not([hidden]) textarea')?.focus()); }}>Go to {missingTab}</Button> : null}</div> : null}
       <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:justify-between">
         <Button variant="soft" className="min-w-0 !px-2 sm:!px-5" disabled={busy === "save" || imageBusy} onClick={close}>Cancel</Button>
-        <Button className="min-w-0 !px-2 sm:!px-5" disabled={disabled || recipeSettingsInvalid || pendingConversions || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || draft.ingredients.length + draft.unmeasuredIngredients.length > 100} onClick={() => void save()}>{meal ? "Save changes" : "Save"}</Button>
+        <Button className="min-w-0 !px-2 sm:!px-5" disabled={disabled || recipeSettingsInvalid || pendingConversions || reviewNeedsAddition || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || draft.ingredients.length + draft.unmeasuredIngredients.length > 100} onClick={() => void save()}>{meal ? "Save changes" : "Save"}</Button>
       </div>
     </div>}>
     <div ref={root} className="grid min-w-0 gap-4">
@@ -388,9 +427,16 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
           </div>)}
           <Button variant="soft" className="w-fit !px-3 text-xs" disabled={draft.ingredients.length + draft.unmeasuredIngredients.length >= 100} onClick={() => update({ unmeasuredIngredients: [...draft.unmeasuredIngredients, { id: uid("unmeasured"), name: "", measurement: "To taste" }] })}><Plus className="h-4 w-4" aria-hidden />Add seasoning or garnish</Button>
         </section>
-        {draft.review.length ? <section className="grid min-w-0 gap-3" aria-label="Ingredient review"><h4 className="text-sm font-bold">Review suggested ingredients</h4>{draft.questions.map((question,index) => <p key={index} className="text-xs text-ink-soft">{question}</p>)}<ul className="grid gap-2">{draft.review.map(item => row(item, true))}</ul><Button className="w-fit !px-3 text-xs" disabled={!reviewValid || draft.ingredients.length + selectedReview.length > 100} onClick={appendReview}>Add selected ingredients</Button></section> : null}
+        {draft.review.length ? <section className="grid min-w-0 gap-3" aria-label="Ingredient review"><h4 className="text-sm font-bold">Review suggested ingredients</h4>{draft.questions.map((question,index) => <p key={index} className="text-xs text-ink-soft">{question}</p>)}<ul className="grid gap-2">{draft.review.map(item => row(item, true))}</ul>
+          <div className="grid gap-2 text-xs font-semibold text-ink-soft" aria-live="polite">
+            {!selectedReview.length ? <p>Select at least one suggested ingredient to add.</p> : null}
+            {reviewIssues.map(({ item, issue }) => <div key={item.id} className="flex min-w-0 flex-wrap items-center gap-2"><p className="break-words">{item.name}: {issue === "source" ? "Choose a trusted source or supply custom nutrition." : issue === "amount" ? "Correct the quantity or range; nutrition servings must be between 0.0001 and 10,000." : issue === "pending-conversion" ? "Confirm or cancel the pending unit conversion." : item.measurementKind === "unmeasured" ? "Enter an assumed nutrition weight in Details → Nutrition basis." : `Confirm a valid ingredient-specific gram weight for ${item.unit} in Details → Nutrition basis.`}</p><Button variant="ghost" className="!px-2 text-xs underline" onClick={() => resolveReview(item, issue)}>{issue === "conversion" ? "Review nutrition basis" : issue === "source" ? "Choose nutrition source" : issue === "amount" ? "Review quantity" : "Review conversion"}</Button></div>)}
+            {reviewLimit ? <p>A recipe supports at most 100 ingredients, including seasonings. Deselect suggestions or remove ingredients before adding.</p> : null}
+            {reviewValid && !reviewLimit ? <p>Selected ingredients are ready. Choose Add selected ingredients to include them in the recipe.</p> : null}
+          </div>
+          <Button data-add-reviewed className="w-fit !px-3 text-xs" disabled={!reviewValid || reviewLimit} onClick={appendReview}>Add selected ingredients</Button></section> : null}
       </section>,
-        details: <div className="grid min-w-0 gap-4">{detailsBasics}<section className="grid gap-2 rounded-2xl bg-lav-50 p-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3" aria-label="Recipe nutrition"><h4 className="text-sm font-extrabold">Per serving</h4>{preview ? <NutritionPills values={preview.perServing} precision={1} approximate label="Recipe nutrition per serving" /> : <p className="text-sm text-ink-soft">Add ingredients with nutrition, enter valid quantities and a serving count to see the per-serving totals.</p>}</section><RecipeNutritionBasis ingredients={draft.ingredients} foods={foods} notes={draft.nutritionNotes} hasUnmeasured={draft.unmeasuredIngredients.length > 0} onIngredient={updateIngredient} onNotes={nutritionNotes => update({ nutritionNotes })} onIngredients={() => setTab("ingredients")} /><label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-sm font-bold">Reference (optional)<input className="input" maxLength={2000} value={draft.reference} placeholder="Recipe link, cookbook, or attribution" onChange={event => update({ reference: event.target.value })} /></label></div>,
+        details: <div className="grid min-w-0 gap-4">{detailsBasics}<section className="grid gap-2 rounded-2xl bg-lav-50 p-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3" aria-label="Recipe nutrition"><h4 className="text-sm font-extrabold">Per serving</h4>{preview ? <NutritionPills values={preview.perServing} precision={1} approximate label="Recipe nutrition per serving" /> : <p className="text-sm text-ink-soft">Add ingredients with nutrition, enter valid quantities and a serving count to see the per-serving totals.</p>}</section><RecipeNutritionBasis ingredients={draft.ingredients} review={draft.review} foods={foods} notes={draft.nutritionNotes} hasUnmeasured={draft.unmeasuredIngredients.length > 0} onIngredient={updateIngredient} onReviewIngredient={(id, patch) => updateIngredient(id, patch, true)} onReview={returnToIngredientReview} onNotes={nutritionNotes => update({ nutritionNotes })} onIngredients={() => setTab("ingredients")} /><label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-sm font-bold">Reference (optional)<input className="input" maxLength={2000} value={draft.reference} placeholder="Recipe link, cookbook, or attribution" onChange={event => update({ reference: event.target.value })} /></label></div>,
         instructions: <div className="grid min-w-0 gap-3"><label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-sm font-bold">Instructions (required)<textarea className="input min-h-28 resize-y !py-3" required maxLength={10000} value={draft.instructions} placeholder="Describe how to prepare this recipe." onChange={event => update({ instructions: event.target.value })} /></label></div>,
       }} />
     </fieldset>

@@ -123,7 +123,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and p.prorettype = '3802'::oid
-), 51, 'the public API exposes the 51 jsonb RPC interfaces');
+), 52, 'the public API exposes the 52 jsonb RPC interfaces');
 
 select is((
   select count(*)::int
@@ -132,7 +132,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-), 49, 'authenticated execution is granted for every current wrapper');
+), 50, 'authenticated execution is granted for every current wrapper');
 
 select is((
   select count(*)::int
@@ -148,7 +148,7 @@ select is((
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef
-), 53, 'only the deliberate public mutation wrappers are SECURITY DEFINER');
+), 54, 'only the deliberate public mutation wrappers are SECURITY DEFINER');
 
 select is((
   select count(*)::int
@@ -157,7 +157,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and p.proconfig @> ARRAY['search_path=""']::text[]
-), 51, 'public RPCs use a controlled empty search_path');
+), 52, 'public RPCs use a controlled empty search_path');
 
 select is((
   select count(*)::int
@@ -196,7 +196,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and pg_get_functiondef(p.oid) not ilike '%user_metadata%'
-), 51, 'authorization does not rely on editable user metadata');
+), 52, 'authorization does not rely on editable user metadata');
 
 select is((
   select count(*)::int

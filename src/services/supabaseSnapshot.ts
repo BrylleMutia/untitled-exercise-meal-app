@@ -379,6 +379,8 @@ function mapGrocery(row: GroceryListRow, items: GroceryItemRow[]): AppSnapshot["
     weekOf: row.week_of,
     revision: row.revision,
     calendarReviewRequired: row.calendar_review_required,
+    totalAmountCentavos: row.total_amount_centavos ?? null,
+    totalAmountCarriedFromWeek: row.total_amount_carried_from_week ?? null,
     items: items
       .filter((item) => item.grocery_list_row_id === row.row_id)
       .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))

@@ -96,6 +96,32 @@ export function ingredientDraftServing(item: RecipeIngredientDraft, food: Food) 
   return factor && Number.isFinite(factor) && factor > 0 ? { servings: quantity * factor / food.servingGrams } : null;
 }
 
+export type RecipeIngredientIssue = "source" | "amount" | "conversion" | "pending-conversion";
+
+export function patchRecipeIngredient(item: RecipeIngredientDraft, patch: Partial<RecipeIngredientDraft>): RecipeIngredientDraft {
+  return prepareRecipeIngredient({
+    ...item,
+    ...(patch.quantity !== undefined || patch.upperQuantity !== undefined || patch.unit !== undefined || patch.measurementKind !== undefined ? { cookingText: undefined } : {}),
+    ...(patch.unit !== undefined || patch.food !== undefined ? { gramsPerUnit: undefined } : {}),
+    ...(patch.food !== undefined ? { conversionBases: undefined, pendingConversion: undefined, nutritionServings: undefined } : {}),
+    ...(patch.measurementKind !== undefined ? { pendingConversion: undefined } : {}),
+    ...patch,
+  }, patch.food === undefined ? item.food : patch.food, false);
+}
+
+/** Explain the same incomplete inputs that prevent a whole ingredient preview. */
+export function recipeIngredientIssue(item: RecipeIngredientDraft, foods: Food[]): RecipeIngredientIssue | null {
+  if (item.pendingConversion) return "pending-conversion";
+  const food = foods.find(candidate => candidate.id === item.food?.id) ?? item.food;
+  if (!food || food.valueSource === "ai_estimate") return "source";
+  if (item.gramsPerUnit?.trim() && (!Number.isFinite(Number(item.gramsPerUnit)) || Number(item.gramsPerUnit) <= 0 || Number(item.gramsPerUnit) > 1000000)) return "conversion";
+  if (!ingredientDraftMeasurement(item)) return "amount";
+  const serving = ingredientDraftServing(item, food);
+  if (!serving) return "conversion";
+  if (!Number.isFinite(serving.servings) || serving.servings < 0.0001 || serving.servings > 10000) return "amount";
+  return null;
+}
+
 export type RecipeIngredientMethod = "search" | "describe" | "custom";
 
 export function recipeServingsControl(value: string) {

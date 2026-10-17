@@ -2,6 +2,9 @@ import type { RecipeImage } from "@/types/domain";
 
 export const defaultRecipeImage = "/images/recipe-default.png";
 export const recipeCatalogImages = {
+  "hainanese-chicken-rice": "/images/recipes/hainanese-chicken-rice.webp",
+  "korean-broccoli-side-dish": "/images/recipes/korean-broccoli-side-dish.webp",
+  "tortang-talong-with-chicken": "/images/recipes/tortang-talong-with-chicken.webp",
   "creamy-lemon-chicken": "/images/recipes/creamy-lemon-chicken.png",
   "korean-beef-bowl": "/images/recipes/korean-beef-bowl.png",
   "sticky-teriyaki-chicken": "/images/recipes/sticky-teriyaki-chicken.png",

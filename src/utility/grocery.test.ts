@@ -10,8 +10,8 @@ describe("week-specific grocery reconciliation", () => {
   });
   it("retains the existing week's identity, revision, checked state and quantity override", () => {
     const item = { id: "ingredient", name: "Ingredient", category: "Other" as const, unit: "g", generatedQuantity: 100, quantity: 150, checked: true };
-    const previous = { id: "existing-week", weekOf: "2026-10-05", revision: 7, items: [item] };
+    const previous = { id: "existing-week", weekOf: "2026-10-05", revision: 7, totalAmountCentavos: 125050, totalAmountCarriedFromWeek: "2026-10-04", items: [item] };
     const next = { id: "generated-week", weekOf: previous.weekOf, items: [{ ...item, generatedQuantity: 200, quantity: 200, checked: false }] };
-    expect(mergeGroceryLists(previous, next)).toMatchObject({ id: "existing-week", revision: 7, items: [{ quantity: 150, generatedQuantity: 200, checked: true }] });
+    expect(mergeGroceryLists(previous, next)).toMatchObject({ id: "existing-week", revision: 7, totalAmountCentavos: 125050, totalAmountCarriedFromWeek: "2026-10-04", items: [{ quantity: 150, generatedQuantity: 200, checked: true }] });
   });
 });

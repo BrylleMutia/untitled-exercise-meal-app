@@ -272,7 +272,7 @@ identities to preserve historical starter values. A carb-limited plan uses only
 trusted serving data and enforces allergies, existing dietary restrictions,
 portions, and daily carbohydrate totals in generation and server mutations.
 Meals use cooked/labeled quantities and count all listed oil. If a safe slot
-cannot be filled, it remains visibly unresolved; a partially planned day is
+cannot be filled, Nutrition shows an empty slot; a partially planned day is
 never described as fully compliant. Editing the future plan never rewrites
 logged food.
 
@@ -476,7 +476,7 @@ recipe definitions, personal overrides, plans and recorded nutrition are retaine
 The eight earlier predefined recipes are retired, retaining their original
 identities, ingredients, plans and saved nutrition history. Personal recipes are
 unaffected. New plans can select the replacement for lunch/dinner when compatible
-with restrictions and cooking time; breakfast remains unresolved unless an
+with restrictions and cooking time; breakfast displays an empty slot unless an
 eligible personal recipe is available. The app must not substitute chicken into
 vegetarian/vegan plans or bypass milk/wheat restrictions.
 
@@ -650,6 +650,18 @@ preparation note. Ranges use their upper amount for ingredient calculations.
 Known weight conversions are automatic; unsupported household/count units
 require a confirmed ingredient-specific gram weight in Details → Nutrition
 basis. An unresolved conversion prevents saving and offers a route to review it.
+Nutrition basis includes separately labeled Recipe ingredients and Ingredients
+awaiting addition. Both groups support ingredient-specific gram conversions and
+explicit nutrition assumptions for unspecified amounts; changes to pending rows
+remain in the review draft until Add selected ingredients is chosen. Pending
+rows show their inclusion status. Source confirmation alone does not confirm a
+volume or piece weight. Review explains each selected ingredient's blocker and
+links to the relevant control, including focusing its conversion in Details.
+Returning to review focuses the originating ingredient, or Add selected
+ingredients when ready. Selected suggestions must be added or deselected before
+saving. Addition is explicit, appends each selected row once, retains excluded
+suggestions and confirmed factors, and refreshes per-serving nutrition. Closing,
+reloading or a failed save preserves the full review and its conversion inputs.
 Changing an ingredient unit converts its quantity and both range bounds while
 preserving the ingredient weight. Create and Edit expose only g, kg, mg, oz, ml,
 tsp, tbsp, cups and piece/s, in that order, including suggestions and recovered drafts. Legacy source units remain
@@ -724,9 +736,14 @@ pill is independent of planned portions. Configured card time reads “X mins”
 missing time reads “Not set”; missing
 recipe complexity defaults to Medium. Descriptions stay off cards. Planned
 serving changes never change per-serving calorie values or whole-recipe yields.
-Planned and Eaten displays use compact rows; food-only and unresolved entries retain logging
-restrictions. Existing slot grouping, ordering, permissions, skip and log flows
-remain unchanged. Catalog recipes can be favorited by their stable identity.
+Planned and Eaten displays use compact rows. Unloggable planned rows (including
+missing recipes, foods or ingredients) are omitted from the Planned list. A slot
+without other visible planned meals or eaten entries shows “Nothing planned or
+logged.” and retains Add meal. Loading and failed reads never appear as empty.
+Stored prescriptions, actual logs, planned totals and uncertainty indicators,
+grocery calculations and generation occupancy are unchanged. Valid food-only and
+skipped meals keep their controls, grouping and ordering. Catalog recipes can be
+favorited by their stable identity.
 
 Popular means the user's top five non-archived recipes actually eaten during
 the last 30 local calendar days, including today. Planned-only meals do not
@@ -816,15 +833,15 @@ with one week.
 
 Required behavior:
 
-- Browse previous/next weeks, return to This week, or jump to a calendar date;
-  the chosen date selects its account-preferred week and its own saved grocery list.
+- Browse previous/next weeks or return to This week. The account-preferred week
+  range and year sit beside navigation; there is no date-jump input.
 - Load the selected week independently of Nutrition's current-week snapshot.
   Loading and failed reads must not appear as empty lists; Retry retains input.
 - Combine duplicate ingredients
 - Multiply quantities by planned servings
 - Group items by category
 - Add custom items
-- Edit quantities
+- Edit quantities through an explicit Edit / Save / Cancel flow
 - Check items off
 - Remove items
 - Keep checked state when the list is reopened
@@ -842,8 +859,13 @@ same ingredient appearing in two weeks must never cause a checkbox, quantity,
 or removal action in one week to change the other. Custom-item drafts are scoped
 to account and week; older unscoped drafts remain recoverable in the current
 week. Adding an extra item to an empty week creates that week's list.
+Quantity drafts recover per account/week/item. Plus/minus and typing edit only
+the draft; Save confirms through the repository. Nonnegative fractional quantities
+up to 1,000,000 are supported. Cancel discards input. Failures retain drafts;
+stale lists require refreshed-state review before retry. Below 768px, quantity
+and actions fill a second row; wider rows keep controls beside the name.
 
-Regenerate derives requirements from the authoritative latest plan for that
+Refresh derives requirements from the authoritative latest plan for that
 week: each recipe ingredient is multiplied by planned servings divided by recipe
 yield; standalone foods are included, skipped entries are excluded, and totals
 are combined before rounding to whole grams or rounding pieces up. Unmeasured
@@ -852,6 +874,25 @@ included. User quantities are shown separately from generated requirements.
 
 The first version does not need store-specific pricing, inventory tracking, or
 online ordering.
+
+The selected week's Total Amount records manually entered grocery spending in
+PHP. The top mint card shows a peso amount and an Edit total amount icon. Unset
+is ₱— / Not recorded; explicit zero is ₱0.00. Editing opens a labeled decimal
+input with a persistent ₱ prefix, Save amount and Cancel. Nonnegative peso
+amounts support up to two decimal places and are stored as safe integer centavos;
+blank clears the amount. Item quantities do not calculate spending. Refresh,
+recipe reconciliation, plan generation and item edits preserve it. An amount-only
+week creates a list header without generated items. Amounts are account-backed
+and included in account export.
+Amount drafts are scoped to account/week and recover after navigation, reload
+and failed saves. Cancel discards the draft. A stale list or calendar requires
+refresh and explicit review of the latest amount before retry; unchanged network
+retries retain their idempotency key. Saved values change only after server
+confirmation. Week regrouping carries each active source amount, including zero,
+once to the week containing its former start date and records source state and
+destination mappings in the transition audit. Reused inactive destination amounts
+must not reappear. The carried origin is shown for review; an explicit amount save
+clears its review marker without deleting the audit.
 
 ### 11. Calendar and Progress
 
@@ -1232,3 +1273,14 @@ means no assignments and a disabled save. Changing dates or shuffling creates a
 fresh preview while preserving the other choices. Partial results still require
 unused-serving acknowledgment. Recoverable drafts retain selected dates; old or
 stale previews require a fresh review before save.
+
+### Approved shared recipe additions (October 17, 2026)
+
+Hainanese Chicken Rice, Korean Broccoli Side Dish and Tortang Talong with Chicken
+are system defaults for current and new accounts. Copies retain saved ingredients,
+cooking measurements, conversions, yields, meal slots, references and approved
+covers. Shared ingredient records have no private dependencies. Personal originals
+and logged history remain intact. Only Hainanese water is corrected, using a
+separate zero-calorie record as explicitly confirmed by the author, including
+its source personal recipe. Other authored content and uncertainty remain;
+the release does not invent cooking instructions.

@@ -85,5 +85,5 @@ export function mergeGroceryLists(previous: GroceryList, next: GroceryList): Gro
     });
 
   const customs = previous.items.filter((i) => i.custom && !i.removed);
-  return { ...next, id: previous.id, revision: previous.revision, items: [...merged, ...customs] };
+  return { ...next, id: previous.id, revision: previous.revision, totalAmountCentavos: previous.totalAmountCentavos ?? null, totalAmountCarriedFromWeek: previous.totalAmountCarriedFromWeek ?? null, items: [...merged, ...customs] };
 }

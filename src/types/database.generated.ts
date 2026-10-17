@@ -687,6 +687,8 @@ export type Database = {
           created_at: string
           revision: number
           row_id: number
+          total_amount_carried_from_week: string | null
+          total_amount_centavos: number | null
           updated_at: string
           user_id: string
           week_of: string
@@ -698,6 +700,8 @@ export type Database = {
           created_at?: string
           revision?: number
           row_id?: never
+          total_amount_carried_from_week?: string | null
+          total_amount_centavos?: number | null
           updated_at?: string
           user_id: string
           week_of: string
@@ -709,6 +713,8 @@ export type Database = {
           created_at?: string
           revision?: number
           row_id?: never
+          total_amount_carried_from_week?: string | null
+          total_amount_centavos?: number | null
           updated_at?: string
           user_id?: string
           week_of?: string
@@ -1880,6 +1886,7 @@ export type Database = {
       set_celebrations: { Args: { p_payload: Json }; Returns: Json }
       set_daily_step_target: { Args: { p_payload: Json }; Returns: Json }
       set_grocery_quantity: { Args: { p_payload: Json }; Returns: Json }
+      set_grocery_total_amount: { Args: { p_payload: Json }; Returns: Json }
       set_recipe_favorite: { Args: { p_payload: Json }; Returns: Json }
       set_week_start: { Args: { p_payload: Json }; Returns: Json }
       skip_planned_meal: { Args: { p_payload: Json }; Returns: Json }

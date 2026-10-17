@@ -20,6 +20,7 @@ import type {
   OnboardingInput,
   ProfileUpdateInput,
   RegenerateGroceryInput,
+  SetGroceryTotalAmountInput,
   RepositoryError,
   ResetPlanInput,
   SaveMealInput,
@@ -87,6 +88,7 @@ export interface SnapshotRepository {
   updateGrocery(input: GroceryMutationInput, currentSnapshot: AppSnapshot): Promise<MutationOutcome>;
   addCustomGrocery(input: AddCustomGroceryInput): Promise<MutationOutcome>;
   regenerateGrocery(input: RegenerateGroceryInput): Promise<MutationOutcome>;
+  setGroceryTotalAmount(input: SetGroceryTotalAmountInput): Promise<MutationOutcome>;
   skipPlannedMeal(input: SkipPlannedMealInput): Promise<MutationOutcome>;
   editMealPlan(input: EditMealPlanInput): Promise<MutationOutcome>;
   generateNutritionWeek(input: GenerateNutritionWeekInput): Promise<MutationOutcome>;

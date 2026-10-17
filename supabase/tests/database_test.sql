@@ -27,9 +27,9 @@ select has_table('public', 'mutation_idempotency', 'idempotency table exists');
 select has_table('public', 'progression_decisions', 'progression decisions table exists');
 
 select is((select count(*)::int from public.exercises where is_system), 21, 'starter exercise count');
-select is((select count(*)::int from public.foods where is_system), 53, 'starter and reviewed MVP-3 food count');
-select is((select count(*)::int from public.meals where is_system), 12, 'starter and MVP-3 meal count');
-select is((select count(*)::int from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.is_system), 59, 'catalog meal ingredient count');
+select is((select count(*)::int from public.foods where is_system), 61, 'starter and reviewed MVP-3 food count');
+select is((select count(*)::int from public.meals where is_system), 15, 'starter and MVP-3 meal count');
+select is((select count(*)::int from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.is_system), 81, 'catalog meal ingredient count');
 
 select is((
   select count(*)::int

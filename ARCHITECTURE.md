@@ -781,6 +781,24 @@ must not infer business events by comparing arbitrary snapshots.
   applies feature-specific lifetimes, reports storage failure without closing
   the active form, exposes account-scoped inspection, and clears drafts on
   sign-out or deletion.
+- Grocery spending uses nullable `grocery_lists.total_amount_centavos` and a
+  nullable carried-source week. The pure decimal parser uses integer arithmetic
+  and accepts only nonnegative safe integer centavos, identically bounded in
+  Postgres. Typed `setGroceryTotalAmount` calls the authenticated
+  `set_grocery_total_amount` wrapper, resolves identity from `auth.uid()`, takes
+  the account calendar lock before profile/list locks, and checks calendar and
+  grocery revisions. It creates empty-week headers without generating items.
+  The mutation uses idempotency receipts, refreshed reads and the existing
+  grocery-list-updated event; direct client writes remain revoked. Mutable read
+  payloads are excluded from this intent's retry identity. Snapshot/week mapping
+  and raw account exports include the new header fields; missing cached fields
+  read as unset. Regeneration/reconciliation never overwrite spending.
+  `grocery-total:<week>` drafts retain the value, base revision, calendar revision
+  and retry key. Stale reapplication requires an explicit refreshed review.
+  Calendar regrouping captures amount/source metadata in the source grocery
+  audit, clears inactive destination metadata, and transfers active source
+  amounts once by their former start date, including zero. Explicit amount saves
+  clear the carried review marker while transition records remain recoverable.
 - Draft keys contain the authenticated user ID and feature/draft type. The
   legacy unscoped `calicoach:session:*` namespace is never bulk-cleared during
   another account's sign-out; only account-scoped keys and the known
@@ -888,7 +906,12 @@ verify original plan preservation, retry replay and two-account isolation.
 Grocery reuses the focused weekly read model and stale-response protection.
 Its selected-week context is passed through Context to existing grocery RPCs;
 global current-week state is refreshed after a mutation rather than replaced by
-the viewed week. Account/week keyed editor instances isolate draft recovery.
+the viewed week. Account/week keyed editor instances isolate draft recovery. Quantity drafts also
+include item identity, base list/calendar revisions and a stable retry key. The
+typed quantity action returns success; only confirmed saves clear drafts. Retry
+payloads use list identity rather than mutable item content. Stale review captures
+new revisions and a new key. Changed calendar grouping blocks the old draft.
+Draft writes are serialized before save/cancel/delete to avoid resurrecting input.
 Grocery payloads carry list identity, account week and expected list revision;
 regeneration also carries the selected plan version. Private preflight scopes
 these checks by week, and item updates/bumped parent revisions target one list,
@@ -1302,3 +1325,13 @@ integration deploys `main`. Release verification must match the production
 deployment's source commit to the pushed Git head and confirm the production
 alias is ready. Both calendar migrations above are already deployed; packaging
 the frontend does not require reapplying them.
+
+### Approved account recipes as shared defaults
+
+Forward migrations publish approved snapshots as new system meal and food rows,
+using stable IDs and no private food dependencies. Personal records and logged
+history remain intact, apart from the specifically authorized Hainanese water
+correction. Existing RLS exposes shared rows to current and future accounts
+without per-user backfill or new client write grants. Approved covers are bundled
+assets; client and existing server asset validation are extended together. No
+private upload paths or author identifiers appear in the published copies.

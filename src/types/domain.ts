@@ -319,7 +319,7 @@ export interface CookingMeasurement {
 export interface UnmeasuredIngredient { name: string; measurement: string; optional?: boolean }
 
 export type RecipeImage = { kind: "url"; url: string } | { kind: "upload"; path: string }
-  | { kind: "asset"; id: "creamy-lemon-chicken" | "korean-beef-bowl" | "breakfast-egg-salad" | "snack-sandwich" | "dinner-curry-omelette" | "sticky-teriyaki-chicken" | "chicken-burrito-protein-boxes" };
+  | { kind: "asset"; id: "creamy-lemon-chicken" | "korean-beef-bowl" | "breakfast-egg-salad" | "snack-sandwich" | "dinner-curry-omelette" | "sticky-teriyaki-chicken" | "chicken-burrito-protein-boxes" | "hainanese-chicken-rice" | "korean-broccoli-side-dish" | "tortang-talong-with-chicken" };
 
 export type RecipeComplexity = "easy" | "medium" | "hard";
 export type ProvidedRecipeNutrition = { calories: number; proteinG: number; carbsG: number; fatG: number };
@@ -414,6 +414,8 @@ export interface GroceryItem {
 }
 
 export interface GroceryList {
+  totalAmountCentavos?: number | null;
+  totalAmountCarriedFromWeek?: string | null;
   calendarReviewRequired?: boolean;
   id: string;
   weekOf: string;

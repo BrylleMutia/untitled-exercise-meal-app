@@ -224,7 +224,7 @@ export type WeightInput = IdempotentInput & {
 
 export type GroceryMutationInput =
   | (IdempotentInput & { type: "toggle"; itemId: string; expectedVersions?: ExpectedVersions })
-  | (IdempotentInput & { type: "quantity"; itemId: string; quantity: number; expectedVersions?: ExpectedVersions })
+  | (IdempotentInput & { type: "quantity"; itemId: string; quantity: number; calendarRevision?: number; expectedVersions?: ExpectedVersions })
   | (IdempotentInput & { type: "remove"; itemId: string; expectedVersions?: ExpectedVersions });
 
 export type AddCustomGroceryInput = IdempotentInput & {
@@ -238,6 +238,14 @@ export type AddCustomGroceryInput = IdempotentInput & {
 export type RegenerateGroceryInput = IdempotentInput & {
   currentSnapshot: AppSnapshot;
   expectedVersions?: ExpectedVersions;
+};
+
+export type SetGroceryTotalAmountInput = IdempotentInput & {
+  weekOf: string;
+  calendarRevision: number;
+  totalAmountCentavos: number | null;
+  expectedVersions: ExpectedVersions;
+  currentSnapshot: AppSnapshot;
 };
 
 export type SkipPlannedMealInput = IdempotentInput & {

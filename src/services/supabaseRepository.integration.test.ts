@@ -128,6 +128,43 @@ function completedSession(snapshot: AppSnapshot, session: WorkoutSession): Worko
 }
 
 describe("Supabase repository against the disposable local stack", () => {
+  it("saves exact weekly spending, preserves it across refresh, exports it, and rejects competing writers", async () => {
+    const account = await createAccount();
+    const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Weekly spending"), currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
+    const weekOf = addDays(startOfWeek(todayKey(), 1), 35);
+    const initial = await account.repository.loadNutritionWeek(weekOf);
+    const input = { weekOf, calendarRevision: base.profile!.calendarRevision!, totalAmountCentavos: 125050, expectedVersions: { groceryRevision: 0 }, currentSnapshot: nutritionWeekSnapshot(base, initial), idempotencyKey: randomUUID() };
+    await account.repository.setGroceryTotalAmount(input);
+    await account.repository.setGroceryTotalAmount(input);
+    let week = await account.repository.loadNutritionWeek(weekOf);
+    expect(week.grocery).toMatchObject({ totalAmountCentavos: 125050, items: [] });
+    await expect(account.repository.setGroceryTotalAmount({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    await account.repository.addCustomGrocery({ name: "Spending extra", quantity: 1, unit: "pcs", currentSnapshot: nutritionWeekSnapshot(base, week), idempotencyKey: randomUUID() });
+    week = await account.repository.loadNutritionWeek(weekOf);
+    const context = nutritionWeekSnapshot(base, week);
+    const competing = await Promise.allSettled([
+      account.repository.setGroceryTotalAmount({ ...input, totalAmountCentavos: 50000, currentSnapshot: context, expectedVersions: { groceryRevision: week.grocery!.revision! }, idempotencyKey: randomUUID() }),
+      account.repository.updateGrocery({ type: "quantity", itemId: week.grocery!.items[0].id, quantity: 3, idempotencyKey: randomUUID() }, context),
+    ]);
+    expect(competing.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(competing.find(result => result.status === "rejected")).toMatchObject({ reason: { repositoryError: { code: "stale_version" } } });
+    week = await account.repository.loadNutritionWeek(weekOf);
+    const recorded = week.grocery!.totalAmountCentavos;
+    await account.repository.regenerateGrocery({ currentSnapshot: nutritionWeekSnapshot(base, week), idempotencyKey: randomUUID() });
+    expect((await account.repository.loadNutritionWeek(weekOf)).grocery!.totalAmountCentavos).toBe(recorded);
+    const exported = await account.repository.exportData();
+    expect(exported.data!.groceryLists.find(row => row.week_of === weekOf)?.total_amount_centavos).toBe(recorded);
+    const fresh = await account.repository.loadNutritionWeek(weekOf);
+    const changed = await Promise.allSettled([
+      account.repository.setWeekStart({ weekStartsOn: 6, expectedRevision: base.profile!.revision!, idempotencyKey: randomUUID() }),
+      account.repository.setGroceryTotalAmount({ ...input, totalAmountCentavos: 60000, currentSnapshot: nutritionWeekSnapshot(base, fresh), expectedVersions: { groceryRevision: fresh.grocery!.revision! }, idempotencyKey: randomUUID() }),
+    ]);
+    expect(changed.some(result => result.status === "fulfilled")).toBe(true);
+    const after = (await account.repository.load())!;
+    const regrouped = await account.repository.loadNutritionWeek(startOfWeek(weekOf, after.profile!.weekStartsOn));
+    expect([recorded, 60000]).toContain(regrouped.grocery!.totalAmountCentavos);
+    expect(after.nutritionLogs).toEqual(base.nutritionLogs);
+  });
   it("serializes competing calendar changes without merging their effects", async () => {
     const account = await createAccount();
     const empty = (await account.repository.load())!;
@@ -166,7 +203,7 @@ describe("Supabase repository against the disposable local stack", () => {
     for (const weekOf of weeks) {
       const week = await account.repository.loadNutritionWeek(weekOf);
       const context = nutritionWeekSnapshot(base, week);
-      const selected = base.savedMeals.filter(recipe => recipe.isSystem && !recipe.archivedAt);
+      const selected = base.savedMeals.filter(recipe => recipe.isSystem && !recipe.archivedAt && !recipe.id.startsWith("meal-default-"));
       const preview = generateWeeklyMeals(context, weekOf, selected.map(recipe => recipe.id), "grocery-audit");
       expect(preview.assignments).toHaveLength(14);
       await account.repository.generateNutritionWeek({ weekOf, selectedDates: weekDates(weekOf), recipes: selected.map(recipe => ({ id: recipe.id, revision: recipe.revision! })), assignments: preview.assignments,
@@ -221,6 +258,8 @@ describe("Supabase repository against the disposable local stack", () => {
     current = nutritionWeekSnapshot(base, week);
     await account.repository.addCustomGrocery({ name: "Keep my grocery", quantity: 2, unit: "item", currentSnapshot: current, idempotencyKey: randomUUID() });
     week = await account.repository.loadNutritionWeek(weekOf);
+    await account.repository.setGroceryTotalAmount({ weekOf, calendarRevision: base.profile!.calendarRevision!, totalAmountCentavos: 125050, expectedVersions: { groceryRevision: week.grocery!.revision! }, currentSnapshot: nutritionWeekSnapshot(base, week), idempotencyKey: randomUUID() });
+    week = await account.repository.loadNutritionWeek(weekOf);
     current = nutritionWeekSnapshot(base, week);
     const preview = generateWeeklyMeals(current, weekOf, [id], "repository-preview");
     expect(preview.assignments).toHaveLength(3);
@@ -233,6 +272,7 @@ describe("Supabase repository against the disposable local stack", () => {
     expect(outcomes[0].snapshot.sessions).toEqual(base.sessions);
     const after = await account.repository.loadNutritionWeek(weekOf);
     expect(after.mealPlan!.meals).toHaveLength(4);
+    expect(after.grocery!.totalAmountCentavos).toBe(125050);
     expect(after.mealPlan!.version).toBe(week.mealPlan!.version + 1);
     expect(after.mealPlan!.meals.find(row => row.id === manual.id)).toEqual(week.mealPlan!.meals.find(row => row.id === manual.id));
     expect(after.mealPlan!.meals.every(row => row.expectedCalories === 560 && row.expectedProteinG === 45)).toBe(true);
@@ -245,6 +285,7 @@ describe("Supabase repository against the disposable local stack", () => {
     expect(edited.snapshot.savedMeals.find(meal => meal.id === id)?.servings).toBe(40);
     expect((await account.repository.loadNutritionWeek(weekOf)).mealPlan).toEqual(after.mealPlan);
     expect((await account.repository.loadNutritionWeek(weekOf)).grocery).toEqual(after.grocery);
+    expect((await account.repository.loadNutritionWeek(weekOf)).grocery!.totalAmountCentavos).toBe(125050);
     const exported = await account.repository.exportData({ idempotencyKey: randomUUID() });
     expect(JSON.stringify(exported.data)).toContain('"meal_slots":["breakfast","snack"]');
   });
@@ -366,6 +407,18 @@ describe("Supabase repository against the disposable local stack", () => {
     expect((await account.repository.loadNutritionWeek(weeks[1])).mealPlan).toEqual(newer.mealPlan);
   });
 
+  it("exposes approved shared recipes and zero-calorie water to independent accounts", async () => {
+    for (const account of [userA, userB]) {
+      const snapshot = (await account.repository.load())!;
+      for (const [slug, count] of [["hainanese-chicken-rice", 11], ["korean-broccoli-side-dish", 6], ["tortang-talong-with-chicken", 5]] as const) {
+        const recipe = snapshot.savedMeals.find(meal => meal.id === `meal-default-${slug}`)!;
+        expect(recipe).toMatchObject({ isSystem: true, servings: 4, image: { kind: "asset", id: slug } });
+        expect(recipe.ingredients).toHaveLength(count);
+        for (const ingredient of recipe.ingredients) expect(snapshot.foods.some(food => food.id === ingredient.foodId)).toBe(true);
+      }
+      expect(snapshot.foods.find(food => food.id === "food-default-water-zero")).toMatchObject({ calories: 0, carbsG: 0, proteinG: 0, fatG: 0, valueSource: "user_provided" });
+    }
+  });
   it("round trips all recipe presets and preserves nutrition, groceries and history during image-only edits", async () => {
     const account = await createAccount();
     const empty = (await account.repository.load())!;
@@ -396,7 +449,7 @@ describe("Supabase repository against the disposable local stack", () => {
   it("loads the replacement catalog and saves a personal copy with its bundled cover", async () => {
     const snapshot = (await userA.repository.load())!;
     const catalog = snapshot.savedMeals.filter(meal => meal.isSystem && !meal.archivedAt);
-    expect(catalog.map(meal => meal.id)).toEqual(["meal-creamy-lemon-chicken", "meal-korean-beef-bowl", "meal-sticky-teriyaki-chicken", "meal-chicken-burrito-protein-boxes"]);
+    expect(catalog.map(meal => meal.id)).toEqual(["meal-creamy-lemon-chicken", "meal-korean-beef-bowl", "meal-sticky-teriyaki-chicken", "meal-chicken-burrito-protein-boxes", "meal-default-hainanese-chicken-rice", "meal-default-korean-broccoli-side-dish", "meal-default-tortang-talong-with-chicken"]);
     const source = catalog[0];
     expect(source).toMatchObject({ complexity: "easy", totalTimeMinutes: 30, servings: 2, image: { kind: "asset", id: "creamy-lemon-chicken" } });
     const id = `recipe-copy-${randomUUID()}`;

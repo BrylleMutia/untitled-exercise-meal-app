@@ -1,6 +1,6 @@
 begin;
 select plan(15);
-select is((select count(*)::integer from public.meals where is_system and archived_at is null),4,'four active predefined recipes');
+select is((select count(*)::integer from public.meals where is_system and archived_at is null),7,'seven active predefined recipes');
 select is((select count(*)::integer from public.meals where is_system and archived_at is not null),8,'eight old recipes retained but retired');
 select is((select name from public.meals where app_id='meal-creamy-lemon-chicken'),'Creamy Lemon Chicken','recipe name');
 select is((select servings::integer from public.meals where app_id='meal-creamy-lemon-chicken'),2,'two servings');

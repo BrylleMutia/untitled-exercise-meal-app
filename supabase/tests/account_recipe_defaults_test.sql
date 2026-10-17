@@ -1,0 +1,16 @@
+begin;
+select no_plan();
+select is((select count(*) from public.meals where app_id like 'meal-default-%' and is_system and owner_user_id is null and archived_at is null),3::bigint,'three approved shared recipes');
+select is((select count(*) from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.app_id like 'meal-default-%'),22::bigint,'all authored ingredients retained');
+select is((select count(*) from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id join public.foods f on f.row_id=i.food_row_id where m.app_id like 'meal-default-%' and (not f.is_system or f.owner_user_id is not null)),0::bigint,'defaults have no private food dependencies');
+select is((select calories from public.foods where app_id='food-default-water-zero'),0::numeric,'water calories corrected');
+select is((select carbs_g from public.foods where app_id='food-default-water-zero'),0::numeric,'water carbohydrate corrected');
+select is((select cooking_measurement->>'quantity' from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id join public.foods f on f.row_id=i.food_row_id where m.app_id='meal-default-hainanese-chicken-rice' and f.app_id='food-default-water-zero'),'500','water cooking amount retained');
+set local role authenticated;
+set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000009801';
+select is((select count(*) from public.meals where app_id like 'meal-default-%'),3::bigint,'new identity reads shared recipes through RLS');
+select is((select count(*) from public.foods where app_id like 'food-default-%'),8::bigint,'shared ingredient sources readable');
+select ok(not has_table_privilege('authenticated','public.meals','update'),'direct catalog writes denied');
+reset role;
+select * from finish();
+rollback;

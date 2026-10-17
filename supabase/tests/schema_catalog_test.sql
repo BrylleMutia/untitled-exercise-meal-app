@@ -128,9 +128,9 @@ select is((
 ), 0, 'every public foreign key has a leftmost B-tree index');
 
 select is((select count(*)::int from public.exercises where is_system), 21, 'starter exercise count');
-select is((select count(*)::int from public.foods where is_system), 53, 'starter and reviewed food count');
-select is((select count(*)::int from public.meals where is_system), 12, 'starter and reviewed meal count');
-select is((select count(*)::int from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.is_system), 59, 'catalog meal ingredient count');
+select is((select count(*)::int from public.foods where is_system), 61, 'starter and reviewed food count');
+select is((select count(*)::int from public.meals where is_system), 15, 'starter and reviewed meal count');
+select is((select count(*)::int from public.meal_ingredients i join public.meals m on m.row_id=i.meal_row_id where m.is_system), 81, 'catalog meal ingredient count');
 
 select ok((
   exists (select 1 from public.exercises where app_id = 'ex-knee-push-up' and slug = 'knee-push-up')

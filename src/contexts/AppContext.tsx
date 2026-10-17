@@ -29,6 +29,7 @@ import type {
   RecipeCardReadModel,
   NutritionWeekReadModel,
   SetRecipeFavoriteInput,
+  SetGroceryTotalAmountInput,
 } from "@/types/backend";
 import type {
   AppSnapshot,
@@ -53,6 +54,7 @@ import { clearDraft, clearUserDrafts, listDrafts, readDraft } from "@/services/d
 import { suggestProgression, type ProgressionSuggestion } from "@/utility/progression";
 import { todayKey } from "@/utility/dates";
 import { nutritionWeekSnapshot } from "@/utility/nutritionWeek";
+import { validGroceryCentavos } from "@/utility/groceryAmount";
 
 export interface AppActions {
   loadNutritionWeek(weekOf: string): Promise<NutritionWeekReadModel>;
@@ -104,10 +106,11 @@ export interface AppActions {
   deleteNutrition(id: string, expectedRevision?: number): Promise<void>;
   logWeight(weightKg: number, date: string): Promise<void>;
   toggleGrocery(id: string, week?: NutritionWeekReadModel): Promise<void>;
-  setGroceryQuantity(id: string, quantity: number, week?: NutritionWeekReadModel): Promise<void>;
-  removeGroceryItem(id: string, week?: NutritionWeekReadModel): Promise<void>;
+  setGroceryQuantity(id: string, quantity: number, week: NutritionWeekReadModel, options: { calendarRevision: number; groceryRevision: number; idempotencyKey: string }): Promise<boolean>;
+  removeGroceryItem(id: string, week?: NutritionWeekReadModel): Promise<boolean>;
   addCustomGrocery(name: string, quantity: number, unit: string, week?: NutritionWeekReadModel): Promise<boolean>;
   regenerateGrocery(week?: NutritionWeekReadModel): Promise<void>;
+  setGroceryTotalAmount(input: Omit<SetGroceryTotalAmountInput, "currentSnapshot">, week: NutritionWeekReadModel): Promise<boolean>;
   skipPlannedMeal(id: string, week?: NutritionWeekReadModel): Promise<void>;
   editMealPlan(mealPlan: MealPlan, week?: NutritionWeekReadModel): Promise<boolean>;
   generateNutritionWeek(input: Omit<GenerateNutritionWeekInput, "currentSnapshot">, week: NutritionWeekReadModel): Promise<boolean>;
@@ -736,20 +739,23 @@ export function AppProvider({
         );
       },
 
-      async setGroceryQuantity(id, quantity, week) {
-        if (!Number.isFinite(quantity) || quantity < 0) {
-          notify("Quantity must be a non-negative number.", "warn");
-          return;
+      async setGroceryQuantity(id, quantity, week, options) {
+        if (!Number.isFinite(quantity) || quantity < 0 || quantity > 1_000_000) {
+          notify("Quantity must be between 0 and 1,000,000.", "warn");
+          return false;
         }
-        await execute("set_grocery_quantity", (current, idempotencyKey) =>
-          repository!.updateGrocery({ type: "quantity", itemId: id, quantity, idempotencyKey }, nutritionWeekSnapshot(current, week)),
+        const outcome = await execute("set_grocery_quantity", (current, idempotencyKey) =>
+          repository!.updateGrocery({ type: "quantity", itemId: id, quantity, calendarRevision: options.calendarRevision, expectedVersions: { groceryRevision: options.groceryRevision }, idempotencyKey }, nutritionWeekSnapshot(current, week)),
+          options.idempotencyKey,
         );
+        return Boolean(outcome);
       },
 
       async removeGroceryItem(id, week) {
-        await execute("remove_grocery_item", (current, idempotencyKey) =>
+        const outcome = await execute("remove_grocery_item", (current, idempotencyKey) =>
           repository!.updateGrocery({ type: "remove", itemId: id, idempotencyKey }, nutritionWeekSnapshot(current, week)),
         );
+        return Boolean(outcome);
       },
 
       async addCustomGrocery(name, quantity, unit, week) {
@@ -763,6 +769,15 @@ export function AppProvider({
         await execute("regenerate_grocery", (current, idempotencyKey) =>
           repository!.regenerateGrocery({ currentSnapshot: nutritionWeekSnapshot(current, week), idempotencyKey }),
         );
+      },
+
+      async setGroceryTotalAmount(input, week) {
+        if (!validGroceryCentavos(input.totalAmountCentavos) || input.weekOf !== week.weekOf) {
+          notify("Enter a valid non-negative grocery amount.", "warn");
+          return false;
+        }
+        const outcome = await execute("set_grocery_total_amount", (current, key) => repository!.setGroceryTotalAmount({ ...input, idempotencyKey: key, currentSnapshot: nutritionWeekSnapshot(current, week) }), input.idempotencyKey);
+        return Boolean(outcome);
       },
 
       async skipPlannedMeal(id, week) {

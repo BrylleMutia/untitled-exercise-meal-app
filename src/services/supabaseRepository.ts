@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { FOODS, foodById } from "@/constants/foods";
 import { SAVED_MEALS } from "@/constants/meals";
 import { generateGroceryList, mergeGroceryLists } from "@/utility/grocery";
+import { validGroceryCentavos } from "@/utility/groceryAmount";
 import { buildDailyTarget } from "@/utility/health";
 import { generateMealPlan } from "@/utility/mealPlan";
 import { targetForDate } from "@/utility/targetHistory";
@@ -52,6 +53,7 @@ import type {
   OnboardingInput,
   ProfileUpdateInput,
   RegenerateGroceryInput,
+  SetGroceryTotalAmountInput,
   RepositoryError,
   ResetPlanInput,
   SaveMealInput,
@@ -125,6 +127,7 @@ type RpcName =
   | "remove_grocery_item"
   | "add_custom_grocery_item"
   | "regenerate_grocery"
+  | "set_grocery_total_amount"
   | "export_account_data"
   | "delete_account";
 
@@ -744,7 +747,15 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       expectedVersions: input.expectedVersions ?? { groceryRevision: currentSnapshot.grocery?.revision ?? 0 },
       idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
     };
-    if (input.type === "quantity") payload.quantity = input.quantity;
+    if (input.type === "quantity") {
+      if (!Number.isFinite(input.quantity) || input.quantity < 0 || input.quantity > 1_000_000) {
+        throw Object.assign(new Error("Quantity must be between 0 and 1,000,000."), { repositoryError: { code: "validation_failed", message: "Quantity must be between 0 and 1,000,000.", retryable: false } satisfies RepositoryError });
+      }
+      payload.quantity = input.quantity;
+      // Only identity belongs in a retry payload; refreshed item content must not change its hash.
+      payload.grocery = currentSnapshot.grocery ? { id: currentSnapshot.grocery.id, weekOf: currentSnapshot.grocery.weekOf } : null;
+      if (input.calendarRevision !== undefined) payload.calendarRevision = input.calendarRevision;
+    }
     return this.mutate(functionName, payload, [
       { type: "grocery-list-updated", listId: currentSnapshot.grocery?.id ?? "" },
     ]);
@@ -797,6 +808,21 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         },
       ],
     );
+  }
+
+  async setGroceryTotalAmount(input: SetGroceryTotalAmountInput): Promise<MutationOutcome> {
+    if (!validGroceryCentavos(input.totalAmountCentavos) || !Number.isInteger(input.calendarRevision) || input.calendarRevision < 1 || !Number.isInteger(input.expectedVersions.groceryRevision) || input.expectedVersions.groceryRevision! < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(input.weekOf) || startOfWeek(input.weekOf, input.currentSnapshot.profile?.weekStartsOn ?? 0) !== input.weekOf) {
+      throw repositoryException(toRepositoryError("validation_failed: choose a valid grocery week and amount"));
+    }
+    return this.mutate("set_grocery_total_amount", {
+      weekOf: input.weekOf,
+      totalAmountCentavos: input.totalAmountCentavos,
+      calendarRevision: input.calendarRevision,
+      // The calendar guard uses this context key; mutable read data is not retry identity.
+      grocery: null,
+      expectedVersions: input.expectedVersions,
+      idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
+    }, [{ type: "grocery-list-updated", listId: input.currentSnapshot.grocery?.id ?? `gl-${input.weekOf}` }]);
   }
 
   async skipPlannedMeal(input: SkipPlannedMealInput): Promise<MutationOutcome> {

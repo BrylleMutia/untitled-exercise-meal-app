@@ -17,10 +17,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe("week-specific Grocery", () => {
-  it("provides past/current/future controls, a calendar jump, and complete accessible dates", () => {
+  it("provides past/current/future controls beside complete accessible dates", () => {
     const html = renderToStaticMarkup(<WeekNavigator weekOf="2026-12-28" onChange={vi.fn()} />);
-    for (const label of ["Previous grocery week", "Next grocery week", "Jump to grocery week", "This week", "Mon, Dec 28 - Sun, Jan 3", "Monday, December 28, 2026 through Sunday, January 3, 2027"]) expect(html).toContain(label);
-    expect(html).toContain('type="date"'); expect(html).toContain('value="2026-12-28"');
+    for (const label of ["Previous grocery week", "Next grocery week", "This week", "Mon, Dec 28 - Sun, Jan 3", "Monday, December 28, 2026 through Sunday, January 3, 2027"]) expect(html).toContain(label);
+    expect(html).not.toContain('type="date"'); expect(html).not.toContain("Jump to week");
   });
   it("shows the selected week's list rather than the global current snapshot", () => {
     data!.grocery = { id: "selected", weekOf: data!.weekOf, items: [{ id: "rice", name: "Uncooked rice", category: "Grains", unit: "g", quantity: 550, generatedQuantity: 500, checked: true }] };
@@ -41,5 +41,15 @@ describe("week-specific Grocery", () => {
     pendingMutation = "add_custom_grocery_item";
     const html = renderToStaticMarkup(<GroceryPage />);
     expect(html).toContain('<fieldset disabled=""'); expect(html).toContain('aria-label="Previous grocery week" disabled=""');
+  });
+  it("shows saved spending independently of item quantities and flags carried values", () => {
+    data!.grocery = { id: "amount", weekOf: data!.weekOf, items: [], totalAmountCentavos: 125050, totalAmountCarriedFromWeek: "2026-10-11" };
+    const html = renderToStaticMarkup(<GroceryPage />);
+    expect(html).toContain("₱1,250.50"); expect(html).toContain("Edit total amount");
+    expect(html).toContain("Review this amount for the regrouped list.");
+    data!.grocery.totalAmountCentavos = 0;
+    expect(renderToStaticMarkup(<GroceryPage />)).toContain("₱0.00");
+    data!.grocery.totalAmountCentavos = null;
+    expect(renderToStaticMarkup(<GroceryPage />)).toContain("Not recorded");
   });
 });

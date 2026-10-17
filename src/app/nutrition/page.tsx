@@ -457,7 +457,7 @@ export default function NutritionPage() {
         <fieldset className="min-w-0" disabled={!week.data || week.loading || Boolean(week.error) || entrySaving || savingPlannedLog || savingSavedMeal || Boolean(pendingMutation)}>
         <div className="mt-5 grid gap-4">
           {SLOTS.map((slot) => {
-            const planned = todaysPlan.filter((meal) => meal.slot === slot && !loggedPlannedIds.has(meal.id)).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+            const planned = todaysPlan.filter((meal) => meal.slot === slot && !loggedPlannedIds.has(meal.id) && canLogPlanned(meal)).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
             const eaten = entries[slot].length > 0 || snapshot.loggedMeals.some((meal) => meal.date === selected && meal.slot === slot);
             return <section key={slot} className="min-w-0 border-t border-ink/10 pt-4" aria-label={slotLabels[slot]}>
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -478,14 +478,13 @@ export default function NutritionPage() {
               </div> : null}
               {planned.length > 0 ? <ul className="mt-2 grid min-w-0 gap-1.5">
                 {planned.map((pm) => {
-                  const canLog = canLogPlanned(pm);
                   const recipe = pm.mealId ? snapshot.savedMeals.find(meal => meal.id === pm.mealId) : undefined;
                   const savedNutrition = plannedDayNutrition([pm], selected);
                   const nutrition = Object.values(savedNutrition.metrics).some(metric => metric.value !== null)
                     ? Object.fromEntries(Object.entries(savedNutrition.metrics).map(([metric, value]) => [metric, value.value])) : null;
                   const summary = <>
                       <span className="block text-[11px] font-bold text-ink-soft">Planned{pm.skipped ? " · skipped" : ""}</span>
-                      <span className="block break-words text-sm font-extrabold">{canLog ? pm.label : "Unresolved meal"}</span>
+                      <span className="block break-words text-sm font-extrabold">{pm.label}</span>
                       <span className="block text-[11px] font-semibold text-ink-soft">{slotLabels[slot]} · {pm.servings} {pm.servings === 1 ? "serving" : "servings"}</span>
                       {nutrition ? <><NutritionPills className="mt-1" values={nutrition} nullLabel="unavailable" approximate precision={1} label="Planned portion nutrition" />{savedNutrition.affectedMeals ? <span className="mt-1 block text-xs font-semibold text-ink-soft">Partial total</span> : null}</>
                         : <span className="mt-1 block text-xs font-semibold text-ink-soft">Nutrition unavailable</span>}
@@ -496,16 +495,15 @@ export default function NutritionPage() {
                     : <div className="min-w-0">{summary}</div>} actions={<>
                         <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink" aria-label="Edit" title={`Edit planned ${pm.label}`} aria-expanded={editingPlannedMealId === pm.id} onClick={event => { plannedEditReturnFocus.current = event.currentTarget; setEditingPlannedMealId(pm.id); }}><Pencil className="h-4 w-4" aria-hidden /></button>
                         <Button variant="soft" className="!min-h-11 !rounded-full !px-3 text-xs" onClick={() => void actions.skipPlannedMeal(pm.id)}>{pm.skipped ? "Plan again" : "Skip"}</Button>
-                        <Button id={`log-planned-${pm.id}`} className="!min-h-11 !rounded-full !px-3 text-xs" disabled={!canLog} title={canLog ? undefined : "Edit this unresolved meal before logging it"} onClick={() => openPlannedLog(pm, pm.id)}>Log</Button>
+                        <Button id={`log-planned-${pm.id}`} className="!min-h-11 !rounded-full !px-3 text-xs" onClick={() => openPlannedLog(pm, pm.id)}>Log</Button>
                       </>}>
-                      {!canLog ? <p className="text-xs font-semibold text-ink-soft">Choose a meal that fits your restrictions. Edit this unresolved item before it can be logged.</p> : null}
                       {plannedLogConfirmation(pm, pm.id, `log-planned-${pm.id}`)}
                       {editingPlannedMealId === pm.id ? <PlannedMealEditor key={pm.id} plannedMeal={pm} date={selected} savedMeals={snapshot.savedMeals} foods={foods} onSave={savePlannedMeal} onCancel={() => setEditingPlannedMealId(null)} /> : null}
                     </MealRow>;
                 })}
               </ul> : null}
               {eaten ? <ul className="mt-2 grid min-w-0 gap-1.5">{loggedRows(slot)}</ul> : null}
-              {week.data && !planned.length && !eaten ? <p className="mt-2 rounded-xl bg-cream px-3 py-3 text-sm font-semibold text-muted">Nothing planned or logged.</p> : null}
+              {week.data && !week.loading && !week.error && !planned.length && !eaten ? <p className="mt-2 rounded-xl bg-cream px-3 py-3 text-sm font-semibold text-muted">Nothing planned or logged.</p> : null}
             </section>;
           })}
         </div>

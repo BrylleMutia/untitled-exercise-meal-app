@@ -28,4 +28,17 @@ describe("recipe presentation", () => {
     expect(html).toContain("excluded from nutrition");
     expect(html).toContain("309 g used for nutrition");
   });
+  it("exposes pending review conversions separately from added ingredients", () => {
+    const food = { ...FOODS[0], unit: "g" as const, servingOptions: [] };
+    const review = [{ id: "salt", name: "Salt", food, quantity: "1", unit: "tsp", included: true, assumptions: [] }, { id: "oil", name: "Oil", food, quantity: "1.5", unit: "tbsp", included: false, assumptions: [], gramsPerUnit: "14" }];
+    const html = renderToStaticMarkup(<RecipeNutritionBasis ingredients={[]} review={review} foods={[]} notes="" hasUnmeasured={false} onIngredient={() => {}} onReviewIngredient={() => {}} onReview={() => {}} onNotes={() => {}} onIngredients={() => {}} />);
+    expect(html).toContain('aria-label="Recipe ingredients"');
+    expect(html).toContain('aria-label="Ingredients awaiting addition"');
+    expect(html).toContain('aria-label="Salt grams per tsp"');
+    expect(html).toContain('aria-label="Oil grams per tbsp"');
+    expect(html).toContain("Selected for addition");
+    expect(html).toContain("Not selected for addition");
+    expect(html).toContain("Return to ingredient review");
+    expect(html).toContain("21 g used for nutrition");
+  });
 });

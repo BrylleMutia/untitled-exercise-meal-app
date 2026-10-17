@@ -1,9 +1,46 @@
 import { describe, expect, it } from "vitest";
 import { FOODS } from "@/constants/foods";
-import { recipeMethodPrefill, recipePreview, recipeServingPlan, recipeServingsControl, safeRecipeReference, type RecipeIngredientDraft, type RecipeIngredientMethod } from "./recipeEditor";
+import { patchRecipeIngredient, recipeIngredientIssue, recipeMethodPrefill, recipePreview, recipeServingPlan, recipeServingsControl, safeRecipeReference, type RecipeIngredientDraft, type RecipeIngredientMethod } from "./recipeEditor";
 
 const food = FOODS[0];
 const ingredient = (quantity: string, unit = "serving"): RecipeIngredientDraft => ({ id: "item", name: food.name, food, quantity, unit, included: true, assumptions: [] });
+
+describe("ingredient review blockers", () => {
+  const byWeight = { ...food, unit: "g" as const, servingGrams: 100, servingOptions: [] };
+  const reviewed = (patch: Partial<RecipeIngredientDraft> = {}): RecipeIngredientDraft => ({ ...ingredient("1", "tbsp"), food: byWeight, ...patch });
+  it("distinguishes a matched source from a confirmed cooking weight", () => {
+    expect(recipeIngredientIssue(reviewed(), [])).toBe("conversion");
+    const resolved = reviewed({ gramsPerUnit: "12" });
+    expect(recipeIngredientIssue(resolved, [])).toBeNull();
+    expect(recipePreview([resolved], "1", [])!.ingredients[0].servings).toBe(.12);
+    expect(recipeIngredientIssue(reviewed({ unit: "g", quantity: "680" }), [])).toBeNull();
+    expect(recipeIngredientIssue(reviewed({ food: null }), [])).toBe("source");
+    expect(recipeIngredientIssue(reviewed({ food: { ...byWeight, valueSource: "ai_estimate" } }), [])).toBe("source");
+  });
+  it("identifies invalid amounts, ranges, factors and pending conversions", () => {
+    for (const quantity of ["", "0", "-2", "NaN", "1000001"]) expect(recipeIngredientIssue(reviewed({ unit: "g", quantity }), [])).toBe("amount");
+    for (const gramsPerUnit of ["0", "-1", "NaN", "Infinity", "1000001"]) expect(recipeIngredientIssue(reviewed({ gramsPerUnit }), [])).toBe("conversion");
+    expect(recipeIngredientIssue(reviewed({ measurementKind: "range", quantity: "2", upperQuantity: "1" }), [])).toBe("amount");
+    expect(recipeIngredientIssue(reviewed({ measurementKind: "range", upperQuantity: "2", gramsPerUnit: "12" }), [])).toBeNull();
+    expect(recipeIngredientIssue(reviewed({ pendingConversion: { unit: "g", gramsPerUnit: "12" } }), [])).toBe("pending-conversion");
+    expect(recipeIngredientIssue(reviewed({ unit: "g", quantity: "0.00001" }), [])).toBe("amount");
+  });
+  it("supports explicit unspecified amounts and trusted serving conversions", () => {
+    expect(recipeIngredientIssue(reviewed({ measurementKind: "unmeasured", cookingText: "To taste" }), [])).toBe("conversion");
+    expect(recipeIngredientIssue(reviewed({ measurementKind: "unmeasured", cookingText: "To taste", nutritionServings: .1 }), [])).toBeNull();
+    expect(recipeIngredientIssue(reviewed({ food: { ...byWeight, servingOptions: [{ unit: "tbsp", label: "1 tbsp (15 g)", grams: 15 }] } }), [])).toBeNull();
+  });
+  it("invalidates source-specific weights without losing authored measurements", () => {
+    const item = reviewed({ quantity: "1.5", gramsPerUnit: "14", conversionBases: [{ unit: "tsp", gramsPerUnit: 4.666 }], nutritionServings: .21, optional: true, preparationNote: "Finishing oil", assumptions: ["Measured"] });
+    const changed = patchRecipeIngredient(item, { food: { ...byWeight, id: "new-source" } });
+    expect(changed).toMatchObject({ quantity: "1.5", unit: "tbsp", optional: true, preparationNote: "Finishing oil", assumptions: ["Measured"] });
+    expect(changed.gramsPerUnit).toBeUndefined(); expect(changed.conversionBases).toBeUndefined(); expect(changed.nutritionServings).toBeUndefined();
+    expect(recipeIngredientIssue(changed, [])).toBe("conversion");
+    expect(patchRecipeIngredient(item, { food: null }).food).toBeNull();
+    const unspecified = reviewed({ measurementKind: "unmeasured", cookingText: "To taste", nutritionServings: .1 });
+    expect(recipeIngredientIssue(patchRecipeIngredient(unspecified, { food: { ...byWeight, id: "another-source" } }), [])).toBe("conversion");
+  });
+});
 describe("recipe servings controls", () => {
   it("starts blank at one and prevents decrementing below one", () => {
     for (const value of ["", " "]) expect(recipeServingsControl(value)).toMatchObject({ minusDisabled: true, plusDisabled: false, increment: "1" });

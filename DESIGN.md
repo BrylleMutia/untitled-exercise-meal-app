@@ -14,7 +14,7 @@
 Implemented surfaces include five focused onboarding groups, relative meal-cost
 choices, a labeled final save, Home summary actions, remaining-calorie rings,
 daily activity, Pilates selection, custom routines and session controls,
-explicit unresolved diet slots, shared pressed/validation feedback, and optional
+empty unfilled diet slots, shared pressed/validation feedback, and optional
 personal milestones. The pastel tokens and existing exercise media are retained.
 
 Desktop 1440×900 and mobile 390×844 flows, keyboard order, large text, reduced
@@ -640,7 +640,11 @@ its accessible label retains the whole-recipe
 basis. Missing time reads “Not set” and explicit zero remains valid. Peach
 complexity shows Easy, Medium, or Hard, defaulting missing recipe values to Medium.
 Descriptions are omitted. The Planned section uses compact meal rows instead
-of recipe cards, including food-only, skipped and unresolved entries.
+of recipe cards, including valid food-only and skipped entries. Unloggable
+planned rows are hidden; a slot with no visible planned or eaten rows uses
+“Nothing planned or logged.” with its heading and Add meal action. Loading/error
+states remain distinct. This presentation does not remove stored records or
+alter planned totals, actual intake or generation occupancy.
 
 Saved footers place flexible Add to plan with a trailing plus beside 48px Pencil/Edit
 and Archive icon buttons with contextual accessible labels and dismissible
@@ -793,6 +797,18 @@ existing recoverable browser draft. Successful saving clears the draft and
 closes only after authoritative state and draft cleanup complete. Discard resets
 the form explicitly. The name field receives focus after draft restoration;
 ingredient selection moves focus to the new quantity field.
+Nutrition basis separates Recipe ingredients from Ingredients awaiting addition,
+with distinct accessible groups. Pending review rows show whether they are
+selected for addition and expose the same source, confirmed grams-per-unit and
+assumed nutrition weight controls as added ingredients. Review nutrition basis
+opens Details and focuses the relevant weight field. Return to ingredient review
+restores the originating row's focus, or focuses Add selected ingredients once
+all selected rows are valid. Confirming a source alone does not establish a
+household measure's weight or add a suggested ingredient. Review identifies
+missing sources, invalid amounts, missing gram conversions and unfinished unit
+conversions, with a direct recovery action. Selected suggestions must be added
+explicitly or deselected before Save; addition retains unselected suggestions,
+moves focus to the first added quantity and updates recipe nutrition.
 Successful and fallback covers have no visible “Recipe image” caption;
 accessible descriptions remain. Loading status is announced and actual image
 failure retains visible feedback and Retry. Nutrition pills are confined to
@@ -828,23 +844,29 @@ bounded spelling suggestions show “Close match” and require explicit selecti
 ### Grocery custom-item form
 
 The mint week toolbar precedes the list with Previous / This week / Next controls
-and a labeled native calendar input for jumping directly to any week. Its compact
-preference-aligned seven-day range shows its year (both years across New Year) and retains full
-dates for assistive technology. Controls
-wrap at narrow widths and enlarged text without hiding the date input. Week
+and its compact preference-aligned seven-day range beside them, replacing the
+former date-jump input. The range shows its year (both years across New Year) and
+retains full dates for assistive technology and polite announcements. Controls
+and range wrap at narrow widths and enlarged text; both center whenever the
+range occupies a second row, including wrapping caused by enlarged text. Week
 navigation is frozen during a save; read transitions retain the toolbar and show
 an explicit loading or Retry state instead of another week's items.
 
 The weekly list explains that the form adds items outside the meal plan. On
 narrow screens, the item-name input takes a full row so entered text stays
-readable; quantity, unit, and Add sit below it. At wider widths, the controls
-share one row with fixed widths for quantity and unit. The item name has a
+readable; quantity, unit, and Add form a right-aligned group below it. At 768px
+and above, the controls share one vertically aligned row with Item. The group
+may wrap when enlarged text needs more room. Quantity and unit retain their
+existing widths and action targets stay at least 44px. The item name has a
 descriptive accessible label, and an in-progress item remains a recoverable
-draft until it is saved. Category cards use available width rather than forcing
-two narrow columns. Each item puts its checkbox beside a wrapping name and
-generated quantity, followed by the editable quantity and unit across the row
-and then decrease, increase and Remove controls. Action targets remain 44px at
-enlarged text sizes; full quantities remain readable without squeezing the name.
+draft until it is saved. Category cards span the available width. At 768px and above, each item keeps
+its completion checkbox, wrapping name/metadata and quantity controls on one row.
+Below 768px, controls fill a second row. Normal mode shows quantity/unit, Edit
+and Delete. Edit reveals Plus, a growing decimal field with its unit, Minus,
+a primary Save check, Cancel X and Delete. Cancel moves below the main row,
+aligned right, if the control group is too narrow. Icons retain 44px targets;
+keyboard focus is separate from selection. Enter saves and Escape cancels.
+Only Save persists quantity changes; adjustments remain drafts until confirmed.
 Week controls wrap when their labels need more room.
 
 The list heading is “Grocery list”; its help explains recipe-yield scaling,
@@ -853,6 +875,17 @@ you” remain visible. Each account/week has its own recoverable extra-item draf
 including empty weeks. Fields and list mutations are disabled during loading,
 failed refreshes and pending saves. Extra-item fields also wait for draft recovery
 before accepting input, so recovery cannot replace newly typed text.
+
+The top mint card places Total Amount below week navigation, with a bold
+PHP-formatted value and a 44px Edit total amount icon. Unset is ₱— with Not
+recorded; zero is displayed explicitly. The inline editor has a persistent peso
+prefix, a labeled decimal field, Save amount and Cancel, plus
+invalid, saving, offline/retry, recovered-draft and stale-review feedback. Focus
+enters the field and returns to Edit after confirmation or cancel; Escape
+cancels. Review latest amount acknowledges refreshed data without replacing the
+user's input. Amounts carried after calendar regrouping identify their original
+week and request review. Grocery's Refresh action keeps the existing refresh
+icon and recalculates quantities while preserving edits and recorded spending.
 
 ## Shared UI Component Inventory
 
@@ -1159,3 +1192,14 @@ Day strips, week navigators, Progress weekday headers and workout cards follow
 the account preference. Existing dates and today indicators remain unchanged.
 Grocery lists show a regrouping review notice and identify carried edits by their
 source week. Loading/error states remain distinct from genuinely empty weeks.
+
+### Approved shared recipe additions
+
+Hainanese Chicken Rice, Korean Broccoli Side Dish and Tortang Talong with Chicken
+are shared defaults for current and new accounts. Approved uploaded covers are
+bundled assets. Personal originals remain separate. Authored measurements,
+conversions, source references and instructions are retained; Hainanese water
+uses the author-approved zero-calorie correction.
+
+Grocery Total Amount omits the redundant spending description and decimal-entry
+helper sentence; validation errors and carried-amount review guidance remain.

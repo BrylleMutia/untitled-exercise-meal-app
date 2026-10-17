@@ -2,6 +2,7 @@ import { test, expect, type Browser, type BrowserContext, type Locator, type Pag
 import fs from "node:fs";
 import { strFromU8, unzipSync } from "fflate";
 import { addDays, formatCompactWeekRange, formatFullDate, fromKey, startOfWeek, todayKey } from "../src/utility/dates";
+import type { Database } from "../src/types/database.generated";
 import {
   createAuthenticatedContext,
   createLocalAccount,
@@ -12,6 +13,58 @@ import {
 const userAState = "playwright/.auth/user-a.json";
 const userBState = "playwright/.auth/user-b.json";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+
+test("unresolved planned rows show normal empty slots while valid meals remain usable", async ({ browser }, info) => {
+  const account = await createLocalAccount(`empty-planned-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Empty planned slots");
+    let mutations = 0;
+    page.on("request", request => { if (/\/rpc\/(edit_meal_plan|skip_planned_meal|log_planned_meal|save_nutrition_log)$/.test(request.url())) mutations += 1; });
+    await page.route("**/rest/v1/rpc/get_nutrition_week", async route => {
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      const raw = await response.json() as { plannedMeals: Database["public"]["Tables"]["planned_meals"]["Row"][] };
+      const template = raw.plannedMeals.find(row => row.meal_row_id !== null);
+      expect(template).toBeTruthy();
+      const date = todayKey();
+      // Alter only this read response; no unresolved fixtures are persisted.
+      raw.plannedMeals = [
+        ...raw.plannedMeals.filter(row => row.meal_date !== date),
+        { ...template!, app_id: "unavailable-breakfast", meal_date: date, meal_slot: "breakfast", meal_row_id: null, food_row_id: null, label: "Hidden unavailable breakfast" },
+        { ...template!, app_id: "valid-lunch", meal_date: date, meal_slot: "lunch", label: "Available planned lunch", skipped: false },
+        { ...template!, app_id: "unavailable-lunch", meal_date: date, meal_slot: "lunch", meal_row_id: null, food_row_id: null, label: "Hidden unavailable lunch" },
+        { ...template!, app_id: "valid-skipped-snack", meal_date: date, meal_slot: "snack", label: "Available skipped snack", skipped: true },
+      ];
+      await route.fulfill({ response, json: raw });
+    });
+    await openNutritionPage(page);
+    const planned = page.getByRole("region", { name: "Planned", exact: true });
+    const breakfast = planned.getByRole("region", { name: "Breakfast", exact: true });
+    const lunch = planned.getByRole("region", { name: "Lunch", exact: true });
+    const snack = planned.getByRole("region", { name: "Snack", exact: true });
+    await expect(planned.getByText("Unresolved meal", { exact: true })).toHaveCount(0);
+    await expect(planned.getByText(/Hidden unavailable/)).toHaveCount(0);
+    await expect(breakfast.getByText("Nothing planned or logged.", { exact: true })).toBeVisible();
+    await expect(breakfast.getByRole("listitem")).toHaveCount(0);
+    await expect(lunch.getByRole("listitem")).toHaveCount(1);
+    await expect(lunch.getByRole("button", { name: "Log", exact: true })).toBeEnabled();
+    await expect(lunch.getByText("Nothing planned or logged.", { exact: true })).toHaveCount(0);
+    await expect(snack.getByRole("button", { name: "Plan again", exact: true })).toBeEnabled();
+    const add = breakfast.getByRole("button", { name: "Add meal", exact: true });
+    await add.focus(); await add.press("Enter");
+    await expect(breakfast.getByRole("group", { name: "Add meal", exact: true })).toBeVisible();
+    await breakfast.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(add).toBeFocused();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const largeText = await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await largeText.evaluate(element => element.parentNode?.removeChild(element));
+    await planned.screenshot({ path: `output/empty-planned/slots-${info.project.name}.png` });
+    expect(mutations).toBe(0);
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
 
 test("calendar preference and selected-day planning preserve dates across the app", async ({ browser }, info) => {
   const account = await createLocalAccount(`calendar-${info.project.name}`);
@@ -177,6 +230,145 @@ test("calendar preference and selected-day planning preserve dates across the ap
   } finally { await context.close(); await deleteLocalAccount(account); }
 });
 
+test("weekly grocery spending recovers drafts, retries safely, and follows responsive controls", async ({ browser }, info) => {
+  const account = await createLocalAccount(`grocery-spending-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Grocery Spending"); await page.goto("/grocery");
+    const next = page.getByRole("button", { name: "Next grocery week", exact: true });
+    const previous = page.getByRole("button", { name: "Previous grocery week", exact: true });
+    await next.click(); await next.click();
+    const spending = page.getByRole("region", { name: "Weekly grocery spending", exact: true });
+    const edit = spending.getByRole("button", { name: "Edit total amount", exact: true });
+    const amount = spending.getByRole("textbox", { name: "Total amount (PHP)", exact: true });
+    const save = spending.getByRole("button", { name: "Save amount", exact: true });
+    await expect(spending.getByText("Not recorded", { exact: true })).toBeVisible();
+    await edit.press("Enter"); await expect(amount).toBeFocused();
+    await amount.fill("-1"); await expect(save).toBeDisabled();
+    await amount.fill("1.234"); await expect(save).toBeDisabled();
+    await amount.fill("1250.50");
+    await next.click(); await expect(spending.getByText("₱—", { exact: true })).toBeVisible();
+    await previous.click(); await expect(amount).toHaveValue("1250.50");
+    await page.reload(); await next.click(); await next.click(); await expect(amount).toHaveValue("1250.50");
+    await context.setOffline(true); await save.click();
+    await expect(amount).toHaveValue("1250.50");
+    const retryWeek = page.getByRole("button", { name: "Retry grocery week", exact: true });
+    await expect(retryWeek).toBeVisible(); await context.setOffline(false); await retryWeek.click();
+    await expect(spending.getByRole("button", { name: "Retry save", exact: true })).toBeEnabled();
+    let firstKey = "";
+    await page.route("**/rest/v1/rpc/set_grocery_total_amount", route => {
+      firstKey = route.request().postDataJSON().p_payload.idempotencyKey;
+      return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Temporary spending save failure" }) });
+    });
+    await spending.getByRole("button", { name: "Retry save", exact: true }).click();
+    await expect(amount).toHaveValue("1250.50"); await expect(spending.getByText("₱—", { exact: true })).toBeVisible();
+    await page.unroute("**/rest/v1/rpc/set_grocery_total_amount");
+    const confirmed = nextRpcResponse(page, "set_grocery_total_amount"); await spending.getByRole("button", { name: "Retry save", exact: true }).click();
+    const response = await confirmed; expect(response.ok(), await response.text()).toBe(true);
+    expect(response.request().postDataJSON().p_payload.idempotencyKey).toBe(firstKey);
+    await expect(spending.getByText("₱1,250.50", { exact: true })).toBeVisible();
+    await expect(amount).toHaveCount(0); await expect(edit).toBeFocused();
+    await next.click(); await edit.click(); await amount.fill("0");
+    const zero = nextRpcResponse(page, "set_grocery_total_amount"); await save.click(); expect((await zero).ok()).toBe(true);
+    await expect(spending.getByText("₱0.00", { exact: true })).toBeVisible();
+    await previous.click(); await expect(spending.getByText("₱1,250.50", { exact: true })).toBeVisible();
+    const item = page.getByRole("textbox", { name: "Extra grocery item name", exact: true });
+    await item.fill("Weekly spending extra");
+    const added = nextRpcResponse(page, "add_custom_grocery_item"); await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click(); expect((await added).ok()).toBe(true);
+    const refresh = nextRpcResponse(page, "regenerate_grocery"); await page.getByRole("button", { name: "Refresh", exact: true }).click(); expect((await refresh).ok()).toBe(true);
+    await expect(spending.getByText("₱1,250.50", { exact: true })).toBeVisible();
+    await edit.click(); await amount.fill("2500.75");
+    await page.route("**/rest/v1/rpc/set_grocery_total_amount", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ message: "stale_version: changed elsewhere", details: JSON.stringify({ code: "stale_version", entity: "grocery" }) }) }));
+    await save.click();
+    const reviewLatest = spending.getByRole("button", { name: "Review latest amount", exact: true });
+    await expect(reviewLatest).toBeVisible(); await expect(save).toBeDisabled(); await expect(amount).toHaveValue("2500.75");
+    await page.unroute("**/rest/v1/rpc/set_grocery_total_amount");
+    await reviewLatest.click(); await expect(save).toBeEnabled(); await expect(save).toBeFocused();
+    for (const width of [320, 390, 565, 595, 767, 768, 1440]) {
+      await page.setViewportSize({ width, height: 930 });
+      const nameBox = await item.boundingBox(); const quantityBox = await page.getByRole("textbox", { name: "Quantity", exact: true }).boundingBox();
+      expect(nameBox && quantityBox).toBeTruthy();
+      if (width < 768) expect(quantityBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height);
+      else expect(Math.abs(quantityBox!.y - nameBox!.y)).toBeLessThan(2);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+      expect(await page.getByRole("button", { name: "Add custom grocery item", exact: true }).evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      if ([320, 595, 768].includes(width)) { await spending.scrollIntoViewIfNeeded(); await page.screenshot({ path: `output/grocery-amount/width-${width}-${info.project.name}.png` }); }
+    }
+    await page.setViewportSize({ width: info.project.name === "mobile" ? 320 : 973, height: 930 });
+    await page.emulateMedia({ reducedMotion: "reduce" }); await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
+    await page.screenshot({ path: `output/grocery-amount/large-text-${info.project.name}.png` });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+    await amount.press("Escape"); await expect(edit).toBeFocused();
+    await page.reload(); await next.click(); await next.click(); await expect(amount).toHaveCount(0); await expect(spending.getByText("₱1,250.50", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `output/grocery-amount/complete-${info.project.name}.png` });
+    await edit.click(); await amount.fill(""); const cleared = nextRpcResponse(page, "set_grocery_total_amount"); await save.click(); expect((await cleared).ok()).toBe(true);
+    await expect(spending.getByText("Not recorded", { exact: true })).toBeVisible();
+  } finally { await context.setOffline(false); await context.close(); await deleteLocalAccount(account); }
+});
+
+test("grocery quantity edits require save and preserve recoverable revisions", async ({ browser }, info) => {
+  const account = await createLocalAccount(`grocery-quantity-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Quantity Editing"); await page.goto("/grocery");
+    const next = page.getByRole("button", { name: "Next grocery week", exact: true });
+    await next.click(); await next.click();
+    const name = "Quantity test with a long ingredient name that wraps safely";
+    await page.getByRole("textbox", { name: "Extra grocery item name", exact: true }).fill(name);
+    const added = nextRpcResponse(page, "add_custom_grocery_item"); await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click(); expect((await added).ok()).toBe(true);
+    const row = page.getByRole("listitem", { name, exact: true });
+    const edit = row.getByRole("button", { name: `Edit quantity for ${name}`, exact: true });
+    const field = row.getByRole("textbox", { name: `Quantity for ${name}`, exact: true });
+    const save = row.getByRole("button", { name: `Save quantity for ${name}`, exact: true });
+    const cancel = row.getByRole("button", { name: `Cancel quantity edit for ${name}`, exact: true });
+    await expect(row.getByRole("button", { name: `Increase ${name}`, exact: true })).toHaveCount(0);
+    await edit.press("Enter"); await expect(field).toBeFocused();
+    await field.fill("2.5"); await row.getByRole("button", { name: `Increase ${name}`, exact: true }).click(); await expect(field).toHaveValue("3.5");
+    await row.getByRole("button", { name: `Decrease ${name}`, exact: true }).click(); await expect(field).toHaveValue("2.5");
+    await next.click(); await page.getByRole("button", { name: "Previous grocery week", exact: true }).click(); await expect(field).toHaveValue("2.5");
+    await page.reload(); await next.click(); await next.click(); await expect(field).toHaveValue("2.5");
+    for (const bad of ["", "-1", "1000001", "no"]) { await field.fill(bad); await expect(save).toBeDisabled(); }
+    await field.fill("2.5");
+    for (const width of [320,390,430,668,767,768,1440]) {
+      await page.setViewportSize({width,height:930});
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
+      for (const button of await row.getByRole("button").all()) { const box = await button.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(44); expect(box!.height).toBeGreaterThanOrEqual(44); }
+      const nameBox = await row.getByText(name, {exact:true}).boundingBox(); const fieldBox = await field.boundingBox();
+      if (width < 768) expect(fieldBox!.y).toBeGreaterThanOrEqual(nameBox!.y+nameBox!.height);
+      else expect(fieldBox!.y).toBeLessThan(nameBox!.y+nameBox!.height);
+      if (width === 320) { const cancelBox=await cancel.boundingBox(); expect(cancelBox!.y).toBeGreaterThan(fieldBox!.y); }
+      if ([320,430,768].includes(width)) { await row.scrollIntoViewIfNeeded(); await page.screenshot({path:`output/grocery-amount/quantity-${width}-${info.project.name}.png`}); }
+    }
+    await page.setViewportSize({width:430,height:930});
+    const toolbar = page.getByRole("group",{name:"Choose a grocery week",exact:true}).locator('[data-wrapped]');
+    await expect(toolbar).toHaveAttribute("data-wrapped","true");
+    const navBox = await toolbar.locator(":scope > div").boundingBox(); const rangeBox = await toolbar.locator(":scope > p").boundingBox();
+    expect(Math.abs(navBox!.x+navBox!.width/2-rangeBox!.x-rangeBox!.width/2)).toBeLessThan(2);
+    let retryKey="";
+    await page.route("**/rest/v1/rpc/set_grocery_quantity", route => { retryKey=route.request().postDataJSON().p_payload.idempotencyKey; return route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({message:"Temporary quantity failure"})}); });
+    await save.click(); await expect(row.getByRole("alert")).toBeVisible(); await expect(field).toHaveValue("2.5");
+    await page.unroute("**/rest/v1/rpc/set_grocery_quantity");
+    const saved=nextRpcResponse(page,"set_grocery_quantity"); await row.getByRole("button",{name:`Retry saving ${name}`,exact:true}).click();
+    const response=await saved; expect(response.ok(),await response.text()).toBe(true); expect(response.request().postDataJSON().p_payload.idempotencyKey).toBe(retryKey);
+    await expect(field).toHaveCount(0); await expect(edit).toBeFocused(); await expect(row).toContainText("2.5");
+    await edit.click(); await field.fill("0"); const zero=nextRpcResponse(page,"set_grocery_quantity"); await field.press("Enter"); expect((await zero).ok()).toBe(true); await expect(field).toHaveCount(0);
+    await edit.click(); await field.fill("9"); await field.press("Escape"); await expect(edit).toBeFocused(); await edit.click(); await expect(field).toHaveValue("0");
+    await field.fill("5.5");
+    await page.route("**/rest/v1/rpc/set_grocery_quantity",route=>route.fulfill({status:400,contentType:"application/json",body:JSON.stringify({message:"stale_version: changed elsewhere",details:JSON.stringify({code:"stale_version",entity:"grocery"})})}));
+    await save.click(); await expect(row.getByRole("button",{name:"Review latest quantity",exact:true})).toBeVisible(); await expect(save).toBeDisabled(); await expect(field).toHaveValue("5.5");
+    await page.unroute("**/rest/v1/rpc/set_grocery_quantity"); await row.getByRole("button",{name:"Review latest quantity",exact:true}).click(); await expect(save).toBeFocused(); await expect(save).toBeEnabled();
+    await page.emulateMedia({reducedMotion:"reduce"}); await page.setViewportSize({width:320,height:930}); await page.evaluate(()=>{document.documentElement.style.fontSize="200%";});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);
+    await page.evaluate(()=>{document.documentElement.style.fontSize="";}); await cancel.click();
+    await page.route("**/rest/v1/rpc/remove_grocery_item",route=>route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({message:"Temporary delete failure"})}));
+    await row.getByRole("button",{name:`Remove ${name}`,exact:true}).click(); await expect(row).toBeVisible(); await expect(row.getByRole("alert")).toBeVisible();
+    await page.unroute("**/rest/v1/rpc/remove_grocery_item"); const removed=nextRpcResponse(page,"remove_grocery_item"); await row.getByRole("button",{name:`Remove ${name}`,exact:true}).click(); expect((await removed).ok()).toBe(true); await expect(row).toHaveCount(0);
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
 test("grocery weeks audit generated recipe quantities and preserve isolated edits and drafts", async ({ browser }, info) => {
   const account = await createLocalAccount(`grocery-weeks-${info.project.name}`);
   const context = await createAuthenticatedContext(browser, baseURL, account);
@@ -195,27 +387,30 @@ test("grocery weeks audit generated recipe quantities and preserve isolated edit
     await page.goto("/grocery");
     await expect(page.getByRole("heading", { name: "Grocery list", exact: true })).toBeVisible();
     const weekOf = addDays(startOfWeek(todayKey()), 7);
-    const jump = page.getByLabel("Jump to grocery week", { exact: true });
-    await jump.fill(weekOf);
-    await expect(jump).toHaveValue(weekOf);
+    const navigator = page.getByRole("group", { name: "Choose a grocery week", exact: true });
+    await expect(page.getByLabel("Jump to grocery week", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Next grocery week", exact: true }).click();
+    await expect(navigator).toContainText(formatFullDate(weekOf));
     const chicken = () => page.getByRole("listitem").filter({ has: page.getByText("Chicken breast, skinless, boneless", { exact: true }) });
     await expect(chicken()).toContainText("generated 1200 g");
     await expect(page.getByRole("listitem").filter({ has: page.getByText("Jasmine rice (uncooked; long-grain rice proxy)", { exact: true }) })).toContainText("generated 500 g");
     const toggled = nextRpcResponse(page, "toggle_grocery_item");
     await chicken().getByRole("checkbox").click(); expect((await toggled).ok()).toBe(true);
     await expect(chicken().getByRole("checkbox")).toBeChecked();
+    await chicken().getByRole("button", { name: "Edit quantity for Chicken breast, skinless, boneless", exact: true }).click();
+    await chicken().getByRole("button", { name: "Decrease Chicken breast, skinless, boneless", exact: true }).click();
     const changed = nextRpcResponse(page, "set_grocery_quantity");
-    await chicken().getByRole("button", { name: "Decrease Chicken breast, skinless, boneless", exact: true }).click(); expect((await changed).ok()).toBe(true);
+    await chicken().getByRole("button", { name: "Save quantity for Chicken breast, skinless, boneless", exact: true }).click(); expect((await changed).ok()).toBe(true);
     await expect(chicken()).toContainText("1199");
     const extra = page.getByRole("textbox", { name: "Extra grocery item name", exact: true });
     await extra.fill("Only first week draft");
     await page.getByRole("button", { name: "Next grocery week", exact: true }).click();
-    await expect(jump).toHaveValue(addDays(weekOf, 7));
+    await expect(navigator).toContainText(formatFullDate(addDays(weekOf, 7)));
     await expect(chicken()).toContainText("generated 1200 g"); await expect(chicken().getByRole("checkbox")).not.toBeChecked();
     await expect(extra).toHaveValue(""); await expect(chicken()).not.toContainText("1199");
     await page.getByRole("button", { name: "Previous grocery week", exact: true }).click();
     await expect(extra).toHaveValue("Only first week draft"); await expect(chicken().getByRole("checkbox")).toBeChecked();
-    const regenerated = nextRpcResponse(page, "regenerate_grocery"); await page.getByRole("button", { name: "Regenerate", exact: true }).click(); expect((await regenerated).ok()).toBe(true);
+    const regenerated = nextRpcResponse(page, "regenerate_grocery"); await page.getByRole("button", { name: "Refresh", exact: true }).click(); expect((await regenerated).ok()).toBe(true);
     await expect(chicken()).toContainText("1199"); await expect(chicken()).toContainText("generated 1200 g");
     await expect(chicken().getByRole("checkbox")).toBeChecked();
     if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
@@ -224,14 +419,15 @@ test("grocery weeks audit generated recipe quantities and preserve isolated edit
     const physicalWidth = page.viewportSize()!.width;
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(physicalWidth + 1);
     expect(await chicken().locator("p").first().evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThanOrEqual(120);
-    expect(await chicken().getByRole("button", { name: "Increase Chicken breast, skinless, boneless", exact: true }).evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThanOrEqual(44);
-    await jump.scrollIntoViewIfNeeded();
+    expect(await chicken().getByRole("button", { name: "Edit quantity for Chicken breast, skinless, boneless", exact: true }).evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThanOrEqual(44);
+    await navigator.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `output/grocery-weeks/grocery-${info.project.name}.png`, fullPage: false });
     await chicken().scrollIntoViewIfNeeded();
     await page.screenshot({ path: `output/grocery-weeks/grocery-items-${info.project.name}.png`, fullPage: false });
     await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
     await page.route("**/rest/v1/rpc/get_nutrition_week", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Test read failure" }) }));
-    await jump.fill(addDays(weekOf, 14));
+    await page.getByRole("button", { name: "Next grocery week", exact: true }).click();
+    await page.getByRole("button", { name: "Next grocery week", exact: true }).click();
     await expect(page.getByRole("button", { name: "Retry grocery week", exact: true })).toBeVisible();
     await expect(page.getByText("No groceries for this week", { exact: true })).not.toBeVisible();
     await page.unroute("**/rest/v1/rpc/get_nutrition_week");
@@ -241,7 +437,7 @@ test("grocery weeks audit generated recipe quantities and preserve isolated edit
     await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click(); expect((await added).ok()).toBe(true);
     await expect(page.getByRole("listitem").filter({ hasText: "Empty week extra" })).toBeVisible();
     await page.getByRole("button", { name: "This week", exact: true }).click();
-    await expect(jump).toHaveValue(startOfWeek(todayKey())); await expect(page.getByText("Empty week extra", { exact: true })).not.toBeVisible();
+    await expect(navigator).toContainText(formatFullDate(startOfWeek(todayKey()))); await expect(page.getByText("Empty week extra", { exact: true })).not.toBeVisible();
   } finally { await context.close(); await deleteLocalAccount(account); }
 });
 
@@ -591,6 +787,105 @@ test("recipe unit conversions retain amounts and recover pending confirmations",
     await page.reload(); await page.getByRole("button", { name: `View recipe: ${name}`, exact: true }).click();
     await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
     await expect(overview.getByText("3 cup", { exact: true })).toBeVisible(); await expect(overview.getByText("3 tsp", { exact: true })).toBeVisible();
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
+test("recipe review confirms pending nutrition bases in Details and saves recovered ingredients", async ({ browser }, info) => {
+  const account = await createLocalAccount(`review-basis-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  const candidate = (name: string, fdcId: string) => ({ fdcId, recordType: "Foundation", name, servingLabel: "100 g", servingGrams: 100, unit: "g", calories: 120, proteinG: 8, carbsG: 20, fatG: 0, nutrientsPer100g: { calories: 120, proteinG: 8, carbsG: 20, fatG: 0 }, source: "USDA FoodData Central", sourceVersion: "test", estimated: false, confidence: "high", preparationBasis: "prepared" });
+  const names = ["Broccoli test", "Sesame oil test", "Salt test"];
+  try {
+    await completeOnboarding(page, "Review Basis");
+    const editor = await openRecipe(page);
+    const recipeName = `Reviewed weights ${info.project.name}`;
+    await editor.getByLabel("Recipe name", { exact: true }).fill(recipeName);
+    await editor.getByLabel("Recipe servings", { exact: true }).fill("4");
+    await fillRecipeSection(editor, "Instructions", "Instructions (required)", "Mix and serve.");
+    await editor.getByLabel("Ingredient search").fill("Greek yogurt");
+    await editor.getByRole("button", { name: /Greek yogurt.*170 g/ }).click();
+    await editor.getByLabel("Greek yogurt quantity", { exact: true }).fill("100");
+    await page.route("**/functions/v1/nutrition-text-parse", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ suggestedMealName: "Vegetables", candidates: [...names.map((name, index) => ({ name, quantity: [680, 1.5, 1][index], unit: ["g", "tbsp", "tsp"][index], preparation: "prepared", assumptions: [], confidence: "high", presence: "stated" })), { name: "Possible garnish", quantity: 1, unit: "tsp", preparation: "prepared", assumptions: [], confidence: "low", presence: "possible_hidden" }], questions: [] }) }));
+    await page.route("**/functions/v1/nutrition-meal-match", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ matches: names.map((name, ingredientIndex) => ({ ingredientIndex, query: name, candidates: [candidate(name, `review-basis-${ingredientIndex}`)] })) }) }));
+    await page.route("**/functions/v1/nutrition-search", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ candidates: [candidate("Salt test", "review-basis-2")] }) }));
+    await editor.getByRole("button", { name: "Describe ingredients", exact: true }).click();
+    await editor.getByLabel("Ingredient description").fill("Broccoli with sesame oil and salt");
+    await editor.getByRole("button", { name: "Analyze ingredients", exact: true }).click();
+    const review = editor.getByRole("region", { name: "Ingredient review", exact: true });
+    const saltRow = review.getByRole("listitem").filter({ has: page.getByLabel("Salt test quantity", { exact: true }) });
+    const oilRow = review.getByRole("listitem").filter({ has: page.getByLabel("Sesame oil test quantity", { exact: true }) });
+    const add = review.getByRole("button", { name: "Add selected ingredients", exact: true });
+    await expect(add).toBeDisabled();
+    for (const name of names) await review.getByRole("checkbox", { name, exact: true }).uncheck();
+    await expect(review.getByText("Select at least one suggested ingredient to add.", { exact: true })).toBeVisible();
+    await expect(add).toBeDisabled();
+    for (const name of names) await review.getByRole("checkbox", { name, exact: true }).check();
+    await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(editor.getByText("Finish ingredient review, then choose Add selected ingredients before saving.")).toBeVisible();
+    await oilRow.getByRole("button", { name: "Review nutrition basis", exact: true }).click();
+    const pending = editor.getByRole("region", { name: "Ingredients awaiting addition", exact: true });
+    const oil = pending.getByLabel("Sesame oil test grams per tbsp", { exact: true });
+    const salt = pending.getByLabel("Salt test grams per tsp", { exact: true });
+    await expect(oil).toBeFocused();
+    await expect(pending.getByText("Not selected for addition", { exact: true })).toHaveCount(1);
+    await expect(editor.getByRole("region", { name: "Recipe ingredients", exact: true }).getByText("Greek yogurt", { exact: true })).toBeVisible();
+    await oil.fill("14"); await salt.fill("0");
+    await expect(salt).toHaveAttribute("aria-invalid", "true");
+    await expect(pending.getByRole("alert")).toHaveText("Enter a positive finite weight up to 1,000,000 g.");
+    await pending.getByRole("button", { name: "Return to ingredient review", exact: true }).click();
+    await expect(review.getByRole("checkbox", { name: "Sesame oil test", exact: true })).toBeFocused();
+    await expect(add).toBeDisabled();
+    await saltRow.getByRole("button", { name: "Review nutrition basis", exact: true }).click();
+    await expect(salt).toBeFocused(); await salt.fill("6");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.reload();
+    await page.getByRole("region", { name: "Recipes" }).getByRole("button", { name: "Create", exact: true }).click();
+    await expect(editor.getByText("Recipe draft restored.", { exact: true })).toBeVisible();
+    await expect(oil).toHaveValue("14"); await expect(salt).toHaveValue("6");
+    await pending.getByRole("button", { name: "Return to ingredient review", exact: true }).click();
+    await expect(add).toBeFocused();
+    // Even reselecting a source must discard the old ingredient-specific factor.
+    await saltRow.getByRole("button", { name: "Choose or change match", exact: true }).click();
+    await editor.getByRole("button", { name: "Search trusted USDA", exact: true }).click();
+    await editor.getByRole("button", { name: /Salt test.*100 g/ }).click();
+    await expect(saltRow.getByLabel("Salt test quantity", { exact: true })).toHaveValue("1");
+    await expect(add).toBeDisabled();
+    await saltRow.getByRole("button", { name: "Review nutrition basis", exact: true }).click();
+    await expect(salt).toHaveValue(""); await salt.fill("6");
+    await page.setViewportSize({ width: info.project.name === "mobile" ? 320 : 973, height: 930 });
+    await pending.getByRole("heading", { name: "Ingredients awaiting addition", exact: true }).scrollIntoViewIfNeeded();
+    await editor.screenshot({ path: `output/recipe-review-basis/overview-${info.project.name}.png` });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    await salt.scrollIntoViewIfNeeded();
+    expect(await editor.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    expect(await pending.evaluate(node => [node, ...node.querySelectorAll("*")].every(element => element.scrollWidth <= element.clientWidth + 1))).toBe(true);
+    await editor.screenshot({ path: `output/recipe-review-basis/details-${info.project.name}.png` });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+    await pending.getByRole("button", { name: "Return to ingredient review", exact: true }).press("Enter");
+    await expect(add).toBeFocused(); await add.press("Enter");
+    await expect(editor.getByLabel("Broccoli test quantity", { exact: true })).toBeFocused();
+    await expect(review.getByRole("listitem")).toHaveCount(1);
+    await expect(review.getByRole("checkbox", { name: "Possible garnish", exact: true })).not.toBeChecked();
+    await expect(editor.getByRole("button", { name: "Remove Sesame oil test", exact: true })).toHaveCount(1);
+    await expect(editor.getByLabel("Sesame oil test quantity", { exact: true })).toHaveValue("1.5");
+    await page.route("**/rest/v1/rpc/save_recipe", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Temporary save failure" }) }));
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(editor.getByText(/Recipe was not saved/)).toBeVisible();
+    await expect(editor.getByLabel("Sesame oil test quantity", { exact: true })).toHaveValue("1.5");
+    await page.unroute("**/rest/v1/rpc/save_recipe");
+    const saved = nextRpcResponse(page, "save_recipe"); await editor.getByRole("button", { name: "Save", exact: true }).click();
+    const response = await saved; expect(response.ok(), await response.text()).toBe(true);
+    const ingredients = response.request().postDataJSON().p_payload.meal.ingredients;
+    expect(ingredients).toHaveLength(4);
+    expect(ingredients.find((item: { foodId: string }) => item.foodId === "food-fdc-review-basis-1")).toMatchObject({ servings: .21, cookingMeasurement: { quantity: 1.5, unit: "tbsp", gramsPerUnit: 14 } });
+    await expect(editor).toHaveCount(0); await page.reload();
+    await page.getByRole("button", { name: `View recipe: ${recipeName}`, exact: true }).click();
+    const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+    await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+    await expect(overview.getByText("1.5 tbsp", { exact: true })).toBeVisible();
+    await expect(overview.getByText("1 tsp", { exact: true })).toBeVisible();
   } finally { await context.close(); await deleteLocalAccount(account); }
 });
 
@@ -1639,7 +1934,9 @@ async function freshAccountJourney(browser: Browser, testInfo: import("@playwrig
     }
     await journeyPage.getByRole("button", { name: "Add custom grocery item" }).click();
     await expect(journeyPage.getByText(customItem)).toBeVisible();
+    await journeyPage.getByRole("button", { name: `Edit quantity for ${customItem}` }).click();
     await journeyPage.getByRole("button", { name: `Increase ${customItem}` }).click();
+    await journeyPage.getByRole("button", { name: `Save quantity for ${customItem}` }).click();
     await expect(journeyPage.getByText("adjusted by you")).toBeVisible();
 
     await journeyPage.goto("/progress");
@@ -2242,10 +2539,13 @@ test.describe("MVP-1 release browser gate", () => {
     try {
       await page.goto("/grocery");
       await secondPage.goto("/grocery");
+      await page.getByRole("button", { name: /^Edit quantity for / }).first().click();
+      await secondPage.getByRole("button", { name: /^Edit quantity for / }).first().click();
       const increase = page.getByRole("button", { name: /^Increase / }).first();
       const competingIncrease = secondPage.getByRole("button", { name: /^Increase / }).first();
-      const firstEdit = nextRpcResponse(page, "set_grocery_quantity");
       await increase.click();
+      const firstEdit = nextRpcResponse(page, "set_grocery_quantity");
+      await page.getByRole("button", { name: /^Save quantity for / }).first().click();
       await expect(page.getByText(/adjusted by you/i).first()).toBeVisible();
       expect((await firstEdit).ok()).toBe(true);
 
@@ -2254,6 +2554,7 @@ test.describe("MVP-1 release browser gate", () => {
         return route.continue();
       });
       await competingIncrease.click();
+      await secondPage.getByRole("button", { name: /^Save quantity for / }).first().click();
       const conflictAlert = secondPage.getByRole("alert").filter({ hasText: /latest account data is not loaded yet/i });
       await expect(conflictAlert).toBeVisible();
       await secondPage.getByRole("button", { name: "Refresh data" }).click();

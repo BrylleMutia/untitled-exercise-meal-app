@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { WeekNavigator } from "@/components/WeekNavigator";
+import { GroceryItemRow } from "@/components/GroceryItemRow";
+import { GroceryTotalAmount } from "@/components/GroceryTotalAmount";
 import { useNutritionWeek } from "@/components/nutrition/useNutritionWeek";
 import { startOfWeek, todayKey } from "@/utility/dates";
 import type { NutritionWeekReadModel } from "@/types/backend";
@@ -19,19 +21,21 @@ const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", 
 export default function GroceryPage() {
   const { snapshot, pendingMutation } = useApp();
   const [selectedDate, setSelectedDate] = useState(todayKey);
+  const [amountSaving, setAmountSaving] = useState(false);
+  const [itemSaving, setItemSaving] = useState(false);
   const weekOf = startOfWeek(selectedDate, snapshot.profile?.weekStartsOn ?? 0);
   const week = useNutritionWeek(weekOf);
-  const disabled = Boolean(pendingMutation) || week.loading || Boolean(week.error);
+  const disabled = Boolean(pendingMutation) || amountSaving || itemSaving || week.loading || Boolean(week.error);
   return <div className="grid min-w-0 gap-4 pb-4">
-    <Card tone="mint"><WeekNavigator weekOf={weekOf} onChange={setSelectedDate} weekStartsOn={snapshot.profile?.weekStartsOn ?? 0} disabled={Boolean(pendingMutation)} /></Card>
+    <Card tone="mint"><WeekNavigator weekOf={weekOf} onChange={setSelectedDate} weekStartsOn={snapshot.profile?.weekStartsOn ?? 0} disabled={Boolean(pendingMutation) || amountSaving || itemSaving} />{week.data ? <GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={setAmountSaving} /> : null}</Card>
     {week.loading ? <p role="status">Loading this week&apos;s groceries…</p> : null}
     {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-peach-100 p-4"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
     {week.data?.grocery?.calendarReviewRequired ? <p role="status" className="rounded-2xl bg-peach-100 p-4 text-sm font-semibold">This list was regrouped after your start of week changed. Review ingredients and carried grocery edits.</p> : null}
-    {week.data ? <GroceryWeek key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} /> : null}
+    {week.data ? <GroceryWeek key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={setItemSaving} /> : null}
   </div>;
 }
 
-function GroceryWeek({ week, disabled }: { week: NutritionWeekReadModel; disabled: boolean }) {
+function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void }) {
   const { snapshot, actions } = useApp();
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -112,7 +116,7 @@ function GroceryWeek({ week, disabled }: { week: NutritionWeekReadModel; disable
       ) : null}
 
 
-      <div className="mt-3 flex flex-wrap gap-2 sm:flex-nowrap">
+      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
         <input
           value={name}
           onChange={(e) => {
@@ -120,9 +124,10 @@ function GroceryWeek({ week, disabled }: { week: NutritionWeekReadModel; disable
             setName(e.target.value);
           }}
           placeholder="Item"
-          className="input min-w-0 basis-full sm:basis-0 sm:flex-1"
+          className="input min-w-0 basis-full md:basis-40 md:flex-1"
           aria-label="Extra grocery item name"
         />
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
         <input
           value={quantity}
           onChange={(e) => {
@@ -169,6 +174,7 @@ function GroceryWeek({ week, disabled }: { week: NutritionWeekReadModel; disable
         >
           <Plus className="h-4 w-4" aria-hidden />
         </Button>
+        </div>
       </div>
     </fieldset>
   );
@@ -195,17 +201,17 @@ function GroceryWeek({ week, disabled }: { week: NutritionWeekReadModel; disable
       <Card tone="mint">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-1"><h2 className="font-extrabold">Grocery list</h2><HelpPopover title="Grocery list"><p>This list comes from the selected week&apos;s planned meals, with recipe quantities scaled by planned servings divided by recipe yield. Skipped meals and unmeasured garnishes are excluded.</p><p>Checked items, quantity edits, removals, and extra items stay with this week. Regenerate recalculates the plan quantities while preserving your adjustments.</p></HelpPopover></div>
+            <div className="flex items-center gap-1"><h2 data-grocery-heading tabIndex={-1} className="font-extrabold">Grocery list</h2><HelpPopover title="Grocery list"><p>This list comes from the selected week&apos;s planned meals, with recipe quantities scaled by planned servings divided by recipe yield. Skipped meals and unmeasured garnishes are excluded.</p><p>Checked items, quantity edits, removals, extra items, and recorded spending stay with this week. Refresh recalculates the plan quantities while preserving your adjustments.</p></HelpPopover></div>
           </div>
           <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={disabled} onClick={() => actions.regenerateGrocery(week)}>
-            <RefreshCw className="h-4 w-4" aria-hidden /> Regenerate
+            <RefreshCw className="h-4 w-4" aria-hidden /> Refresh
           </Button>
         </div>
 
         {customItemEditor}
       </Card>
 
-      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,28rem),1fr))] gap-3">
+      <div className="grid min-w-0 grid-cols-1 gap-3">
         {categories.map((category) => {
           const items = visible.filter((i) => i.category === category);
           if (items.length === 0) return null;
@@ -213,73 +219,7 @@ function GroceryWeek({ week, disabled }: { week: NutritionWeekReadModel; disable
             <Card key={category} className="!p-[16px]">
               <h3 className="font-extrabold">{category}</h3>
               <ul className="mt-2 grid gap-1">
-                {items.map((item) => {
-                  const adjusted = item.quantity !== item.generatedQuantity;
-                  return (
-                    <li
-                      key={item.id}
-                      className={`grid min-w-0 grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-x-[8px] gap-y-[4px] rounded-xl px-[8px] py-[6px] ${
-                        item.checked ? "bg-mint-50" : "bg-cream"
-                      }`}
-                    >
-                      <label className="col-start-1 row-start-1 grid h-[44px] w-[44px] place-items-center">
-                        <input
-                          type="checkbox"
-                          checked={item.checked}
-                          disabled={disabled}
-                          onChange={() => actions.toggleGrocery(item.id, week)}
-                          aria-label={`Mark ${item.name} as done`}
-                          className="h-5 w-5 accent-lav-500"
-                        />
-                      </label>
-                      <div className="col-span-2 col-start-2 row-start-1 min-w-0">
-                        <p className={`break-words text-sm font-bold [overflow-wrap:anywhere] ${item.checked ? "line-through opacity-60" : ""}`}>
-                          {item.name}
-                          {item.custom ? (
-                            <span className="ml-1 rounded-full bg-lav-100 px-1.5 text-[9px] uppercase">custom</span>
-                          ) : null}
-                        </p>
-                        <p className="text-[10px] font-semibold text-muted">
-                          generated {item.generatedQuantity} {item.unit}
-                          {item.carriedFromWeek ? ` | Carried from ${item.carriedFromWeek}` : ""}
-                          {adjusted ? " · adjusted by you" : ""}
-                        </p>
-                      </div>
-                      <span className="col-span-3 col-start-1 row-start-2 min-w-0 break-words text-center text-sm font-extrabold tabular-nums">
-                        {item.quantity} <span className="text-xs font-bold text-muted">{item.unit}</span>
-                      </span>
-                      <div className="col-span-2 col-start-1 row-start-3 flex min-w-0 items-center justify-center gap-[8px]">
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => actions.setGroceryQuantity(item.id, Math.max(0, item.quantity - 1), week)}
-                          aria-label={`Decrease ${item.name}`}
-                          className="grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full bg-white"
-                        >
-                          <Minus className="h-3 w-3" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => actions.setGroceryQuantity(item.id, item.quantity + 1, week)}
-                          aria-label={`Increase ${item.name}`}
-                          className="grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full bg-white"
-                        >
-                          <Plus className="h-3 w-3" aria-hidden />
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => actions.removeGroceryItem(item.id, week)}
-                        aria-label={`Remove ${item.name}`}
-                        className="col-start-3 row-start-3 grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full bg-white"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                      </button>
-                    </li>
-                  );
-                })}
+                {items.map(item => <GroceryItemRow key={item.id} item={item} week={week} disabled={disabled} onRefresh={onRefresh} onSavingChange={onSavingChange} />)}
               </ul>
             </Card>
           );

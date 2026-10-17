@@ -57,7 +57,8 @@ export async function createAuthenticatedContext(
   });
   const { error: sessionError } = await browserClient.auth.setSession(data.session);
   if (sessionError) throw sessionError;
-  const context = await browser.newContext({ serviceWorkers: "block" });
+  // Fresh-account flows must not inherit the project's fixture cookies or storage.
+  const context = await browser.newContext({ serviceWorkers: "block", storageState: { cookies: [], origins: [] } });
   await context.addCookies([...cookieJar.entries()].map(([name, value]) => ({ name, value, url: baseURL })));
   return context;
 }

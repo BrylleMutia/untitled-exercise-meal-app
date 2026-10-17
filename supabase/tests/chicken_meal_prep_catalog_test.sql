@@ -1,7 +1,7 @@
 begin;
 \ir fixtures/calendar_intent.inc
 select no_plan();
-select is((select count(*)::int from public.meals where is_system and archived_at is null),4,'four active recipes');
+select is((select count(*)::int from public.meals where is_system and archived_at is null),7,'seven active recipes');
 select is((select count(*)::int from public.foods where app_id like 'food-chicken-prep-%' and value_source='trusted_catalog'),9,'nine reviewed USDA foods');
 select is((select meal_slots from public.meals where app_id='meal-sticky-teriyaki-chicken'),array['lunch','dinner'],'teriyaki slots');
 select is((select meal_slots from public.meals where app_id='meal-chicken-burrito-protein-boxes'),array['breakfast','lunch'],'burrito slots');
