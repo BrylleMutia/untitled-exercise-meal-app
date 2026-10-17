@@ -8,7 +8,7 @@ import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { Button } from "@/components/ui/Button";
 import { HelpHeading } from "@/components/ui/HelpPopover";
 import { averages, dayStatus } from "@/utility/nutrition";
-import { addDays, monthMatrix, sameMonth, startOfWeek, todayKey } from "@/utility/dates";
+import { addDays, monthMatrix, sameMonth, startOfWeek, todayKey, weekdayNames } from "@/utility/dates";
 import type { Tone } from "@/components/progress/progressShared";
 import { HistoryList, Sparkline } from "@/components/progress/progressShared";
 import type { HistoryReadModel } from "@/types/backend";
@@ -66,7 +66,7 @@ export default function ProgressPage() {
   const completedSessions = sessions.filter(
     (s) => s.status === "completed",
   );
-  const weekOf = startOfWeek(today);
+  const weekOf = startOfWeek(today, snapshot.profile?.weekStartsOn ?? 0);
   const scheduledDayOfWeek = new Set(snapshot.plan?.workouts.map((workout) => workout.dayOfWeek) ?? []);
   const scheduled = Array.from({ length: 7 }, (_, offset) => addDays(weekOf, offset))
     .filter((date) => scheduledDayOfWeek.has(new Date(`${date}T00:00:00Z`).getUTCDay())).length;
@@ -79,7 +79,7 @@ export default function ProgressPage() {
   const avgs = averages(nutritionLogs);
   const { count: weightCount, first: firstWeight, latest: lastWeight, chartEntries, changeKg } = summarizeWeightEntries(weights);
 
-  const grid = monthMatrix(month);
+  const grid = monthMatrix(month, snapshot.profile?.weekStartsOn ?? 0);
   const completedDates = new Set(completedSessions.map((s) => s.date));
   const scheduledDays = scheduledDayOfWeek;
   const nutritionDays = new Map(
@@ -150,9 +150,9 @@ export default function ProgressPage() {
         <Card>
           <HelpHeading title="Calendar"><p>Workout completion counts scheduled days only. Rest days are excluded, not counted as failures. Nutrition days are complete, partial, or unlogged; missing entries never mean zero intake.</p></HelpHeading>
           <div className="mt-4 grid grid-cols-7 gap-1 text-center">
-            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-              <span key={i} className="text-[10px] font-extrabold text-muted">
-                {d}
+            {Array.from({ length: 7 }, (_, i) => weekdayNames[(i + (snapshot.profile?.weekStartsOn ?? 0)) % 7]).map((d, i) => (
+              <span key={i} aria-label={d} className="text-[10px] font-extrabold text-muted">
+                {d.slice(0, 1)}
               </span>
             ))}
             {grid.flat().map((day) => {

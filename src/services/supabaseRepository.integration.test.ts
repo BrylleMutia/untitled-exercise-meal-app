@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { addDays, startOfWeek, todayKey } from "@/utility/dates";
+import { addDays, startOfWeek, todayKey, weekDates } from "@/utility/dates";
 import { nutritionWeekSnapshot } from "@/utility/nutritionWeek";
+import { generateGroceryList } from "@/utility/grocery";
 import { foodMacros } from "@/utility/nutrition";
 import { generateWeeklyMeals, weeklyRecipeOptions } from "@/utility/weeklyMealGeneration";
 import { recipeIngredientDraft, recipePreview, recipeUnitConversion } from "@/utility/recipeEditor";
@@ -66,7 +67,7 @@ function profile(id: string, name: string): UserProfile {
     sex: "female",
     heightCm: 168,
     weightKg: 68,
-    units: "metric",
+    units: "metric", weekStartsOn: 1,
     experience: "beginner",
     equipment: ["none"],
     daysPerWeek: 3,
@@ -127,6 +128,77 @@ function completedSession(snapshot: AppSnapshot, session: WorkoutSession): Worko
 }
 
 describe("Supabase repository against the disposable local stack", () => {
+  it("serializes competing calendar changes without merging their effects", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    const before = (await account.repository.completeOnboarding({ profile: { ...profile(account.id, "Calendar race"), weekStartsOn: 0 }, currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const outcomes = await Promise.allSettled(([1, 6] as const).map(weekStartsOn => account.repository.setWeekStart({ weekStartsOn, expectedRevision: before.profile!.revision!, idempotencyKey: randomUUID() })));
+    expect(outcomes.filter(outcome => outcome.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter(outcome => outcome.status === "rejected")).toHaveLength(1);
+    const after = (await account.repository.load())!;
+    expect(after.profile?.calendarRevision).toBe(before.profile!.calendarRevision! + 1);
+    expect(after.target).toEqual(before.target);
+    expect(after.plan).toEqual(before.plan);
+  });
+  it("regroups calendar preferences atomically while retaining prescribed dates and rejecting stale clients", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    const before = (await account.repository.completeOnboarding({ profile: { ...profile(account.id, "Calendar"), weekStartsOn: 0 }, currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const originalMeals = before.mealPlan!.meals;
+    const originalTarget = before.target;
+    const originalWorkouts = before.plan;
+    const input = { weekStartsOn: 6 as const, expectedRevision: before.profile!.revision!, idempotencyKey: randomUUID() };
+    const changed = await account.repository.setWeekStart(input);
+    expect(changed.snapshot.profile?.weekStartsOn).toBe(6);
+    expect(changed.snapshot.profile?.calendarRevision).toBe(before.profile!.calendarRevision! + 1);
+    expect(changed.snapshot.target).toEqual(originalTarget);
+    expect(changed.snapshot.plan).toEqual(originalWorkouts);
+    const recovered = (await Promise.all([...new Set(originalMeals.map(row => startOfWeek(row.date, 6)))].map(week => account.repository.loadNutritionWeek(week)))).flatMap(week => week.mealPlan?.meals ?? []);
+    expect(recovered.sort((a, b) => a.id.localeCompare(b.id))).toEqual([...originalMeals].sort((a, b) => a.id.localeCompare(b.id)));
+    expect((await account.repository.setWeekStart(input)).snapshot.profile?.weekStartsOn).toBe(6);
+    await expect(account.repository.setWeekStart({ weekStartsOn: 1, expectedRevision: before.profile!.revision!, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+  });
+  it("audits complete generated groceries and isolates edits, retries and extras by selected week", async () => {
+    const account = await createAccount();
+    const empty = (await account.repository.load())!;
+    const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Grocery Weeks"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
+    const weeks = [addDays(startOfWeek(todayKey(), 1), 7), addDays(startOfWeek(todayKey(), 1), 14)];
+    for (const weekOf of weeks) {
+      const week = await account.repository.loadNutritionWeek(weekOf);
+      const context = nutritionWeekSnapshot(base, week);
+      const selected = base.savedMeals.filter(recipe => recipe.isSystem && !recipe.archivedAt);
+      const preview = generateWeeklyMeals(context, weekOf, selected.map(recipe => recipe.id), "grocery-audit");
+      expect(preview.assignments).toHaveLength(14);
+      await account.repository.generateNutritionWeek({ weekOf, selectedDates: weekDates(weekOf), recipes: selected.map(recipe => ({ id: recipe.id, revision: recipe.revision! })), assignments: preview.assignments,
+        currentSnapshot: context, expectedVersions: { profileRevision: base.profile!.revision, mealPlanVersion: 0, groceryRevision: 0 }, idempotencyKey: randomUUID() });
+      const saved = await account.repository.loadNutritionWeek(weekOf);
+      const scoped = nutritionWeekSnapshot(base, saved);
+      const expected = generateGroceryList(saved.mealPlan!, scoped.savedMeals, scoped.foods, weekOf);
+      expect(saved.grocery!.items.map(item => [item.id, item.generatedQuantity, item.unit]).sort()).toEqual(expected.items.map(item => [item.id, item.generatedQuantity, item.unit]).sort());
+      expect(saved.grocery!.items.find(item => item.id === "gi-food-chicken-prep-171077")?.generatedQuantity).toBe(1200);
+      expect(saved.grocery!.items.find(item => item.id === "gi-food-korean-beef-168877")?.generatedQuantity).toBe(500);
+    }
+    const otherWeek = await account.repository.loadNutritionWeek(weeks[1]);
+    let first = await account.repository.loadNutritionWeek(weeks[0]);
+    const itemId = "gi-food-chicken-prep-171077", key = randomUUID();
+    const oldContext = nutritionWeekSnapshot(base, first);
+    const input = { type: "quantity" as const, itemId, quantity: 1300, idempotencyKey: key };
+    await account.repository.updateGrocery(input, oldContext);
+    await account.repository.updateGrocery(input, oldContext);
+    await expect(account.repository.updateGrocery({ ...input, idempotencyKey: randomUUID() }, oldContext)).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    first = await account.repository.loadNutritionWeek(weeks[0]);
+    await account.repository.updateGrocery({ type: "toggle", itemId, idempotencyKey: randomUUID() }, nutritionWeekSnapshot(base, first));
+    first = await account.repository.loadNutritionWeek(weeks[0]);
+    await account.repository.regenerateGrocery({ currentSnapshot: nutritionWeekSnapshot(base, first), idempotencyKey: randomUUID() });
+    first = await account.repository.loadNutritionWeek(weeks[0]);
+    expect(first.grocery!.items.find(item => item.id === itemId)).toMatchObject({ generatedQuantity: 1200, quantity: 1300, checked: true });
+    expect((await account.repository.loadNutritionWeek(weeks[1])).grocery).toEqual(otherWeek.grocery);
+    const emptyWeek = await account.repository.loadNutritionWeek(addDays(weeks[1], 7));
+    await account.repository.addCustomGrocery({ name: "Empty-week extra", quantity: 2, unit: "pcs", currentSnapshot: { ...nutritionWeekSnapshot(base, emptyWeek), grocery: { id: `gl-${emptyWeek.weekOf}`, weekOf: emptyWeek.weekOf, items: [] } }, idempotencyKey: randomUUID() });
+    expect((await account.repository.loadNutritionWeek(emptyWeek.weekOf)).grocery?.items[0]).toMatchObject({ name: "Empty-week extra", quantity: 2, custom: true });
+    expect((await account.repository.loadNutritionWeek(weeks[1])).grocery).toEqual(otherWeek.grocery);
+    expect((await account.repository.load())!.mealPlan).toEqual(base.mealPlan);
+  });
   let userA: TestAccount;
   let userB: TestAccount;
   let initialA: AppSnapshot;
@@ -140,7 +212,7 @@ describe("Supabase repository against the disposable local stack", () => {
     base = (await account.repository.saveRecipe({ meal: { ...source, id, isSystem: false, revision: undefined, name: "Weekly assigned bowl", mealSlots: ["breakfast", "snack"] }, newFoods: [], currentSnapshot: base, idempotencyKey: randomUUID() })).snapshot;
     const saved = base.savedMeals.find(meal => meal.id === id)!;
     expect(saved.mealSlots).toEqual(["breakfast", "snack"]);
-    const weekOf = startOfWeek(addDays(todayKey(), 21));
+    const weekOf = startOfWeek(addDays(todayKey(), 21), 1);
     let week = await account.repository.loadNutritionWeek(weekOf);
     let current = nutritionWeekSnapshot(base, week);
     const manual = { id: `manual-${randomUUID()}`, date: weekOf, slot: "breakfast" as const, mealId: id, label: saved.name, servings: 1 };
@@ -153,7 +225,7 @@ describe("Supabase repository against the disposable local stack", () => {
     const preview = generateWeeklyMeals(current, weekOf, [id], "repository-preview");
     expect(preview.assignments).toHaveLength(3);
     expect(preview.unused).toEqual([]);
-    const input = { weekOf, recipes: [{ id, revision: saved.revision! }], assignments: preview.assignments, currentSnapshot: current,
+    const input = { weekOf, selectedDates: weekDates(weekOf), recipes: [{ id, revision: saved.revision! }], assignments: preview.assignments, currentSnapshot: current,
       expectedVersions: { profileRevision: base.profile!.revision, mealPlanVersion: week.mealPlan!.version, groceryRevision: week.grocery!.revision }, idempotencyKey: randomUUID() };
     const outcomes = await Promise.all([account.repository.generateNutritionWeek(input), account.repository.generateNutritionWeek(input)]);
     expect(outcomes[0].snapshot.mealPlan).toEqual(base.mealPlan);
@@ -202,7 +274,7 @@ describe("Supabase repository against the disposable local stack", () => {
     const convertedRecipe = converted.snapshot.savedMeals.find(meal => meal.id === recipe.id)!;
     expect(convertedRecipe.ingredients[0]).toMatchObject({ servings: 2, cookingMeasurement: { quantity: 0.25, upperQuantity: 0.5, unit: "cup", gramsPerUnit: 200 } });
     expect(converted.snapshot.mealPlan).toEqual(saved.snapshot.mealPlan); expect(converted.snapshot.nutritionLogs).toEqual(saved.snapshot.nutritionLogs); expect(converted.snapshot.grocery).toEqual(saved.snapshot.grocery);
-    const week = await account.repository.loadNutritionWeek(startOfWeek(todayKey()));
+    const week = await account.repository.loadNutritionWeek(startOfWeek(todayKey(), 1));
     expect(week.recipes.find(meal => meal.id === "meal-creamy-lemon-chicken")?.ingredients[3].cookingMeasurement).toMatchObject({ quantity: 300, unit: "ml", gramsPerUnit: 1.03 });
     const exported = await account.repository.exportData({ idempotencyKey: randomUUID() });
     if (!exported.data) throw new Error("Account export returned no data");
@@ -242,7 +314,7 @@ describe("Supabase repository against the disposable local stack", () => {
     expect(replayed.snapshot.mealPlan).toEqual(current.mealPlan);
     expect(replayed.snapshot.grocery).toEqual(current.grocery);
     expect(replayed.snapshot.savedMeals).toEqual(current.savedMeals);
-    expect((await account.repository.loadNutritionWeek(startOfWeek(date))).loggedMeals.find(meal => meal.id === group.id)?.recipeServings).toBe(0.5);
+    expect((await account.repository.loadNutritionWeek(startOfWeek(date, 1))).loggedMeals.find(meal => meal.id === group.id)?.recipeServings).toBe(0.5);
     await expect(account.repository.updateLoggedMeal({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
     await expect(userB.repository.updateLoggedMeal({ ...input, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "not_found" } });
     const beef = current.savedMeals.find(meal => meal.id === "meal-korean-beef-bowl")!;
@@ -257,7 +329,7 @@ describe("Supabase repository against the disposable local stack", () => {
     const empty = (await account.repository.load())!;
     const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Week Integration"), currentSnapshot: empty, idempotencyKey: randomUUID() })).snapshot;
     const currentWeek = base.mealPlan!.weekOf;
-    const weeks = [startOfWeek(addDays(todayKey(), 7)), startOfWeek(addDays(todayKey(), 14))];
+    const weeks = [startOfWeek(addDays(todayKey(), 7), 1), startOfWeek(addDays(todayKey(), 14), 1)];
     for (const weekOf of weeks) {
       const context = await account.repository.loadNutritionWeek(weekOf);
       const result = await account.repository.addPlannedMeal({ plannedMeal: { id: `beef-${weekOf}`, date: weekOf, slot: "lunch", mealId: "meal-korean-beef-bowl", label: "Korean Beef Bowl", servings: 0.5 }, currentSnapshot: nutritionWeekSnapshot(base, context), idempotencyKey: randomUUID() });
@@ -277,7 +349,7 @@ describe("Supabase repository against the disposable local stack", () => {
     const restored = await account.repository.loadNutritionWeek(weeks[0]);
     expect(restored.mealPlan?.meals[0]).toMatchObject({ expectedProteinG: 22.5 });
     expect(restored.mealPlan?.meals[0].skipped).not.toBe(true);
-    const otherAccountWeek = await userB.repository.loadNutritionWeek(weeks[0]);
+    const otherAccountWeek = await userB.repository.loadNutritionWeek(startOfWeek(weeks[0], 0));
     expect(otherAccountWeek.mealPlan).toBeNull();
     expect((await account.repository.load())?.mealPlan?.weekOf).toBe(currentWeek);
     const competing = [1, 1.5].map(servings => ({

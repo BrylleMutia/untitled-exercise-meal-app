@@ -18,6 +18,7 @@ import type {
   CustomWorkoutSession,
   DailyTarget,
   GroceryList,
+  Weekday,
 } from "@/types/domain";
 
 export type MutationErrorCode =
@@ -115,6 +116,7 @@ export type AccountExport = {
   groceryLists: AccountExportRow[];
   groceryItems: AccountExportRow[];
   savedMeals: AccountExportRow[];
+  calendarTransitions?: AccountExportRow[];
   recipeFavorites?: AccountExportRow[];
   recipeCatalogPreferences?: AccountExportRow[];
   savedMealIngredients: AccountExportRow[];
@@ -138,6 +140,7 @@ export type SaveDailyStepsInput = IdempotentInput & {
 export type DeleteDailyStepsInput = IdempotentInput & { date: string; expectedRevision: number };
 export type CelebrationsPreferenceInput = IdempotentInput & { enabled: boolean; expectedRevision: number };
 export type DailyStepTargetInput = IdempotentInput & { target: number | null; expectedRevision: number };
+export type WeekStartInput = IdempotentInput & { weekStartsOn: Weekday; expectedRevision: number };
 export type SaveCustomWorkoutInput = IdempotentInput & { id: string; expectedVersion: number; definition: CustomWorkoutDefinition; profile: UserProfile };
 export type StartCustomWorkoutInput = IdempotentInput & { id: string; workoutId: string; expectedVersion: number; date: string };
 export type SaveCustomSessionInput = IdempotentInput & { id: string; expectedRevision: number; actual: CustomWorkoutSession["actual"]; status: CustomWorkoutSession["status"] };
@@ -251,6 +254,7 @@ export type EditMealPlanInput = IdempotentInput & {
 
 export type GenerateNutritionWeekInput = IdempotentInput & {
   weekOf: string;
+  selectedDates: string[];
   recipes: Array<{ id: string; revision: number }>;
   assignments: PlannedMeal[];
   expectedVersions: ExpectedVersions;

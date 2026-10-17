@@ -15,7 +15,7 @@ import { parseRecipeImage } from "@/utility/recipeImage";
 import { isRecipeComplexity } from "@/utility/recipeCard";
 import { parseMealSlots, validRecipeYield } from "@/utility/recipeMealSlots";
 import { loadRecipeCardMetadata, setRecipeFavorite } from "./recipeCardMetadata";
-import { startOfWeek, todayKey, weekDates } from "@/utility/dates";
+import { isWeekday, startOfWeek, todayKey, weekDates } from "@/utility/dates";
 import type {
   AppSnapshot,
   Food,
@@ -73,6 +73,7 @@ import type {
   DeleteDailyStepsInput,
   CelebrationsPreferenceInput,
   DailyStepTargetInput,
+  WeekStartInput,
   SelectTrainingProgramInput,
   SaveCustomWorkoutInput,
   StartCustomWorkoutInput,
@@ -90,6 +91,7 @@ type RpcName =
   | "delete_daily_steps"
   | "set_celebrations"
   | "set_daily_step_target"
+  | "set_week_start"
   | "complete_onboarding"
   | "update_profile"
   | "update_units"
@@ -252,7 +254,7 @@ function profileBundle(
   };
   const mealPlan = mealPlanOverride ?? generateMealPlan(
     target.id,
-    startOfWeek(effectiveDate),
+    startOfWeek(effectiveDate, profile.weekStartsOn ?? 0),
     profile,
     { savedMeals, foods, dailyCalories: target.calories },
   );
@@ -343,9 +345,11 @@ function goalPayload(goal: OnboardingInput["goal"] | undefined) {
 
 export class SupabaseSnapshotRepository implements SnapshotRepository {
   private readonly client: SupabaseClient<Database>;
+  private calendarRevision: number | undefined;
 
-  constructor(client: SupabaseClient<Database>) {
+  constructor(client: SupabaseClient<Database>, calendarRevision?: number) {
     this.client = client;
+    this.calendarRevision = calendarRevision;
   }
 
   async saveCustomWorkout(input: SaveCustomWorkoutInput): Promise<MutationOutcome> {
@@ -364,6 +368,13 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const invalid = validateDailySteps(input.date, input.steps, input.walkingMinutes);
     if (invalid) throw repositoryException(toRepositoryError(`validation_failed: ${invalid}`));
     return this.mutate("save_daily_steps", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "daily-steps-saved", date: input.date }]);
+  }
+
+  async setWeekStart(input: WeekStartInput): Promise<MutationOutcome> {
+    if (!isWeekday(input.weekStartsOn) || !Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
+      throw repositoryException(toRepositoryError("validation_failed: Choose a weekday and refresh your profile."));
+    }
+    return this.mutate("set_week_start", { ...input, idempotencyKey: input.idempotencyKey ?? idempotencyKey() }, [{ type: "profile-updated" }]);
   }
 
   async setDailyStepTarget(input: DailyStepTargetInput): Promise<MutationOutcome> {
@@ -408,7 +419,9 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       throw repositoryException(toRepositoryError(error.message, error.status));
     }
     const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
-    return userId ? loadAppSnapshot(this.client, userId) : null;
+    const snapshot = userId ? await loadAppSnapshot(this.client, userId) : null;
+    this.calendarRevision = snapshot?.profile?.calendarRevision;
+    return snapshot;
   }
 
   async loadHistory(query: HistoryQuery = {}): Promise<HistoryReadModel> {
@@ -441,7 +454,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     events: MutationOutcome["events"] = [],
   ): Promise<MutationOutcome> {
     const { data, error, status } = await this.client.rpc(name, {
-      p_payload: payload as Json,
+      p_payload: { calendarRevision: this.calendarRevision, ...payload } as Json,
     });
     if (error) {
       throw repositoryException(toRepositoryError(error.message, status, error.details));
@@ -726,7 +739,9 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
           : "remove_grocery_item";
     const payload: Record<string, unknown> = {
       itemId: input.itemId,
-      expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(currentSnapshot),
+      grocery: currentSnapshot.grocery,
+      weekOf: currentSnapshot.grocery?.weekOf,
+      expectedVersions: input.expectedVersions ?? { groceryRevision: currentSnapshot.grocery?.revision ?? 0 },
       idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
     };
     if (input.type === "quantity") payload.quantity = input.quantity;
@@ -751,7 +766,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       "add_custom_grocery_item",
       {
         grocery: input.currentSnapshot.grocery,
-        expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
+        expectedVersions: input.expectedVersions ?? { groceryRevision: input.currentSnapshot.grocery?.revision ?? 0 },
+        weekOf: input.currentSnapshot.grocery?.weekOf,
         item,
         idempotencyKey: mutationKey,
       },
@@ -765,11 +781,13 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async regenerateGrocery(input: RegenerateGroceryInput): Promise<MutationOutcome> {
+    if (!input.currentSnapshot.grocery) throw repositoryException(toRepositoryError("validation_failed: choose a grocery week first"));
     return this.mutate(
       "regenerate_grocery",
       {
         grocery: input.currentSnapshot.grocery,
-        expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
+        weekOf: input.currentSnapshot.grocery.weekOf,
+        expectedVersions: input.expectedVersions ?? { groceryRevision: input.currentSnapshot.grocery.revision ?? 0, ...(input.currentSnapshot.mealPlan ? { mealPlanVersion: input.currentSnapshot.mealPlan.version } : {}) },
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
       },
       [
@@ -941,7 +959,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
 
   async generateNutritionWeek(input: GenerateNutritionWeekInput): Promise<MutationOutcome> {
     const current = input.currentSnapshot;
-    if (!input.assignments.length || input.assignments.length > 28 || startOfWeek(input.weekOf) !== input.weekOf) {
+    if (!input.selectedDates?.length || new Set(input.selectedDates).size !== input.selectedDates.length || input.selectedDates.some(date => !weekDates(input.weekOf).includes(date)) || input.assignments.some(row => !input.selectedDates.includes(row.date)) || !input.assignments.length || input.assignments.length > 28 || startOfWeek(input.weekOf, current.profile?.weekStartsOn ?? 0) !== input.weekOf) {
       throw repositoryException(toRepositoryError("validation_failed: Review the selected week and generated meals."));
     }
     const existing = current.mealPlan?.weekOf === input.weekOf ? current.mealPlan : null;
@@ -953,14 +971,14 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       meals: [...(existing?.meals ?? []), ...input.assignments] };
     const generated = generateGroceryList(mealPlan, current.savedMeals, current.foods, input.weekOf);
     const grocery = current.grocery?.weekOf === input.weekOf ? mergeGroceryLists(current.grocery, generated) : generated;
-    return this.mutate("generate_nutrition_week", { weekOf: input.weekOf, recipes: input.recipes, assignments: input.assignments,
+    return this.mutate("generate_nutrition_week", { weekOf: input.weekOf, selectedDates: input.selectedDates, recipes: input.recipes, assignments: input.assignments,
       mealPlan, grocery, expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
       [{ type: "plan-edited", planId: mealPlan.id }, { type: "grocery-list-updated", listId: grocery.id }]);
   }
 
   async addPlannedMeal(input: AddPlannedMealInput): Promise<MutationOutcome> {
     const { plannedMeal, currentSnapshot } = input;
-    const weekOf = startOfWeek(plannedMeal.date);
+    const weekOf = startOfWeek(plannedMeal.date, currentSnapshot.profile?.weekStartsOn ?? 0);
     const currentPlan = currentSnapshot.mealPlan?.weekOf === weekOf ? currentSnapshot.mealPlan : null;
     const target = targetForDate(currentSnapshot.nutritionWeekTargets, plannedMeal.date)
       ?? (currentSnapshot.target?.effectiveDate && currentSnapshot.target.effectiveDate <= plannedMeal.date ? currentSnapshot.target : null);
@@ -1247,6 +1265,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
 
 export function createSupabaseRepository(
   client: SupabaseClient<Database>,
+  calendarRevision?: number,
 ): SnapshotRepository {
-  return new SupabaseSnapshotRepository(client);
+  return new SupabaseSnapshotRepository(client, calendarRevision);
 }

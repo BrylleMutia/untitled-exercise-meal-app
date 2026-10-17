@@ -105,7 +105,7 @@ export default function NutritionPage() {
   const [summaryMode, setSummaryMode] = useState<"planned" | "eaten">("eaten");
   const [generationOpen, setGenerationOpen] = useState(false);
   const generationReturnFocus = useRef<HTMLButtonElement | null>(null);
-  const weekOf = startOfWeek(selected);
+  const weekOf = startOfWeek(selected, appSnapshot.profile?.weekStartsOn ?? 0);
   const week = useNutritionWeek(weekOf);
   const snapshot = useMemo(() => nutritionWeekSnapshot(appSnapshot, week.data ?? {
     weekOf, mealPlan: null, targets: [], nutritionLogs: [], loggedMeals: [], grocery: null, recipes: [], foods: [],
@@ -213,7 +213,7 @@ export default function NutritionPage() {
   const eatenCount = eatenMealCount(snapshot.nutritionLogs, snapshot.loggedMeals, selected);
   const applicableTarget = targetForDate(snapshot.nutritionWeekTargets, selected);
   const target = snapshot.profile?.targetEligibility === "unsupported" || applicableTarget?.safetyOutcome === "unsupported_population" ? null : applicableTarget;
-  const existingPlanForDay = snapshot.mealPlan?.weekOf === startOfWeek(selected) ? snapshot.mealPlan : null;
+  const existingPlanForDay = snapshot.mealPlan?.weekOf === startOfWeek(selected, appSnapshot.profile?.weekStartsOn ?? 0) ? snapshot.mealPlan : null;
   const canAddPlan = Boolean(existingPlanForDay || (target && target.safetyOutcome !== "unsupported_population"));
   const carbLimit = existingPlanForDay?.totalCarbLimit !== undefined ? existingPlanForDay.totalCarbLimit : totalCarbLimit(snapshot.profile?.dietaryPattern ?? "");
   const foods = useMemo(
@@ -423,7 +423,7 @@ export default function NutritionPage() {
             </div>
           </div>
         </div>
-        <DayStrip selected={selected} onSelect={selectDay} disabled={entrySaving || savingSavedMeal || savingPlannedLog || Boolean(pendingMutation)} />
+        <DayStrip weekStartsOn={appSnapshot.profile?.weekStartsOn ?? 0} selected={selected} onSelect={selectDay} disabled={entrySaving || savingSavedMeal || savingPlannedLog || Boolean(pendingMutation)} />
         {week.loading ? <p className="mt-3 text-xs font-bold text-ink-soft" role="status">Loading this week’s nutrition…</p> : null}
         {week.error ? <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-ink-soft" role="alert"><span>{week.error}</span><Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={week.refresh}>Retry week</Button></div> : null}
         {week.data ? <>
@@ -532,7 +532,8 @@ export default function NutritionPage() {
             key={`recipe-editor:${editingRecipeId ?? "new"}`}
             open={recipeModalOpen}
             returnFocus={recipeReturnFocus}
-            meal={editingRecipeId ? snapshot.savedMeals.find((meal) => meal.id === editingRecipeId) : undefined}            onSave={(input) => actions.saveRecipe(input)}
+            meal={editingRecipeId ? snapshot.savedMeals.find((meal) => meal.id === editingRecipeId) : undefined}
+            onSave={(input) => actions.saveRecipe(input)}
             onSaved={(mealId) => { setRecipeModalOpen(false); setShowNewRecipe(false); setEditingRecipeId(null); if (returnToRecipeOverview) setViewingRecipeId(mealId); }}
             foods={foods}
             onCancel={() => { setRecipeModalOpen(false); if (returnToRecipeOverview) setViewingRecipeId(returnToRecipeOverview); }}

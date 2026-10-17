@@ -45,6 +45,7 @@ import type {
   DeleteDailyStepsInput,
   CelebrationsPreferenceInput,
   DailyStepTargetInput,
+  WeekStartInput,
   SelectTrainingProgramInput,
   SaveCustomWorkoutInput,
   StartCustomWorkoutInput,
@@ -61,6 +62,7 @@ export interface SnapshotRepository {
   saveDailySteps(input: SaveDailyStepsInput): Promise<MutationOutcome>;
   deleteDailySteps(input: DeleteDailyStepsInput): Promise<MutationOutcome>;
   setCelebrations(input: CelebrationsPreferenceInput): Promise<MutationOutcome>;
+  setWeekStart(input: WeekStartInput): Promise<MutationOutcome>;
   setDailyStepTarget(input: DailyStepTargetInput): Promise<MutationOutcome>;
   load(): Promise<AppSnapshot | null>;
   loadHistory(query?: HistoryQuery): Promise<HistoryReadModel>;

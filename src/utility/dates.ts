@@ -1,3 +1,9 @@
+import type { Weekday } from "@/types/domain";
+
+export const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+export function isWeekday(value: unknown): value is Weekday {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 6;
+}
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Local calendar date key; daily logs are keyed by this, never UTC. */
@@ -20,10 +26,10 @@ export function addDays(key: string, days: number): string {
   return dateKey(d);
 }
 
-/** Week starts on Monday to match the weekly plan model. */
-export function startOfWeek(key: string): string {
+/** Local calendar arithmetic; never shift dates through UTC. */
+export function startOfWeek(key: string, weekStartsOn: Weekday = 0): string {
   const d = fromKey(key);
-  const dow = (d.getDay() + 6) % 7; // Monday = 0
+  const dow = (d.getDay() - weekStartsOn + 7) % 7;
   d.setDate(d.getDate() - dow);
   return dateKey(d);
 }
@@ -60,11 +66,11 @@ export function formatLong(key: string): string {
   });
 }
 
-export function monthMatrix(key: string): string[][] {
+export function monthMatrix(key: string, weekStartsOn: Weekday = 0): string[][] {
   const d = fromKey(key);
   const first = new Date(d.getFullYear(), d.getMonth(), 1);
   const start = dateKey(first);
-  const lead = (first.getDay() + 6) % 7;
+  const lead = (first.getDay() - weekStartsOn + 7) % 7;
   const gridStart = addDays(start, -lead);
   return Array.from({ length: 6 }, (_, w) =>
     Array.from({ length: 7 }, (_, i) => addDays(gridStart, w * 7 + i)),

@@ -1,5 +1,5 @@
 import type { AppSnapshot, Meal, MealSlot, PlannedMeal } from "@/types/domain";
-import { weekDates } from "./dates";
+import { todayKey, weekDates } from "./dates";
 import { mealAllowed, mealFitsTimeAndBudget, plannedMealMetadata } from "./mealPlan";
 import { plannedMealNutrition } from "./plannedMealNutrition";
 import { parseMealSlots, recipeMealSlots, validRecipeYield } from "./recipeMealSlots";
@@ -108,7 +108,12 @@ function constrainedMatch(edges: number[][], capacity: number[], costs: number[]
   return best;
 }
 
-export function generateWeeklyMeals(snapshot: AppSnapshot, weekOf: string, selectedIds: string[], seed: string): GenerationPreview {
+export function defaultPlanningDates(weekOf: string, today = todayKey()): string[] {
+  return weekDates(weekOf).filter(date => date >= today);
+}
+
+export function generateWeeklyMeals(snapshot: AppSnapshot, weekOf: string, selectedIds: string[], seed: string, selectedDates: string[] = weekDates(weekOf)): GenerationPreview {
+  const validDates = new Set(selectedDates.filter(date => weekDates(weekOf).includes(date)));
   const options = weeklyRecipeOptions(snapshot, weekOf).filter(option => selectedIds.includes(option.recipe.id));
   const recipes = randomOrder(options.filter(option => !option.reason), seed);
   const dates = weekDates(weekOf);
@@ -117,7 +122,7 @@ export function generateWeeklyMeals(snapshot: AppSnapshot, weekOf: string, selec
   const targets = snapshot.nutritionWeekTargets ?? (snapshot.target ? [snapshot.target] : []);
   const slots = randomOrder(dates.flatMap((date, day) => {
     const target = targetForDate(targets, date);
-    return target && target.safetyOutcome !== "unsupported_population" ? recipeMealSlots.filter(slot => !occupied.has(`${date}:${slot}`)).map(slot => ({ date, slot, day })) : [];
+    return validDates.has(date) && target && target.safetyOutcome !== "unsupported_population" ? recipeMealSlots.filter(slot => !occupied.has(`${date}:${slot}`)).map(slot => ({ date, slot, day })) : [];
   }), `${seed}:slots`);
   const metadata = recipes.map(option => plannedMealMetadata(option.recipe.id, undefined, 1, snapshot.savedMeals, snapshot.foods));
   const edges = slots.map(slot => recipes.flatMap((option, i) => parseMealSlots(option.recipe.mealSlots).includes(slot.slot) ? [i] : []));

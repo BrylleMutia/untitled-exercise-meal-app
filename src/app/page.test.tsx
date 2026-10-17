@@ -8,7 +8,7 @@ vi.mock("@/contexts/AppContext", () => ({ useApp: () => ({ snapshot }) }));
 
 const profile: UserProfile = {
   id: "home-test", name: "Home Test", age: 30, sex: "female", heightCm: 168,
-  weightKg: 68, units: "metric", experience: "beginner", equipment: ["none"],
+  weightKg: 68, units: "metric", weekStartsOn: 1, experience: "beginner", equipment: ["none"],
   daysPerWeek: 3, sessionMinutes: 30, goal: "maintain", dietaryPattern: "No restrictions",
   allergies: [], notificationsEnabled: false, targetEligibility: "eligible", createdAt: "2026-10-05T08:00:00Z",
 };

@@ -11,7 +11,7 @@ describe("Local calendar day labels", () => {
     expect(selected).toMatch(/Wed<\/span>[\s\S]*14[\s\S]*Oct<\/span>/);
   });
   it("uses each day's own month and year across a year boundary", () => {
-    const html = renderToStaticMarkup(<DayStrip selected="2026-12-30" onSelect={() => {}} />);
+    const html = renderToStaticMarkup(<DayStrip selected="2026-12-30" weekStartsOn={1} onSelect={() => {}} />);
     expect(html.match(/>Dec<\/span>/g)).toHaveLength(4);
     expect(html.match(/>Jan<\/span>/g)).toHaveLength(3);
     expect(html).toContain('aria-label="Friday, January 1, 2027"');

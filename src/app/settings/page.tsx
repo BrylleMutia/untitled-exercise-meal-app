@@ -16,6 +16,7 @@ import { HEALTH_DISCLAIMER, kgToLb, lbToKg } from "@/utility/health";
 import { signOutAction } from "@/app/auth/actions";
 import { clearUserDrafts } from "@/services/draftStore";
 import { buildAccountExportZip } from "@/utility/exportBundle";
+import { WeekStartSettings } from "@/components/WeekStartSettings";
 import { DailyStepTargetSettings } from "@/components/DailyStepTargetSettings";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 
@@ -231,6 +232,7 @@ export default function SettingsPage() {
       </Card>
 
       <DailyStepTargetSettings />
+      <WeekStartSettings />
 
       <Card>
         <HelpHeading title="Gentle motivation"><p>Show personal firsts and participation milestones on Home. Rest days, missed entries, and calories never lose points.</p></HelpHeading>

@@ -76,6 +76,8 @@ function mapProfile(row: ProfileRow): UserProfile {
     equipment: row.equipment.filter(isEquipment),
     daysPerWeek: row.days_per_week,
     sessionMinutes: row.session_minutes,
+    calendarRevision: row.calendar_revision,
+    weekStartsOn: (row.week_starts_on ?? 0) as UserProfile["weekStartsOn"],
     ...(row.daily_step_target == null ? {} : { dailyStepTarget: row.daily_step_target }),
     goal: row.goal as UserProfile["goal"],
     dietaryPattern: row.dietary_pattern,
@@ -376,6 +378,7 @@ function mapGrocery(row: GroceryListRow, items: GroceryItemRow[]): AppSnapshot["
     id: row.app_id,
     weekOf: row.week_of,
     revision: row.revision,
+    calendarReviewRequired: row.calendar_review_required,
     items: items
       .filter((item) => item.grocery_list_row_id === row.row_id)
       .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
@@ -388,6 +391,7 @@ function mapGrocery(row: GroceryListRow, items: GroceryItemRow[]): AppSnapshot["
           generatedQuantity: Number(item.generated_quantity),
           quantity: Number(item.quantity),
           checked: item.checked,
+          ...(item.carried_from_week ? { carriedFromWeek: item.carried_from_week } : {}),
           ...(item.custom_item ? { custom: true } : {}),
           ...(item.removed ? { removed: true } : {}),
         }),
@@ -509,11 +513,11 @@ export async function loadAppSnapshot(
       required(client.from("meals").select("*").or(`is_system.eq.true,owner_user_id.eq.${userId}`)),
       required(client.from("meal_ingredients").select("*")),
       required(client.from("workout_plans").select("*").eq("user_id", userId).order("created_at", { ascending: false })),
-      required(client.from("meal_plans").select("*").eq("user_id", userId).eq("week_of", startOfWeek(todayKey())).order("version", { ascending: false }).order("row_id", { ascending: false }).limit(1)),
+      required(client.from("meal_plans").select("*").eq("calendar_active", true).eq("user_id", userId).eq("week_of", startOfWeek(todayKey(), (profile?.week_starts_on ?? 0) as UserProfile["weekStartsOn"])).order("version", { ascending: false }).order("row_id", { ascending: false }).limit(1)),
       required(client.from("workout_sessions").select("*").eq("user_id", userId).gte("session_date", historyFrom).order("session_date", { ascending: false }).limit(100)),
       required(client.from("nutrition_logs").select("*").eq("user_id", userId).gte("log_date", historyFrom).order("log_date", { ascending: false }).limit(100)),
       required(client.from("weight_entries").select("*").eq("user_id", userId).gte("entry_date", historyFrom).order("entry_date", { ascending: false }).limit(100)),
-      required(client.from("grocery_lists").select("*").eq("user_id", userId).order("week_of", { ascending: false })),
+      required(client.from("grocery_lists").select("*").eq("calendar_active", true).eq("user_id", userId).order("week_of", { ascending: false })),
       required(client.from("grocery_items").select("*").eq("user_id", userId)),
       required(client.from("goals").select("*").eq("user_id", userId).order("version", { ascending: false })),
       required(client.from("workout_plan_overrides").select("*").eq("user_id", userId).eq("active", true)),
@@ -600,7 +604,7 @@ export async function loadAppSnapshot(
   // Unsupported screening outcomes may retain historical target rows for
   // audit/export, but they are not surfaced as an active automated target.
   snapshot.target = snapshot.profile?.targetEligibility === "unsupported" ? null : currentTarget;
-  snapshot.nutritionWeekTargets = snapshot.profile?.targetEligibility === "unsupported" ? [] : targetsForNutritionWeek(targetRows.map(mapTarget), todayKey());
+  snapshot.nutritionWeekTargets = snapshot.profile?.targetEligibility === "unsupported" ? [] : targetsForNutritionWeek(targetRows.map(mapTarget), todayKey(), snapshot.profile?.weekStartsOn ?? 0);
   snapshot.plan = currentPlan
     ? mapWorkoutPlan(
         currentPlan,
@@ -679,7 +683,7 @@ export async function loadAppSnapshot(
     date: row.entry_date,
     weightKg: Number(row.weight_kg),
   }));
-  const currentGrocery = groceryListRows.find(row => row.week_of === startOfWeek(todayKey()));
+  const currentGrocery = groceryListRows.find(row => row.week_of === startOfWeek(todayKey(), (profile?.week_starts_on ?? 0) as UserProfile["weekStartsOn"]));
   snapshot.grocery = currentGrocery
     ? mapGrocery(currentGrocery, groceryItemRows)
     : null;
@@ -702,7 +706,7 @@ export async function loadAppSnapshot(
 }
 
 export async function loadNutritionWeekReadModel(client: AppSupabaseClient, weekOf: string): Promise<NutritionWeekReadModel> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf) || startOfWeek(weekOf) !== weekOf) throw new Error("Choose a valid Monday week date.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf)) throw new Error("Choose a valid week date.");
   const { data, error } = await client.rpc("get_nutrition_week", { p_week_of: weekOf });
   if (error) throw new Error(error.code === "PGRST202" || error.code === "42883"
     ? "Weekly nutrition needs the database update. Retry after it is applied; your drafts are retained."

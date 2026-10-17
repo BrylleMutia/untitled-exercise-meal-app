@@ -1,3 +1,4 @@
+import type { Weekday } from "@/types/domain";
 import { startOfWeek, weekDates } from "./dates";
 
 type DatedTarget = { id: string; version: number; effectiveDate: string };
@@ -7,9 +8,9 @@ export function targetForDate<T extends DatedTarget>(targets: T[], date: string)
 }
 
 /** The week selector needs at most seven distinct versions, not the full target history. */
-export function targetsForNutritionWeek<T extends DatedTarget>(targets: T[], today: string): T[] {
+export function targetsForNutritionWeek<T extends DatedTarget>(targets: T[], today: string, weekStartsOn: Weekday = 0): T[] {
   const selected = new Map<string, T>();
-  for (const date of weekDates(startOfWeek(today))) {
+  for (const date of weekDates(startOfWeek(today, weekStartsOn))) {
     const target = targetForDate(targets, date);
     if (target) selected.set(`${target.id}:${target.version}`, target);
   }

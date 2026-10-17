@@ -40,6 +40,7 @@ import type {
   SemanticEvent,
   Toast,
   UnitSystem,
+  Weekday,
   UserProfile,
   WorkoutSession,
   LoggedMeal,
@@ -62,6 +63,7 @@ export interface AppActions {
   saveCustomSession(session: CustomWorkoutSession): Promise<boolean>;
   selectTrainingProgram(program: TrainingProgram): Promise<boolean>;
   saveDailySteps(date: string, steps: number, walkingMinutes?: number, expectedRevision?: number): Promise<boolean>;
+  setWeekStart(weekStartsOn: Weekday, expectedRevision: number): Promise<boolean>;
   setDailyStepTarget(target: number | null, expectedRevision: number): Promise<boolean>;
   deleteDailySteps(date: string, expectedRevision: number): Promise<boolean>;
   setCelebrations(enabled: boolean): Promise<boolean>;
@@ -101,11 +103,11 @@ export interface AppActions {
   deleteLoggedMeal(loggedMealId: string, expectedRevision?: number): Promise<void>;
   deleteNutrition(id: string, expectedRevision?: number): Promise<void>;
   logWeight(weightKg: number, date: string): Promise<void>;
-  toggleGrocery(id: string): Promise<void>;
-  setGroceryQuantity(id: string, quantity: number): Promise<void>;
-  removeGroceryItem(id: string): Promise<void>;
-  addCustomGrocery(name: string, quantity: number, unit: string): Promise<boolean>;
-  regenerateGrocery(): Promise<void>;
+  toggleGrocery(id: string, week?: NutritionWeekReadModel): Promise<void>;
+  setGroceryQuantity(id: string, quantity: number, week?: NutritionWeekReadModel): Promise<void>;
+  removeGroceryItem(id: string, week?: NutritionWeekReadModel): Promise<void>;
+  addCustomGrocery(name: string, quantity: number, unit: string, week?: NutritionWeekReadModel): Promise<boolean>;
+  regenerateGrocery(week?: NutritionWeekReadModel): Promise<void>;
   skipPlannedMeal(id: string, week?: NutritionWeekReadModel): Promise<void>;
   editMealPlan(mealPlan: MealPlan, week?: NutritionWeekReadModel): Promise<boolean>;
   generateNutritionWeek(input: Omit<GenerateNutritionWeekInput, "currentSnapshot">, week: NutritionWeekReadModel): Promise<boolean>;
@@ -219,8 +221,8 @@ export function AppProvider({
     }
   }, []);
   const repository = useMemo<SnapshotRepository | null>(() => {
-    return supabase ? createSupabaseRepository(supabase) : null;
-  }, [supabase]);
+    return supabase ? createSupabaseRepository(supabase, initialSnapshot?.profile?.calendarRevision) : null;
+  }, [supabase, initialSnapshot?.profile?.calendarRevision]);
   const [snapshot, setSnapshot] = useState<AppSnapshot>(
     () => initialSnapshot ?? createEmptySnapshot(),
   );
@@ -512,6 +514,10 @@ export function AppProvider({
         const outcome = await execute("set_celebrations", (current, idempotencyKey) => repository!.setCelebrations({ enabled, expectedRevision: current.profile?.revision ?? 1, idempotencyKey }));
         return Boolean(outcome);
       },
+      async setWeekStart(weekStartsOn, expectedRevision) {
+        const outcome = await execute("set_week_start", (_current, idempotencyKey) => repository!.setWeekStart({ weekStartsOn, expectedRevision, idempotencyKey }));
+        return Boolean(outcome);
+      },
       async setDailyStepTarget(target, expectedRevision) {
         const outcome = await execute("set_daily_step_target", (_current, idempotencyKey) =>
           repository!.setDailyStepTarget({ target, expectedRevision, idempotencyKey }),
@@ -724,38 +730,38 @@ export function AppProvider({
         );
       },
 
-      async toggleGrocery(id) {
+      async toggleGrocery(id, week) {
         await execute("toggle_grocery_item", (current, idempotencyKey) =>
-          repository!.updateGrocery({ type: "toggle", itemId: id, idempotencyKey }, current),
+          repository!.updateGrocery({ type: "toggle", itemId: id, idempotencyKey }, nutritionWeekSnapshot(current, week)),
         );
       },
 
-      async setGroceryQuantity(id, quantity) {
+      async setGroceryQuantity(id, quantity, week) {
         if (!Number.isFinite(quantity) || quantity < 0) {
           notify("Quantity must be a non-negative number.", "warn");
           return;
         }
         await execute("set_grocery_quantity", (current, idempotencyKey) =>
-          repository!.updateGrocery({ type: "quantity", itemId: id, quantity, idempotencyKey }, current),
+          repository!.updateGrocery({ type: "quantity", itemId: id, quantity, idempotencyKey }, nutritionWeekSnapshot(current, week)),
         );
       },
 
-      async removeGroceryItem(id) {
+      async removeGroceryItem(id, week) {
         await execute("remove_grocery_item", (current, idempotencyKey) =>
-          repository!.updateGrocery({ type: "remove", itemId: id, idempotencyKey }, current),
+          repository!.updateGrocery({ type: "remove", itemId: id, idempotencyKey }, nutritionWeekSnapshot(current, week)),
         );
       },
 
-      async addCustomGrocery(name, quantity, unit) {
+      async addCustomGrocery(name, quantity, unit, week) {
         const outcome = await execute("add_custom_grocery_item", (current, idempotencyKey) =>
-          repository!.addCustomGrocery({ name, quantity, unit, currentSnapshot: current, idempotencyKey }),
+          repository!.addCustomGrocery({ name, quantity, unit, currentSnapshot: week ? { ...nutritionWeekSnapshot(current, week), grocery: week.grocery ?? { id: `gl-${week.weekOf}`, weekOf: week.weekOf, items: [] } } : current, idempotencyKey }),
         );
         return Boolean(outcome);
       },
 
-      async regenerateGrocery() {
+      async regenerateGrocery(week) {
         await execute("regenerate_grocery", (current, idempotencyKey) =>
-          repository!.regenerateGrocery({ currentSnapshot: current, idempotencyKey }),
+          repository!.regenerateGrocery({ currentSnapshot: nutritionWeekSnapshot(current, week), idempotencyKey }),
         );
       },
 

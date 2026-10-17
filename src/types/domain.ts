@@ -1,4 +1,5 @@
 export type UnitSystem = "metric" | "imperial";
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type SexForBmr = "female" | "male";
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 export type EquipmentId = "none" | "pullup_bar" | "bands" | "dumbbells" | "bench";
@@ -46,6 +47,9 @@ export interface UserProfile {
   heightCm: number;
   weightKg: number;
   units: UnitSystem;
+  weekStartsOn: Weekday;
+  /** Changes only when week boundaries change; guards cross-tab calendar intents. */
+  calendarRevision?: number;
   experience: ExperienceLevel;
   trainingProgram?: TrainingProgram;
   equipment: EquipmentId[];
@@ -382,7 +386,7 @@ export interface PlannedMeal {
 export interface MealPlan {
   id: string;
   version: number;
-  weekOf: string; // YYYY-MM-DD (Monday)
+  weekOf: string; // YYYY-MM-DD, using the account's start-of-week preference
   targetId: string;
   meals: PlannedMeal[];
   dietaryPattern?: string;
@@ -397,6 +401,7 @@ export interface WeightEntry {
 }
 
 export interface GroceryItem {
+  carriedFromWeek?: string;
   id: string;
   name: string;
   category: GroceryCategory;
@@ -409,6 +414,7 @@ export interface GroceryItem {
 }
 
 export interface GroceryList {
+  calendarReviewRequired?: boolean;
   id: string;
   weekOf: string;
   items: GroceryItem[];

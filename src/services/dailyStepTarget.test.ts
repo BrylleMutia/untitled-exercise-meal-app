@@ -9,7 +9,7 @@ vi.mock("./supabaseSnapshot", () => ({ loadAppSnapshot: loadSnapshot, loadHistor
 
 const profile: UserProfile = {
   id: "owner", name: "Test", age: 30, sex: "female", heightCm: 168, weightKg: 68,
-  units: "metric", experience: "beginner", equipment: ["none"], daysPerWeek: 3,
+  units: "metric", weekStartsOn: 1, experience: "beginner", equipment: ["none"], daysPerWeek: 3,
   sessionMinutes: 30, goal: "maintain", dietaryPattern: "No restrictions", allergies: [],
   notificationsEnabled: false, targetEligibility: "unsupported", revision: 4, createdAt: "2026-10-05T08:00:00Z",
 };

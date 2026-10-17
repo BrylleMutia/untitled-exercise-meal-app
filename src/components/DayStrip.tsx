@@ -1,22 +1,17 @@
-import { formatFullDate, fromKey, todayKey, weekdayShort } from "@/utility/dates";
+import { formatFullDate, fromKey, todayKey, weekdayShort, startOfWeek, weekDates } from "@/utility/dates";
+import type { Weekday } from "@/types/domain";
 
 interface DayStripProps {
   selected: string;
   onSelect: (date: string) => void;
   disabled?: boolean;
+  weekStartsOn?: Weekday;
 }
 
 /** Local-calendar week selector with full dates for assistive navigation. */
-export function DayStrip({ selected, onSelect, disabled = false }: DayStripProps) {
+export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 0 }: DayStripProps) {
   const today = todayKey();
-  const mondayOffset = (fromKey(selected).getDay() + 6) % 7;
-  const monday = fromKey(selected);
-  monday.setDate(monday.getDate() - mondayOffset);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
+  const days = weekDates(startOfWeek(selected, weekStartsOn));
 
   return (
     <div className="flex min-w-0 gap-1 overflow-x-auto p-1.5" role="group" aria-label="Choose a day">

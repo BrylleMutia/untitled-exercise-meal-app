@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AppSnapshot, Meal, PlannedMeal } from "@/types/domain";
 import { FOODS } from "@/constants/foods";
 import { SAVED_MEALS } from "@/constants/meals";
-import { generateWeeklyMeals, weeklyRecipeOptions } from "./weeklyMealGeneration";
+import { defaultPlanningDates, generateWeeklyMeals, weeklyRecipeOptions } from "./weeklyMealGeneration";
 import { recipeMealSlots, validRecipeYield } from "./recipeMealSlots";
 import { weekDates } from "./dates";
 
@@ -16,6 +16,22 @@ function snapshot(meals: Meal[], planned: PlannedMeal[] = []): AppSnapshot {
 const row = (date: string, slot: PlannedMeal["slot"], mealId = "existing", servings = 1): PlannedMeal => ({ id: `${date}-${slot}`, date, slot, mealId, label: mealId, servings });
 
 describe("weekly recipe generation", () => {
+  it("defaults dates to today onward, all future days, and no past days", () => {
+    expect(defaultPlanningDates("2026-10-11", "2026-10-15")).toEqual(["2026-10-15", "2026-10-16", "2026-10-17"]);
+    expect(defaultPlanningDates("2026-10-18", "2026-10-15")).toEqual(weekDates("2026-10-18"));
+    expect(defaultPlanningDates("2026-10-04", "2026-10-15")).toEqual([]);
+  });
+  it("fills only selected dates and preserves that scope while shuffling", () => {
+    const data = snapshot([recipe("a", ["lunch", "dinner"], 20)]);
+    const selected = [week, weekDates(week)[4]];
+    for (const seed of ["first", "shuffle"]) {
+      const preview = generateWeeklyMeals(data, week, ["a"], seed, selected);
+      expect(preview.assignments).toHaveLength(4);
+      expect(preview.assignments.every(row => selected.includes(row.date))).toBe(true);
+    }
+    expect(generateWeeklyMeals(data, week, ["a"], "empty", []).assignments).toEqual([]);
+    expect(generateWeeklyMeals(data, week, ["a"], "invalid", ["2025-01-01"]).assignments).toEqual([]);
+  });
   it("fills each selected recipe's yield with whole portions, repeats deterministically and shuffles", () => {
     const data = snapshot([recipe("a", ["lunch", "dinner"])]);
     const preview = generateWeeklyMeals(data, week, ["a"], "seed");

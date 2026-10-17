@@ -138,7 +138,7 @@ export default function HomePage() {
 
   const todayDow = new Date().getDay();
   const todaysWorkout = snapshot.plan?.workouts.find((w) => w.dayOfWeek === todayDow);
-  const weekOf = startOfWeek(today);
+  const weekOf = startOfWeek(today, snapshot.profile?.weekStartsOn ?? 0);
   const completedWorkoutIds = new Set(
     snapshot.sessions
       .filter(

@@ -51,7 +51,11 @@ const GOALS: Array<{ id: PrimaryGoal; label: string }> = [
   { id: "consistency", label: "Improve consistency" },
 ];
 
+import { weekdayNames } from "@/utility/dates";
+import type { Weekday } from "@/types/domain";
+
 interface Draft {
+  weekStartsOn: Weekday;
   name: string;
   age: string;
   sex: SexForBmr;
@@ -77,6 +81,7 @@ interface Draft {
 }
 
 const initialDraft: Draft = {
+  weekStartsOn: 0,
   name: "",
   age: "",
   sex: "female",
@@ -248,6 +253,7 @@ export default function OnboardingPage() {
       equipment: draft.equipment,
       daysPerWeek: draft.daysPerWeek,
       sessionMinutes: draft.sessionMinutes,
+      weekStartsOn: draft.weekStartsOn ?? 0,
       dailyStepTarget: draft.dailyStepTarget.trim() ? Number(draft.dailyStepTarget) : undefined,
       goal: draft.goal,
       dietaryPattern: draft.dietaryPattern,
@@ -312,6 +318,7 @@ export default function OnboardingPage() {
             heightCm,
             weightKg,
             units: draft.units,
+            weekStartsOn: draft.weekStartsOn ?? 0,
             experience: draft.experience,
             trainingProgram: draft.trainingProgram,
             equipment: draft.equipment,
@@ -577,6 +584,7 @@ export default function OnboardingPage() {
               })}
             </div>
           </Field>
+          <Field label="Start of week"><select className="input" aria-label="Start of week" value={draft.weekStartsOn ?? 0} onChange={event => set("weekStartsOn", Number(event.target.value) as Weekday)}>{weekdayNames.map((name, day) => <option key={name} value={day}>{name}</option>)}</select><p className="mt-1 text-xs font-semibold text-ink-soft">Used across calendars, plans, groceries, and weekly progress. Change it later in Settings.</p></Field>
           <div className="grid gap-2"><div className="flex items-center justify-between gap-2"><label htmlFor="onboarding-step-target" className="text-sm font-bold">Daily step target (optional)</label><HelpPopover title="Daily step target"><p>Choose a target that suits your routine. You can change or remove it in Settings.</p><p>Use a whole number from 1 to 200,000, or leave blank for no target. This range is a technical limit, not a recommendation.</p></HelpPopover></div><input id="onboarding-step-target" className="input" inputMode="numeric" value={draft.dailyStepTarget} placeholder="Leave blank for no target" onChange={(event) => set("dailyStepTarget", event.target.value)} /></div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Days per week">
@@ -751,6 +759,7 @@ export default function OnboardingPage() {
             {[
               { label: "About you", value: `${draft.name} · ${draft.age} years · ${draft.height} ${draft.units === "metric" ? "cm" : "in"} · ${draft.weight} ${draft.units === "metric" ? "kg" : "lb"}`, editStep: 0 },
               { label: "Movement", value: `${draft.trainingProgram === "pilates" ? "Pilates foundations" : "Calisthenics"} · ${draft.experience} · ${draft.daysPerWeek} days/week · ${draft.sessionMinutes} min`, editStep: 1 },
+              { label: "Start of week", value: weekdayNames[draft.weekStartsOn ?? 0], editStep: 1 },
               { label: "Daily step target", value: draft.dailyStepTarget.trim() ? `${Number(draft.dailyStepTarget).toLocaleString()} steps` : "Not set", editStep: 1 },
               { label: "Food choices", value: `${draft.dietaryPattern} · ${draft.mealBudget === "4" ? "Budget-friendly" : draft.mealBudget === "7" ? "Balanced" : draft.mealBudget ? "Saved custom cost preference" : "Flexible"} · ${draft.cookingTimeMinutes} min to cook`, editStep: 2 },
               { label: "Your goal", value: GOALS.find((goal) => goal.id === draft.goal)?.label ?? draft.goal, editStep: 3 },
@@ -821,6 +830,7 @@ function profileToDraft(profile: UserProfile | null | undefined, goal?: { target
     equipment: profile.equipment,
     daysPerWeek: profile.daysPerWeek,
     sessionMinutes: profile.sessionMinutes,
+    weekStartsOn: profile.weekStartsOn ?? 0,
     dailyStepTarget: profile.dailyStepTarget?.toString() ?? "",
     dietaryPattern: profile.dietaryPattern,
     allergies: profile.allergies.join(", "),

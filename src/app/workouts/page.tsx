@@ -28,7 +28,7 @@ export default function WorkoutsPage() {
     candidate.equipment.every((equipment) => equipment === "none" || snapshot.profile?.equipment.includes(equipment)),
   );
   const today = todayKey();
-  const weekOf = startOfWeek(today);
+  const weekOf = startOfWeek(today, snapshot.profile?.weekStartsOn ?? 0);
   const dates = weekDates(weekOf);
   const completedWorkoutIds = new Set(
     snapshot.sessions
@@ -78,7 +78,7 @@ export default function WorkoutsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {plan.workouts.map((workout) => {
+        {[...plan.workouts].sort((a, b) => (a.dayOfWeek - (snapshot.profile?.weekStartsOn ?? 0) + 7) % 7 - (b.dayOfWeek - (snapshot.profile?.weekStartsOn ?? 0) + 7) % 7).map((workout) => {
           const first = workout.exercises[0];
           const exercise = first ? exerciseById(first.exerciseId) : undefined;
           const date = dates.find((d) => new Date(d.replace(/-/g, "/")).getDay() === workout.dayOfWeek);

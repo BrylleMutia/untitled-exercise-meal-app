@@ -5,7 +5,7 @@ import type { UserProfile } from "@/types/domain";
 
 export const testProfile: UserProfile = {
   id: "test", name: "Test", age: 30, sex: "female", heightCm: 168, weightKg: 68,
-  units: "metric", experience: "beginner", equipment: ["none"], daysPerWeek: 3,
+  units: "metric", weekStartsOn: 1, experience: "beginner", equipment: ["none"], daysPerWeek: 3,
   sessionMinutes: 30, goal: "maintain", dietaryPattern: "No restrictions", allergies: [],
   notificationsEnabled: false, createdAt: "2026-10-01T00:00:00.000Z",
 };
