@@ -13,6 +13,238 @@ const userAState = "playwright/.auth/user-a.json";
 const userBState = "playwright/.auth/user-b.json";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
+test("calendar preference and selected-day planning preserve dates across the app", async ({ browser }, info) => {
+  const account = await createLocalAccount(`calendar-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await page.goto("/onboarding");
+    await page.getByLabel("What should we call you?").fill("Calendar Test");
+    await page.getByLabel("Age").fill("30");
+    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await page.getByLabel("Height (cm)").fill("168");
+    await page.getByLabel("Weight (kg)").fill("68");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByLabel("Start of week", { exact: true })).toHaveValue("0");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByText("Maintain weight", { exact: true }).click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("button", { name: "Create my plan", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
+    await page.goto("/settings");
+    await page.getByLabel("Start of week", { exact: true }).selectOption("6");
+    await page.getByRole("button", { name: "Save start of week", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Weeks regrouped" })).toBeVisible();
+    for (const route of ["/", "/workouts", "/progress", "/grocery"]) {
+      await page.goto(route);
+      await expect(page.locator("main")).toBeVisible();
+      await expect(page.getByText("Application error", { exact: false })).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    await openNutritionPage(page);
+    const days = page.getByRole("group", { name: "Choose a day", exact: true });
+    await expect(days.getByRole("button").first()).toHaveAccessibleName(/^Saturday,/);
+    await expect(days.locator('button[aria-pressed="true"]')).toHaveCSS("border-top-style", "solid");
+    for (const day of await days.locator('button[aria-pressed="false"]').all()) {
+      await expect(day).toHaveCSS("border-top-style", "solid");
+      await expect(day).toHaveClass(/border-white/);
+      await expect(day).toHaveCSS("border-top-width", "1px");
+    }
+    await days.screenshot({ path: `output/calendar/nutrition-day-strip-${info.project.name}.png` });
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await page.getByRole("button", { name: "Generate", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Generate plan", exact: true });
+    const dayChoices = dialog.getByRole("group", { name: "Choose days", exact: true });
+    const selectedDate = addDays(startOfWeek(todayKey(), 6), 7);
+    await expect(dialog.getByText(formatCompactWeekRange(selectedDate), { exact: true })).toHaveCount(0);
+    await expect(dayChoices.getByRole("checkbox")).toHaveCount(7);
+    if (info.project.name === "desktop") {
+      for (const width of [320, 390, 596, 767, 768, 1440]) {
+        await page.setViewportSize({ width, height: 930 });
+        for (const groupName of ["Choose days", "Choose recipes"]) {
+          const group = dialog.getByRole("group", { name: groupName, exact: true });
+          for (const name of ["Select all", "Clear"]) {
+            const action = group.getByRole("button", { name, exact: true });
+            await expect(action).toHaveAccessibleName(name);
+            await expect.poll(async () => (await action.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+            const bounds = (await action.boundingBox())!;
+            expect(bounds.width).toBeGreaterThanOrEqual(44);
+            expect(bounds.height).toBeGreaterThanOrEqual(44);
+            await expect(action.locator("span")).toHaveCSS("position", width < 768 ? "absolute" : "static");
+            if (width < 768) expect(bounds.width).toBe(44);
+          }
+        }
+        expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+        if (width === 596 || width === 768) await dialog.screenshot({ path: `output/generation-controls/dialog-${width}.png` });
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
+    const dateLabels = await dayChoices.getByRole("checkbox").evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+    await expect(dayChoices.getByRole("checkbox").first()).toHaveAccessibleName(/^Saturday,/);
+    await dayChoices.getByRole("button", { name: "Clear", exact: true }).click();
+    await expect(dayChoices.locator('input:checked')).toHaveCount(0);
+    for (const tile of await dayChoices.locator("label").all()) {
+      await expect(tile).toHaveCSS("border-top-style", "dashed");
+      await expect(tile).toHaveCSS("border-top-width", "1px");
+    }
+    expect(await dayChoices.getByRole("checkbox").evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(dateLabels);
+    await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeDisabled();
+    await expect(dialog.getByText("Choose at least one day to preview meals.", { exact: true })).toBeVisible();
+    await dayChoices.getByRole("button", { name: "Select all", exact: true }).click();
+    await expect(dayChoices.locator('input:checked')).toHaveCount(7);
+    for (const tile of await dayChoices.locator("label").all()) await expect(tile).toHaveCSS("border-top-style", "solid");
+    await dayChoices.getByRole("button", { name: "Clear", exact: true }).click();
+    await dayChoices.getByRole("checkbox").first().check();
+    await dayChoices.getByRole("checkbox").first().focus();
+    await dayChoices.getByRole("checkbox").first().press("Space");
+    await expect(dayChoices.getByRole("checkbox").first()).not.toBeChecked();
+    await dayChoices.getByRole("checkbox").first().press("Space");
+    await expect(dayChoices.getByRole("checkbox").first()).toBeFocused();
+    await expect(dayChoices.locator("label").first()).toHaveCSS("outline-style", "solid");
+    await expect(dayChoices.locator("label").first()).toHaveCSS("outline-width", "2px");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const largeText = await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await largeText.evaluate(element => element.parentNode?.removeChild(element));
+    await dayChoices.screenshot({ path: `output/calendar/day-choices-${info.project.name}.png` });
+    const preview = dialog.getByRole("region", { name: "Generated plan preview", exact: true });
+    await expect(preview.getByRole("listitem").first()).toContainText(formatFullDate(selectedDate));
+    for (const row of await preview.getByRole("listitem").all()) {
+      await expect(row).toContainText(formatFullDate(selectedDate));
+      await expect(row).toContainText(/(?:Breakfast|Lunch|Dinner|Snack) · 1 serving/);
+      await expect(row).toHaveClass(/bg-lav-50/);
+      await expect(row.getByRole("button")).toHaveCount(0);
+      await expect(row.getByText(/kcal|protein|trusted-catalog/)).toHaveCount(0);
+    }
+    const previewCount = await preview.getByRole("listitem").count();
+    await expect(preview.getByRole("heading")).toHaveText(`Preview · ${previewCount} ${previewCount === 1 ? "meal" : "meals"}`);
+    if (info.project.name === "desktop") {
+      await page.setViewportSize({ width: 760, height: 930 });
+      const headingBox = await dayChoices.getByRole("heading", { name: "Choose days", exact: true }).boundingBox();
+      const selectBox = await dayChoices.getByRole("button", { name: "Select all", exact: true }).boundingBox();
+      expect(Math.abs((headingBox!.y + headingBox!.height / 2) - (selectBox!.y + selectBox!.height / 2))).toBeLessThan(2);
+      await dialog.screenshot({ path: "output/calendar/generation-760.png" });
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
+    await dialog.getByRole("button", { name: "Shuffle", exact: true }).click();
+    await expect(dayChoices.getByRole("checkbox").first()).toBeChecked();
+    await expect(dayChoices.locator('input:checked')).toHaveCount(1);
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Generate", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "Generate", exact: true }).click();
+    await expect(dialog.getByRole("status").filter({ hasText: "Weekly plan draft restored" })).toBeVisible();
+    await expect(dayChoices.getByRole("checkbox").first()).toBeChecked();
+    await expect(dayChoices.locator('input:checked')).toHaveCount(1);
+    await dialog.getByLabel("Save the meals shown, leaving these servings unused.", { exact: true }).check();
+    await dayChoices.getByRole("checkbox").nth(2).check();
+    await expect(dialog.getByLabel("Save the meals shown, leaving these servings unused.", { exact: true })).not.toBeChecked();
+    await dayChoices.getByRole("checkbox").nth(2).uncheck();
+    await dialog.getByLabel("Save the meals shown, leaving these servings unused.", { exact: true }).check();
+    await preview.screenshot({ path: `output/calendar/preview-rows-${info.project.name}.png` });
+    await dialog.screenshot({ path: `output/calendar/generation-${info.project.name}.png` });
+    let releaseSave: () => void = () => {};
+    const blockedSave = new Promise<void>(resolve => { releaseSave = resolve; });
+    await page.route("**/rest/v1/rpc/generate_nutrition_week", async route => {
+      await blockedSave;
+      await route.abort("failed");
+    }, { times: 1 });
+    await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
+    try {
+      await expect(dialog.getByRole("button", { name: "Saving…", exact: true })).toBeDisabled();
+      for (const checkbox of await dayChoices.getByRole("checkbox").all()) await expect(checkbox).toBeDisabled();
+      await expect(dayChoices.getByRole("button", { name: "Select all", exact: true })).toBeDisabled();
+      await expect(dayChoices.getByRole("button", { name: "Clear", exact: true })).toBeDisabled();
+      await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeDisabled();
+    } finally { releaseSave(); }
+    await expect(dialog.getByRole("status").filter({ hasText: "The save was not confirmed" })).toBeVisible();
+    await expect(dayChoices.locator('input:checked')).toHaveCount(1);
+    await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Log", exact: true }).first()).toBeVisible();
+    await days.getByRole("button").nth(1).click();
+    await expect(days.locator('button[aria-pressed="true"]')).toHaveCount(1);
+    await expect(days.getByRole("button").nth(1)).toHaveAttribute("aria-pressed", "true");
+    await page.goto("/settings");
+    await expect(page.getByLabel("Start of week", { exact: true })).toHaveValue("6");
+    await page.route("**/rest/v1/rpc/set_week_start", route => route.abort("failed"));
+    await page.getByLabel("Start of week", { exact: true }).selectOption("2");
+    await page.getByRole("button", { name: "Save start of week", exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Your selection is retained" })).toBeVisible();
+    await expect(page.getByLabel("Start of week", { exact: true })).toHaveValue("2");
+    await page.unroute("**/rest/v1/rpc/set_week_start");
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
+test("grocery weeks audit generated recipe quantities and preserve isolated edits and drafts", async ({ browser }, info) => {
+  const account = await createLocalAccount(`grocery-weeks-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Grocery Weeks"); await openNutritionPage(page);
+    for (let i = 0; i < 2; i++) {
+      await page.getByRole("button", { name: "Next week", exact: true }).click();
+      await page.getByRole("button", { name: "Generate", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Generate plan", exact: true });
+      await expect(dialog.getByText("Preview · 14 meals", { exact: true })).toBeVisible();
+      const saved = nextRpcResponse(page, "generate_nutrition_week");
+      await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
+      expect((await saved).ok()).toBe(true); await expect(dialog).not.toBeVisible();
+    }
+    await page.goto("/grocery");
+    await expect(page.getByRole("heading", { name: "Grocery list", exact: true })).toBeVisible();
+    const weekOf = addDays(startOfWeek(todayKey()), 7);
+    const jump = page.getByLabel("Jump to grocery week", { exact: true });
+    await jump.fill(weekOf);
+    await expect(jump).toHaveValue(weekOf);
+    const chicken = () => page.getByRole("listitem").filter({ has: page.getByText("Chicken breast, skinless, boneless", { exact: true }) });
+    await expect(chicken()).toContainText("generated 1200 g");
+    await expect(page.getByRole("listitem").filter({ has: page.getByText("Jasmine rice (uncooked; long-grain rice proxy)", { exact: true }) })).toContainText("generated 500 g");
+    const toggled = nextRpcResponse(page, "toggle_grocery_item");
+    await chicken().getByRole("checkbox").click(); expect((await toggled).ok()).toBe(true);
+    await expect(chicken().getByRole("checkbox")).toBeChecked();
+    const changed = nextRpcResponse(page, "set_grocery_quantity");
+    await chicken().getByRole("button", { name: "Decrease Chicken breast, skinless, boneless", exact: true }).click(); expect((await changed).ok()).toBe(true);
+    await expect(chicken()).toContainText("1199");
+    const extra = page.getByRole("textbox", { name: "Extra grocery item name", exact: true });
+    await extra.fill("Only first week draft");
+    await page.getByRole("button", { name: "Next grocery week", exact: true }).click();
+    await expect(jump).toHaveValue(addDays(weekOf, 7));
+    await expect(chicken()).toContainText("generated 1200 g"); await expect(chicken().getByRole("checkbox")).not.toBeChecked();
+    await expect(extra).toHaveValue(""); await expect(chicken()).not.toContainText("1199");
+    await page.getByRole("button", { name: "Previous grocery week", exact: true }).click();
+    await expect(extra).toHaveValue("Only first week draft"); await expect(chicken().getByRole("checkbox")).toBeChecked();
+    const regenerated = nextRpcResponse(page, "regenerate_grocery"); await page.getByRole("button", { name: "Regenerate", exact: true }).click(); expect((await regenerated).ok()).toBe(true);
+    await expect(chicken()).toContainText("1199"); await expect(chicken()).toContainText("generated 1200 g");
+    await expect(chicken().getByRole("checkbox")).toBeChecked();
+    if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    const physicalWidth = page.viewportSize()!.width;
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(physicalWidth + 1);
+    expect(await chicken().locator("p").first().evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThanOrEqual(120);
+    expect(await chicken().getByRole("button", { name: "Increase Chicken breast, skinless, boneless", exact: true }).evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThanOrEqual(44);
+    await jump.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `output/grocery-weeks/grocery-${info.project.name}.png`, fullPage: false });
+    await chicken().scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `output/grocery-weeks/grocery-items-${info.project.name}.png`, fullPage: false });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+    await page.route("**/rest/v1/rpc/get_nutrition_week", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Test read failure" }) }));
+    await jump.fill(addDays(weekOf, 14));
+    await expect(page.getByRole("button", { name: "Retry grocery week", exact: true })).toBeVisible();
+    await expect(page.getByText("No groceries for this week", { exact: true })).not.toBeVisible();
+    await page.unroute("**/rest/v1/rpc/get_nutrition_week");
+    await page.getByRole("button", { name: "Retry grocery week", exact: true }).click();
+    await expect(page.getByText("No groceries for this week", { exact: true })).toBeVisible();
+    await extra.fill("Empty week extra"); const added = nextRpcResponse(page, "add_custom_grocery_item");
+    await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click(); expect((await added).ok()).toBe(true);
+    await expect(page.getByRole("listitem").filter({ hasText: "Empty week extra" })).toBeVisible();
+    await page.getByRole("button", { name: "This week", exact: true }).click();
+    await expect(jump).toHaveValue(startOfWeek(todayKey())); await expect(page.getByText("Empty week extra", { exact: true })).not.toBeVisible();
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
 async function fillRecipeSection(editor: Locator, section: "Details" | "Instructions", label: string, value: string) {
   await editor.getByRole("tab", { name: section, exact: true }).click();
   await editor.getByLabel(label).fill(value);
@@ -68,8 +300,8 @@ test("reviewed chicken catalog preserves cooking units, estimates, covers and pe
     await page.getByRole("button", { name: "Next week", exact: true }).click();
     await page.getByRole("button", { name: "Generate", exact: true }).click();
     const generation = page.getByRole("dialog", { name: "Generate plan", exact: true });
-    await generation.getByRole("button", { name: "Clear", exact: true }).click();
-    for (const recipe of cases) await generation.getByRole("checkbox", { name: recipe.name, exact: true }).check();
+    await generation.getByRole("group", { name: "Choose recipes", exact: true }).getByRole("button", { name: "Clear", exact: true }).click();
+    for (const recipe of cases) await generation.getByRole("list", { name: "Recipe choices" }).getByText(recipe.name, { exact: true }).click();
     await expect(generation.getByRole("heading", { name: "Preview · 8 meals", exact: true })).toBeVisible();
     await generation.getByRole("button", { name: "Close", exact: true }).click();
     await recipes.getByRole("button", { name: "View recipe: Sticky Teriyaki Chicken", exact: true }).click();
@@ -146,8 +378,9 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     const dialog = page.getByRole("dialog", { name: "Generate plan", exact: true });
     await expect(dialog.getByRole("button", { name: "Close generate plan", exact: true })).toBeVisible();
     const selectedWeek = startOfWeek(addDays(todayKey(), 7));
-    await expect(dialog.getByText(formatCompactWeekRange(selectedWeek), { exact: true })).toBeVisible();
-    await expect(dialog.getByText(`${formatFullDate(selectedWeek)} – ${formatFullDate(addDays(selectedWeek, 6))}`, { exact: true })).toHaveClass("sr-only");
+    await expect(dialog.getByText(formatCompactWeekRange(selectedWeek), { exact: true })).toHaveCount(0);
+    await expect(dialog.getByText(`${formatFullDate(selectedWeek)} – ${formatFullDate(addDays(selectedWeek, 6))}`, { exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole("group", { name: "Choose days", exact: true }).getByRole("checkbox").first()).toHaveAccessibleName(formatFullDate(selectedWeek));
     const explanation = "Fill this week’s empty meals with one serving per entry. Each recipe has one weekly batch; existing active planned servings count toward its yield.";
     await expect(dialog.getByText(explanation, { exact: true })).toHaveCount(0);
     const help = dialog.getByRole("button", { name: "About generate plan", exact: true });
@@ -162,15 +395,16 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     await page.unroute("**/images/recipes/korean-beef-bowl.png");
     const gridColumns = () => choices.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(" ").length);
     expect(await gridColumns()).toBe(info.project.name === "mobile" ? 2 : 4);
-    const selectAll = dialog.getByRole("button", { name: "Select all", exact: true });
-    const clear = dialog.getByRole("button", { name: "Clear", exact: true });
+    const recipeChoices = dialog.getByRole("group", { name: "Choose recipes", exact: true });
+    const selectAll = recipeChoices.getByRole("button", { name: "Select all", exact: true });
+    const clear = recipeChoices.getByRole("button", { name: "Clear", exact: true });
     await expect(selectAll).toHaveClass(/bg-ink text-white/);
     await expect(clear).not.toHaveClass(/bg-ink text-white/);
     for (const [control, label] of [[selectAll, "Select all"], [clear, "Clear"]] as const) {
-      expect((await control.innerText()).trim()).toBe(label);
+      await expect(control).toHaveAccessibleName(label);
       const bounds = (await control.boundingBox())!;
       expect(bounds.width).toBeGreaterThanOrEqual(44); expect(bounds.height).toBeGreaterThanOrEqual(44);
-      expect(await control.evaluate(node => {
+      if (info.project.name === "desktop") expect(await control.evaluate(node => {
         const icon = node.querySelector('svg[aria-hidden="true"]')!;
         const range = document.createRange(); range.selectNodeContents(node.lastChild!);
         return icon.getBoundingClientRect().right <= range.getBoundingClientRect().left;
@@ -191,9 +425,21 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     expect(clearBounds.y).toBeCloseTo(selectBounds.y, 0);
     await selectAll.click();
     expect(await choices.locator('input:checked').count()).toBe(await choices.getByRole("checkbox").count());
-    await dialog.getByRole("button", { name: "Clear", exact: true }).click();
+    await clear.click();
     expect(await choices.locator('input:checked').count()).toBe(0);
     const choice = dialog.getByRole("checkbox", { name, exact: true });
+    const recipeCard = choice.locator("xpath=ancestor::label");
+    await expect(choice).toHaveCSS("position", "absolute");
+    await expect(choice).toHaveCSS("width", "1px");
+    await expect(choice).toHaveCSS("height", "1px");
+    for (const target of [recipeCard.locator("img"), choices.getByText(name, { exact: true }), recipeCard.locator('[id$="-details"]')]) {
+      await target.click();
+      await expect(choice).toBeChecked();
+      await expect(recipeCard).toHaveClass(/border-ink bg-lav-50/);
+      await target.click();
+      await expect(choice).not.toBeChecked();
+      await expect(recipeCard).toHaveClass(/border-ink\/15 bg-white/);
+    }
     await choices.getByText(name, { exact: true }).click();
     await expect(choice).toBeChecked();
     await choice.focus(); await page.keyboard.press("Space"); await expect(choice).not.toBeChecked();
@@ -245,12 +491,12 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     const retry = nextRpcResponse(page, "generate_nutrition_week"); await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
     const response = await retry; expect(response.ok()).toBe(true); expect(response.request().postDataJSON().p_payload.idempotencyKey).toBe(firstKey);
     await expect(dialog).not.toBeVisible(); await expect(generate).toBeEnabled(); await generate.click();
-    await dialog.getByRole("button", { name: "Clear", exact: true }).click();
-    await expect(choice).toBeEnabled(); await choice.check();
+    await clear.click();
+    await expect(choice).toBeEnabled(); await choices.getByText(name, { exact: true }).click();
     await expect(dialog.getByRole("heading", { name: "Preview · 0 meals", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeDisabled();
     await expect(choices.getByText("No whole servings remain in this week’s allowance.", { exact: true })).toHaveCount(0);
-    await dialog.getByRole("button", { name: "Select all", exact: true }).click();
+    await selectAll.click();
     expect(await choices.locator('input:checked').count()).toBe(await choices.getByRole("checkbox").count());
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await page.reload(); await expect(generate).toBeEnabled();
@@ -272,8 +518,8 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     await generate.click();
     await expect(dialog.getByRole("button", { name: "Review updated preview", exact: true })).toBeVisible();
     await dialog.getByRole("button", { name: "Review updated preview", exact: true }).click();
-    await dialog.getByRole("button", { name: "Clear", exact: true }).click();
-    await dialog.getByRole("checkbox", { name: new RegExp(name) }).check();
+    await clear.click();
+    await choices.getByText(name, { exact: true }).click();
     await expect(dialog.getByRole("region", { name: "Unused servings" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeDisabled();
     await dialog.getByRole("checkbox", { name: "Save the meals shown, leaving these servings unused.", exact: true }).check();

@@ -434,7 +434,7 @@ test("help covers onboarding, settings, editors and workout logging without subm
     await expect(page.getByLabel("Recipe name", { exact: true })).toHaveValue("Draft recipe");
     expect(mutations).toBe(0);
     await page.goto("/grocery");
-    await checkHelp(page, "This week's list");
+    await checkHelp(page, "Grocery list");
     await page.goto("/progress");
     await checkHelp(page, "Weight");
     await checkHelp(page, "Calendar");
