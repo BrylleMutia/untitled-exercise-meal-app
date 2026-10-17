@@ -94,6 +94,7 @@ function onboardingPayload(userId, key, suffix = "") {
       heightCm: 165,
       weightKg: 65,
       units: "metric",
+      weekStartsOn: 1,
       experience: "beginner",
       equipment: ["none"],
       daysPerWeek: 3,
@@ -190,6 +191,7 @@ function onboardingPayload(userId, key, suffix = "") {
 }
 
 async function rawRpc(client, name, payload) {
+  payload = { calendarRevision: 1, ...payload };
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const result = await client.rpc(name, { p_payload: payload });
     if (!result.error || result.error.code !== "PGRST303" || attempt === 3) return result;

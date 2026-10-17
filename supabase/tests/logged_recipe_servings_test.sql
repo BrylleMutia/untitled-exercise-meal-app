@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select no_plan();
 insert into auth.users(id,email) values
  ('00000000-0000-0000-0000-000000001501','recipe-portions@example.test'),
@@ -17,7 +18,7 @@ select jsonb_build_object('loggedMeal',jsonb_build_object('id',log_id),'recipeSe
 $$;
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001501';
-select lives_ok($$select public.save_reviewed_meal(pg_temp.recipe_log('chicken-three','meal-creamy-lemon-chicken',3))$$,'three chicken recipe servings log');
+select lives_ok($$select public.save_reviewed_meal(pg_temp.calendar_intent(pg_temp.recipe_log('chicken-three','meal-creamy-lemon-chicken',3)))$$,'three chicken recipe servings log');
 select is((select recipe_servings from public.logged_meals where app_id='chicken-three'),3::numeric,'actual recipe servings persisted separately');
 select is((select count(*)::integer from public.nutrition_logs),6,'ingredients remain grouped snapshots');
 reset role;
@@ -43,13 +44,13 @@ select throws_ok($$select public.update_logged_meal(pg_temp.portion_edit('chicke
 select throws_ok($$select public.update_logged_meal(pg_temp.portion_edit('chicken-string','chicken-three','"3"',2))$$,'P0001',null,'string servings rejected');
 select throws_ok($$select public.update_logged_meal(pg_temp.portion_edit('chicken-null','chicken-three','null',2))$$,'P0001',null,'null servings rejected');
 select throws_ok($$select public.update_logged_meal(pg_temp.portion_edit('chicken-large','chicken-three','10001',2))$$,'P0001',null,'oversized servings rejected');
-select lives_ok($$select public.save_reviewed_meal(pg_temp.recipe_log('beef-three','meal-korean-beef-bowl',3))$$,'source-provided recipe logs');
+select lives_ok($$select public.save_reviewed_meal(pg_temp.calendar_intent(pg_temp.recipe_log('beef-three','meal-korean-beef-bowl',3)))$$,'source-provided recipe logs');
 select lives_ok($$select public.update_logged_meal(pg_temp.portion_edit('beef-half','beef-three','0.5',1))$$,'provided recipe servings corrected');
 select is((select calories from public.nutrition_logs n join public.logged_meals l on l.row_id=n.logged_meal_row_id where l.app_id='beef-three'),280::numeric,'half provided calories exact');
 select is((select protein_g from public.nutrition_logs n join public.logged_meals l on l.row_id=n.logged_meal_row_id where l.app_id='beef-three'),22.5::numeric,'half provided protein exact');
 select is((select carbs_g from public.nutrition_logs n join public.logged_meals l on l.row_id=n.logged_meal_row_id where l.app_id='beef-three'),29::numeric,'half provided carbs exact');
 select is((select fat_g from public.nutrition_logs n join public.logged_meals l on l.row_id=n.logged_meal_row_id where l.app_id='beef-three'),8::numeric,'half provided fat exact');
-select is((public.save_reviewed_meal(pg_temp.recipe_log('beef-three','meal-korean-beef-bowl',3))->>'replayed'),'true','original log retry stays completed after a correction');
+select is((public.save_reviewed_meal(pg_temp.calendar_intent(pg_temp.recipe_log('beef-three','meal-korean-beef-bowl',3)))->>'replayed'),'true','original log retry stays completed after a correction');
 select is((select recipe_servings from public.logged_meals where app_id='beef-three'),0.5::numeric,'original log retry cannot overwrite corrected portion');
 select throws_ok($$update public.logged_meals set recipe_servings=2 where app_id='beef-three'$$,'42501',null,'direct portion write denied');
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001502';

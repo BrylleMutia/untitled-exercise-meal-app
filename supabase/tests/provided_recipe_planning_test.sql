@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select plan(40);
 
 select ok(not has_function_privilege('authenticated','private.normalize_planned_meal_record(jsonb,uuid)','EXECUTE'),'normalizer remains private');
@@ -46,38 +47,38 @@ select jsonb_build_object('mealPlan',jsonb_build_object('id',key||'-plan','weekO
 $$;
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000008401';
-select is((public.add_planned_meal(pg_temp.provided_add('provided-new'))->>'status'),'completed','new supplied recipe plan persists atomically');
+select is((public.add_planned_meal(pg_temp.calendar_intent(pg_temp.provided_add('provided-new')))->>'status'),'completed','new supplied recipe plan persists atomically');
 select is((select expected_calories from public.planned_meals where user_id=auth.uid()),280::numeric,'new plan stores supplied calories despite client tampering');
 select is((select expected_protein_g from public.planned_meals where user_id=auth.uid()),22.5::numeric,'new plan stores supplied fractional protein');
 select is((select expected_fiber_g from public.planned_meals where user_id=auth.uid()),null::numeric,'new plan leaves unsupplied fiber unknown');
-select is((public.add_planned_meal(pg_temp.provided_add('provided-new'))->>'replayed'),'true','new plan retry replays once');
+select is((public.add_planned_meal(pg_temp.calendar_intent(pg_temp.provided_add('provided-new')))->>'replayed'),'true','new plan retry replays once');
 select is((select count(*)::integer from public.planned_meals where user_id=auth.uid()),1,'retry does not duplicate prescriptions');
 select is((select count(*)::integer from public.nutrition_logs where user_id=auth.uid()),0,'planning does not create eaten intake');
 create temporary table provided_edit as select jsonb_build_object('mealPlan',jsonb_build_object('id','provided-new-plan','weekOf','2026-10-05','targetId','provided-planning-target',
 'meals',jsonb_build_array(jsonb_build_object('id','provided-new-meal','date','2026-10-07','slot','lunch','mealId','meal-korean-beef-bowl','label','Korean Beef Bowl','servings',1.5))),
 'grocery',jsonb_build_object('id','provided-new-grocery','weekOf','2026-10-05','items','[]'::jsonb),
 'expectedVersions',jsonb_build_object('mealPlanVersion',1,'groceryRevision',(select revision from public.grocery_lists where user_id=auth.uid())),'idempotencyKey','provided-edit') as payload;
-select is((public.edit_meal_plan((select payload from provided_edit))->>'status'),'completed','editing creates a new prescribed version');
+select is((public.edit_meal_plan(pg_temp.calendar_intent((select payload from provided_edit)))->>'status'),'completed','editing creates a new prescribed version');
 select is((select expected_calories from public.planned_meals where user_id=auth.uid() order by meal_plan_row_id desc limit 1),840::numeric,'edited portion stores supplied calories');
 select is((select expected_protein_g from public.planned_meals where user_id=auth.uid() order by meal_plan_row_id desc limit 1),67.5::numeric,'edited portion retains fractional protein');
 select is((select expected_calories from public.planned_meals where user_id=auth.uid() order by meal_plan_row_id limit 1),280::numeric,'previous prescribed version is preserved');
-select is((public.edit_meal_plan((select payload from provided_edit))->>'replayed'),'true','edit retry replays without a new version');
+select is((public.edit_meal_plan(pg_temp.calendar_intent((select payload from provided_edit)))->>'replayed'),'true','edit retry replays without a new version');
 select is((select count(*)::integer from public.meal_plans where user_id=auth.uid()),2,'edit retry does not duplicate versions');
-select throws_ok($$select public.edit_meal_plan((select jsonb_set(payload,'{idempotencyKey}','"provided-stale"') from provided_edit))$$,'P0001',null,'fresh stale edit is rejected');
+select throws_ok($$select public.edit_meal_plan(pg_temp.calendar_intent((select jsonb_set(payload,'{idempotencyKey}','"provided-stale"') from provided_edit)))$$,'P0001',null,'fresh stale edit is rejected');
 select throws_ok($$update public.planned_meals set expected_calories=1 where user_id=auth.uid()$$,'42501',null,'direct writes still cannot bypass normalization');
 reset role;
 update public.meals set archived_at=now() where app_id='provided-planning-personal';
 select throws_ok($$select private.normalize_planned_meal_record('{"mealId":"provided-planning-personal","servings":1}', '00000000-0000-0000-0000-000000008401')$$,'P0001',null,'archived supplied recipes are denied');
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000008402';
-select throws_ok($$select public.add_planned_meal(pg_temp.provided_add('provided-foreign'))$$,'P0001',null,'another account cannot use the owned target');
+select throws_ok($$select public.add_planned_meal(pg_temp.calendar_intent(pg_temp.provided_add('provided-foreign')))$$,'P0001',null,'another account cannot use the owned target');
 set local role anon;
-select throws_ok($$select public.add_planned_meal(pg_temp.provided_add('provided-anon'))$$,'42501',null,'anonymous planning is denied');
+select throws_ok($$select public.add_planned_meal(pg_temp.calendar_intent(pg_temp.provided_add('provided-anon')))$$,'42501',null,'anonymous planning is denied');
 reset role;
 set constraints all immediate;
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000008403';
-select throws_ok($$select public.add_planned_meal(pg_temp.provided_add('provided-keto','meal-korean-beef-bowl','provided-planning-keto-target'))$$,'P0001',null,'carb-limited planning rejects unverified supplied macros even with trusted ingredients');
+select throws_ok($$select public.add_planned_meal(pg_temp.calendar_intent(pg_temp.provided_add('provided-keto','meal-korean-beef-bowl','provided-planning-keto-target')))$$,'P0001',null,'carb-limited planning rejects unverified supplied macros even with trusted ingredients');
 select is((select count(*)::integer from public.meal_plans where user_id=auth.uid()),0,'ineligible recipe failure rolls back its plan');
 select is((select count(*)::integer from public.grocery_lists where user_id=auth.uid()),0,'ineligible recipe failure rolls back groceries');
 reset role;

@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select no_plan();
 insert into auth.users(id,email) values
 ('00000000-0000-0000-0000-000000003001','recipe-cover-a@example.test'),
@@ -11,16 +12,16 @@ $$;
 
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000003001';
-select lives_ok($$select public.save_recipe(pg_temp.cover_payload('cover-url','cover-url','{"kind":"url","url":"https://example.com/cover.webp"}'))$$,'HTTPS covers save atomically');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.cover_payload('cover-url','cover-url','{"kind":"url","url":"https://example.com/cover.webp"}')))$$,'HTTPS covers save atomically');
 select is((select image->>'url' from public.meals where app_id='cover-url'),'https://example.com/cover.webp','URL persists');
-select lives_ok($$select public.save_recipe(pg_temp.cover_payload('cover-url','cover-default','null'))$$,'explicit default resets cover');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.cover_payload('cover-url','cover-default','null')))$$,'explicit default resets cover');
 select is((select image from public.meals where app_id='cover-url'),null::jsonb,'default is null');
-select throws_ok(format('select public.save_recipe(pg_temp.cover_payload(%L,%L,%L::jsonb))','bad-'||label,'bad-'||label,cover),'P0001',null,'invalid cover rejected: '||label)
+select throws_ok(format('select public.save_recipe(pg_temp.calendar_intent(pg_temp.cover_payload(%L,%L,%L::jsonb)))','bad-'||label,'bad-'||label,cover),'P0001',null,'invalid cover rejected: '||label)
 from (values ('http','{"kind":"url","url":"http://example.com/a"}'),('credential','{"kind":"url","url":"https://user:pass@example.com/a"}'),('unknown','{"kind":"other"}'),('cross-path','{"kind":"upload","path":"00000000-0000-0000-0000-000000003002/00000000-0000-0000-0000-000000000001.webp"}')) bad(label,cover);
 select lives_ok($$select public.register_recipe_image('{"uploadId":"00000000-0000-0000-0000-000000000001","checksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}')$$,'owner registers stable upload');
 select lives_ok($$select public.register_recipe_image('{"uploadId":"00000000-0000-0000-0000-000000000001","checksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}')$$,'same image upload retries');
 select throws_ok($$select public.register_recipe_image('{"uploadId":"00000000-0000-0000-0000-000000000001","checksum":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}')$$,'P0001',null,'retry cannot swap content');
-select throws_ok($$select public.save_recipe(pg_temp.cover_payload('cover-upload','cover-upload-missing','{"kind":"upload","path":"00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp"}'))$$,'P0001',null,'missing storage object cannot attach');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.cover_payload('cover-upload','cover-upload-missing','{"kind":"upload","path":"00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp"}')))$$,'P0001',null,'missing storage object cannot attach');
 select throws_ok($$select public.claim_recipe_image_cleanup('{"mode":"account"}')$$,'P0001',null,'client cannot claim attached images for account deletion');
 select throws_ok($$select public.claim_recipe_image_cleanup('{}')$$,'P0001',null,'missing cleanup mode rejected');
 select throws_ok($$select public.claim_deleted_recipe_images('{}')$$,'42501',null,'authenticated clients cannot drain deletion jobs');
@@ -29,7 +30,7 @@ select throws_ok($$update public.meals set image=null where app_id='cover-url'$$
 reset role;
 insert into storage.objects(bucket_id,name,owner,owner_id) values ('recipe-covers','00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp','00000000-0000-0000-0000-000000003001','00000000-0000-0000-0000-000000003001');
 set local role authenticated;
-select lives_ok($$select public.save_recipe(pg_temp.cover_payload('cover-upload','cover-upload','{"kind":"upload","path":"00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp"}'))$$,'registered storage cover attaches');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.cover_payload('cover-upload','cover-upload','{"kind":"upload","path":"00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp"}')))$$,'registered storage cover attaches');
 select is(public.recipe_image_access('00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp',false),true,'owner can read attached cover');
 select is(public.recipe_image_access('00000000-0000-0000-0000-000000003001/00000000-0000-0000-0000-000000000001.webp',true),false,'attached image cannot be overwritten');
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000003002';

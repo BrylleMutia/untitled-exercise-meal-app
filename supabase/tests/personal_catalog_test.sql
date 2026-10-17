@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select plan(33);
 insert into auth.users(id,email) values
 ('00000000-0000-0000-0000-000000001201','catalog-a@example.test'),
@@ -21,29 +22,29 @@ select ok(not has_table_privilege('authenticated','public.recipe_catalog_prefere
 select ok(not has_function_privilege('authenticated','private.lock_catalog_preference(text,jsonb,jsonb)','EXECUTE'),'private boundary denied');
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001201';
-select throws_ok($$select public.save_recipe(jsonb_set(pg_temp.catalog_edit('catalog-invalid','catalog-invalid'),'{meal,complexity}','null'))$$,'P0001',null,'missing complexity rejects edit');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_set(pg_temp.catalog_edit('catalog-invalid','catalog-invalid'),'{meal,complexity}','null')))$$,'P0001',null,'missing complexity rejects edit');
 select is((select count(*)::integer from public.recipe_catalog_preferences),0,'failed edit leaves original visible');
-select throws_ok($$select public.save_recipe(jsonb_set(pg_temp.catalog_edit('catalog-no-rev','catalog-no-rev'),'{catalog,preferenceRevision}','null'))$$,'P0001',null,'catalog concurrency version required');
-select lives_ok($$select public.save_recipe(pg_temp.catalog_edit('catalog-edit'))$$,'save creates personal version atomically');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_set(pg_temp.catalog_edit('catalog-no-rev','catalog-no-rev'),'{catalog,preferenceRevision}','null')))$$,'P0001',null,'catalog concurrency version required');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.catalog_edit('catalog-edit')))$$,'save creates personal version atomically');
 select is((select count(*)::integer from public.recipe_catalog_preferences),1,'one owner preference');
 select is((select owner_user_id::text from public.meals where app_id='catalog-personal-test'),'00000000-0000-0000-0000-000000001201','personal recipe belongs to caller');
 select is((select name from public.meals where app_id='meal-korean-beef-bowl'),'Korean Beef Bowl','global contents unchanged');
 select is((select revision from public.meals where app_id='meal-korean-beef-bowl'),4,'global revision unchanged after meal assignment migration');
-select is((select public.save_recipe(pg_temp.catalog_edit('catalog-edit'))->>'replayed'),'true','retry replays before stale checks');
+select is((select public.save_recipe(pg_temp.calendar_intent(pg_temp.catalog_edit('catalog-edit')))->>'replayed'),'true','retry replays before stale checks');
 select is((select revision from public.recipe_catalog_preferences),1,'retry cannot increment preference twice');
-select throws_ok($$select public.save_recipe(pg_temp.catalog_edit('catalog-stale','catalog-stale'))$$,'P0001',null,'competing first edit is stale');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.catalog_edit('catalog-stale','catalog-stale')))$$,'P0001',null,'competing first edit is stale');
 select is((select count(*)::integer from public.meals where app_id='catalog-stale'),0,'conflict leaves no orphan recipe');
-select throws_ok($$select public.save_recipe(pg_temp.catalog_edit('catalog-second','catalog-second',1))$$,'P0001',null,'second edit must use personal version');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.catalog_edit('catalog-second','catalog-second',1)))$$,'P0001',null,'second edit must use personal version');
 select ok(not exists(select 1 from jsonb_array_elements(public.get_recipe_card_metadata('{"asOfDate":"2026-10-12"}')->'recipes') r where r->>'mealId'='meal-korean-beef-bowl'),'hidden original excluded from favorites and popularity');
 select throws_ok($$select public.set_recipe_favorite('{"mealId":"meal-korean-beef-bowl","favorite":true,"expectedRevision":0,"asOfDate":"2026-10-12","idempotencyKey":"hidden-fav"}')$$,'P0001',null,'hidden original cannot be favorited');
 select is(jsonb_array_length(public.export_account_data('{"idempotencyKey":"catalog-export"}')->'data'->'recipeCatalogPreferences'),1,'preferences included in export');
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001202';
 select is((select count(*)::integer from public.recipe_catalog_preferences),0,'other user cannot read preferences');
-select lives_ok($$select public.archive_saved_meal('{"mealId":"meal-korean-beef-bowl","expectedVersions":{"recordRevision":4},"catalogPreferenceRevision":0,"idempotencyKey":"catalog-archive"}')$$,'archive is per user');
-select is((select public.archive_saved_meal('{"mealId":"meal-korean-beef-bowl","expectedVersions":{"recordRevision":4},"catalogPreferenceRevision":0,"idempotencyKey":"catalog-archive"}')->>'replayed'),'true','archive retry is idempotent');
+select lives_ok($$select public.archive_saved_meal(pg_temp.calendar_intent('{"mealId":"meal-korean-beef-bowl","expectedVersions":{"recordRevision":4},"catalogPreferenceRevision":0,"idempotencyKey":"catalog-archive"}'))$$,'archive is per user');
+select is((select public.archive_saved_meal(pg_temp.calendar_intent('{"mealId":"meal-korean-beef-bowl","expectedVersions":{"recordRevision":4},"catalogPreferenceRevision":0,"idempotencyKey":"catalog-archive"}'))->>'replayed'),'true','archive retry is idempotent');
 select ok((select archived_at is null from public.meals where app_id='meal-korean-beef-bowl'),'catalog remains globally active');
 set local role anon;
-select throws_ok($$select public.archive_saved_meal('{}')$$,'42501',null,'anonymous archival denied');
+select throws_ok($$select public.archive_saved_meal(pg_temp.calendar_intent('{}'))$$,'42501',null,'anonymous archival denied');
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001201';
 select lives_ok($$select public.delete_account('{"confirmation":"DELETE","idempotencyKey":"catalog-delete"}')$$,'delete account with catalog preference and personal recipe');

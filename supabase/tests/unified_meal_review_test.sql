@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 
 select plan(25);
 

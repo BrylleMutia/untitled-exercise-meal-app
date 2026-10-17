@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      calendar_transitions: {
+        Row: {
+          created_at: string
+          destinations: Json
+          from_day: number
+          row_id: number
+          source_groceries: Json
+          source_plans: Json
+          to_day: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          destinations?: Json
+          from_day: number
+          row_id?: never
+          source_groceries: Json
+          source_plans: Json
+          to_day: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          destinations?: Json
+          from_day?: number
+          row_id?: never
+          source_groceries?: Json
+          source_plans?: Json
+          to_day?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       custom_workout_sessions: {
         Row: {
           actual: Json
@@ -577,6 +610,7 @@ export type Database = {
       grocery_items: {
         Row: {
           app_id: string
+          carried_from_week: string | null
           category: string
           checked: boolean
           created_at: string
@@ -594,6 +628,7 @@ export type Database = {
         }
         Insert: {
           app_id: string
+          carried_from_week?: string | null
           category: string
           checked?: boolean
           created_at?: string
@@ -611,6 +646,7 @@ export type Database = {
         }
         Update: {
           app_id?: string
+          carried_from_week?: string | null
           category?: string
           checked?: boolean
           created_at?: string
@@ -646,6 +682,8 @@ export type Database = {
       grocery_lists: {
         Row: {
           app_id: string
+          calendar_active: boolean
+          calendar_review_required: boolean
           created_at: string
           revision: number
           row_id: number
@@ -655,6 +693,8 @@ export type Database = {
         }
         Insert: {
           app_id: string
+          calendar_active?: boolean
+          calendar_review_required?: boolean
           created_at?: string
           revision?: number
           row_id?: never
@@ -664,6 +704,8 @@ export type Database = {
         }
         Update: {
           app_id?: string
+          calendar_active?: boolean
+          calendar_review_required?: boolean
           created_at?: string
           revision?: number
           row_id?: never
@@ -784,6 +826,8 @@ export type Database = {
         Row: {
           allergies: string[]
           app_id: string
+          calendar_active: boolean
+          calendar_transition_row_id: number | null
           created_at: string
           dietary_pattern: string
           row_id: number
@@ -797,6 +841,8 @@ export type Database = {
         Insert: {
           allergies?: string[]
           app_id: string
+          calendar_active?: boolean
+          calendar_transition_row_id?: number | null
           created_at?: string
           dietary_pattern?: string
           row_id?: never
@@ -810,6 +856,8 @@ export type Database = {
         Update: {
           allergies?: string[]
           app_id?: string
+          calendar_active?: boolean
+          calendar_transition_row_id?: number | null
           created_at?: string
           dietary_pattern?: string
           row_id?: never
@@ -821,6 +869,13 @@ export type Database = {
           week_of?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meal_plans_calendar_transition_row_id_fkey"
+            columns: ["calendar_transition_row_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_transitions"
+            referencedColumns: ["row_id"]
+          },
           {
             foreignKeyName: "meal_plans_supersedes_fk"
             columns: ["supersedes_plan_row_id", "user_id"]
@@ -839,17 +894,16 @@ export type Database = {
       }
       meals: {
         Row: {
-          meal_slots: string[]
-          nutrition_notes: string | null
-          unmeasured_ingredients: Json | null
           app_id: string
           archived_at: string | null
           complexity: string
           created_at: string
           image: Json | null
           is_system: boolean
+          meal_slots: string[]
           name: string
           notes: string | null
+          nutrition_notes: string | null
           owner_user_id: string | null
           provided_nutrition: Json | null
           reference: string | null
@@ -858,20 +912,20 @@ export type Database = {
           servings: number
           source_url: string | null
           total_time_minutes: number | null
+          unmeasured_ingredients: Json | null
           updated_at: string
         }
         Insert: {
-          meal_slots?: string[]
-          nutrition_notes?: string | null
-          unmeasured_ingredients?: Json | null
           app_id: string
           archived_at?: string | null
           complexity?: string
           created_at?: string
           image?: Json | null
           is_system?: boolean
+          meal_slots?: string[]
           name: string
           notes?: string | null
+          nutrition_notes?: string | null
           owner_user_id?: string | null
           provided_nutrition?: Json | null
           reference?: string | null
@@ -880,20 +934,20 @@ export type Database = {
           servings: number
           source_url?: string | null
           total_time_minutes?: number | null
+          unmeasured_ingredients?: Json | null
           updated_at?: string
         }
         Update: {
-          meal_slots?: string[]
-          nutrition_notes?: string | null
-          unmeasured_ingredients?: Json | null
           app_id?: string
           archived_at?: string | null
           complexity?: string
           created_at?: string
           image?: Json | null
           is_system?: boolean
+          meal_slots?: string[]
           name?: string
           notes?: string | null
+          nutrition_notes?: string | null
           owner_user_id?: string | null
           provided_nutrition?: Json | null
           reference?: string | null
@@ -902,6 +956,7 @@ export type Database = {
           servings?: number
           source_url?: string | null
           total_time_minutes?: number | null
+          unmeasured_ingredients?: Json | null
           updated_at?: string
         }
         Relationships: []
@@ -1330,6 +1385,7 @@ export type Database = {
         Row: {
           age: number
           allergies: string[]
+          calendar_revision: number
           celebrations_enabled: boolean
           cooking_time_minutes: number | null
           created_at: string
@@ -1353,11 +1409,13 @@ export type Database = {
           training_program: string
           units: string
           updated_at: string
+          week_starts_on: number
           weight_kg: number
         }
         Insert: {
           age: number
           allergies?: string[]
+          calendar_revision?: number
           celebrations_enabled?: boolean
           cooking_time_minutes?: number | null
           created_at?: string
@@ -1381,11 +1439,13 @@ export type Database = {
           training_program?: string
           units: string
           updated_at?: string
+          week_starts_on?: number
           weight_kg: number
         }
         Update: {
           age?: number
           allergies?: string[]
+          calendar_revision?: number
           celebrations_enabled?: boolean
           cooking_time_minutes?: number | null
           created_at?: string
@@ -1409,6 +1469,7 @@ export type Database = {
           training_program?: string
           units?: string
           updated_at?: string
+          week_starts_on?: number
           weight_kg?: number
         }
         Relationships: []
@@ -1763,14 +1824,6 @@ export type Database = {
       }
     }
     Functions: {
-      generate_nutrition_week: {
-        Args: { p_payload: Json }
-        Returns: Json
-      }
-      get_nutrition_week: {
-        Args: { p_week_of: string }
-        Returns: Json
-      }
       abandon_workout_session: { Args: { p_payload: Json }; Returns: Json }
       add_custom_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       add_planned_meal: { Args: { p_payload: Json }; Returns: Json }
@@ -1799,6 +1852,8 @@ export type Database = {
       edit_meal_plan: { Args: { p_payload: Json }; Returns: Json }
       export_account_data: { Args: { p_payload: Json }; Returns: Json }
       finish_workout_session: { Args: { p_payload: Json }; Returns: Json }
+      generate_nutrition_week: { Args: { p_payload: Json }; Returns: Json }
+      get_nutrition_week: { Args: { p_week_of: string }; Returns: Json }
       get_recipe_card_metadata: { Args: { p_payload: Json }; Returns: Json }
       log_planned_meal: { Args: { p_payload: Json }; Returns: Json }
       log_saved_meal: { Args: { p_payload: Json }; Returns: Json }
@@ -1826,6 +1881,7 @@ export type Database = {
       set_daily_step_target: { Args: { p_payload: Json }; Returns: Json }
       set_grocery_quantity: { Args: { p_payload: Json }; Returns: Json }
       set_recipe_favorite: { Args: { p_payload: Json }; Returns: Json }
+      set_week_start: { Args: { p_payload: Json }; Returns: Json }
       skip_planned_meal: { Args: { p_payload: Json }; Returns: Json }
       start_custom_workout: { Args: { p_payload: Json }; Returns: Json }
       start_workout_session: { Args: { p_payload: Json }; Returns: Json }

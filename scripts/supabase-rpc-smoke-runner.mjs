@@ -64,6 +64,8 @@ function clientFor(url, key) {
 }
 
 async function rawRpc(client, name, payload, calls) {
+  const { data: profile } = await client.from("profiles").select("calendar_revision").maybeSingle();
+  payload = { calendarRevision: profile?.calendar_revision, ...payload };
   calls.add(name);
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const result = await client.rpc(name, { p_payload: payload });
@@ -122,6 +124,7 @@ function bundle(prefix, options = {}) {
 
   return {
     profile: {
+      weekStartsOn: 1,
       name,
       age: 30,
       sex: "female",

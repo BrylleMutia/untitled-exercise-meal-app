@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 
 -- This suite is deliberately separate from the structural/RLS suites. It
 -- exercises every deployed public mutation wrapper through the same
@@ -164,10 +165,10 @@ set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000401';
 
 -- 1-14: onboarding and the four profile-bundle wrappers.
 select lives_ok($$
-  select public.complete_onboarding(
+  select public.complete_onboarding(pg_temp.calendar_intent(
     pg_temp.rpc_smoke_bundle('test-rpc-smoke-a') ||
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-onboarding-a')
-  )
+  ))
 $$, 'complete_onboarding accepts a valid authenticated bundle');
 select is((select count(*)::int from public.profiles where id = '00000000-0000-0000-0000-000000000401'), 1, 'onboarding creates the owner profile');
 select is((select count(*)::int from public.goals where user_id = '00000000-0000-0000-0000-000000000401'), 1, 'onboarding creates one goal');
@@ -177,59 +178,59 @@ select is((select count(*)::int from public.meal_plans where user_id = '00000000
 select is((select count(*)::int from public.grocery_lists where user_id = '00000000-0000-0000-0000-000000000401'), 1, 'onboarding creates one grocery list');
 select is((select exercise_name_snapshot from public.planned_exercises where app_id = 'test-rpc-smoke-a-exercise'), 'Knee Push-up', 'onboarding stores the planned exercise snapshot');
 select is((select source_version from public.planned_meals where app_id = 'test-rpc-smoke-a-planned-meal'), '2026.09', 'onboarding stores the meal source version');
-select is((select public.complete_onboarding(
+select is((select public.complete_onboarding(pg_temp.calendar_intent(
   pg_temp.rpc_smoke_bundle('test-rpc-smoke-a') ||
   jsonb_build_object('idempotencyKey', 'test-rpc-smoke-onboarding-a')
-)->>'replayed'), 'true', 'complete_onboarding replays the same request');
+))->>'replayed'), 'true', 'complete_onboarding replays the same request');
 select is((select count(*)::int from public.goals where user_id = '00000000-0000-0000-0000-000000000401'), 1, 'onboarding replay does not duplicate the bundle');
-select throws_ok($$select public.complete_onboarding('{"idempotencyKey":"test-rpc-smoke-onboarding-a","different":true}'::jsonb)$$, 'P0001', null, 'a changed onboarding payload is rejected for the same idempotency key');
+select throws_ok($$select public.complete_onboarding(pg_temp.calendar_intent('{"idempotencyKey":"test-rpc-smoke-onboarding-a","different":true}'::jsonb))$$, 'P0001', null, 'a changed onboarding payload is rejected for the same idempotency key');
 select throws_ok($$
-  select public.complete_onboarding(
+  select public.complete_onboarding(pg_temp.calendar_intent(
     jsonb_set(
       pg_temp.rpc_smoke_bundle('test-rpc-smoke-invalid') ||
       jsonb_build_object('idempotencyKey', 'test-rpc-smoke-invalid'),
       '{plan,workouts,0,exercises,0,exerciseId}',
       '"missing-exercise"'::jsonb
     )
-  )
+  ))
 $$, 'P0001', null, 'invalid onboarding child is rejected');
 select is((select count(*)::int from public.profiles where id = '00000000-0000-0000-0000-000000000401' and name = 'RPC Smoke User'), 1, 'the invalid onboarding payload does not overwrite the existing profile');
 
 select lives_ok($$
-  select public.update_profile(
+  select public.update_profile(pg_temp.calendar_intent(
     pg_temp.rpc_smoke_bundle('test-rpc-smoke-profile', 'metric', 'RPC Smoke Updated', '2026-09-08', false, 'test-rpc-smoke-a-plan', 'test-rpc-smoke-profile-meal-plan') ||
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-update-profile')
-  )
+  ))
 $$, 'update_profile creates a new bundle version');
 select is((select count(*)::int from public.goals where user_id = '00000000-0000-0000-0000-000000000401'), 2, 'update_profile appends a goal version');
 select is((select count(*)::int from public.daily_targets where user_id = '00000000-0000-0000-0000-000000000401'), 2, 'update_profile appends a target version');
 select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000401'), 2, 'update_profile appends a workout plan version');
 
 select lives_ok($$
-  select public.update_units(
+  select public.update_units(pg_temp.calendar_intent(
     pg_temp.rpc_smoke_bundle('test-rpc-smoke-units', 'imperial', 'RPC Smoke Imperial', '2026-09-09', false, 'test-rpc-smoke-units-plan', 'test-rpc-smoke-units-meal-plan') ||
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-update-units')
-  )
+  ))
 $$, 'update_units accepts a complete unit-change bundle');
 select is((select units from public.profiles where id = '00000000-0000-0000-0000-000000000401'), 'imperial', 'update_units persists the changed unit system');
 select is((select count(*)::int from public.daily_targets where user_id = '00000000-0000-0000-0000-000000000401'), 2, 'update_units preserves the current target version for a display-unit-only edit');
 
 select lives_ok($$
-  select public.reset_plan(
+  select public.reset_plan(pg_temp.calendar_intent(
     pg_temp.rpc_smoke_bundle('test-rpc-smoke-reset', 'imperial', 'RPC Smoke Reset', '2026-09-10', false, 'test-rpc-smoke-reset-plan', 'test-rpc-smoke-reset-meal-plan') ||
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-reset-plan')
-  )
+  ))
 $$, 'reset_plan creates a future plan bundle');
 select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000401'), 3, 'reset_plan retains previous workout plan history');
 select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000401' and app_id = 'test-rpc-smoke-reset-plan'), 1, 'reset_plan stores the new plan application ID');
 
 select lives_ok($$
-  select public.skip_planned_meal(
+  select public.skip_planned_meal(pg_temp.calendar_intent(
     jsonb_set(pg_temp.rpc_smoke_bundle('test-rpc-smoke-skip', 'imperial', 'RPC Smoke Skip', '2026-09-10', true, 'test-rpc-smoke-reset-plan', 'test-rpc-smoke-reset-meal-plan'), '{grocery,id}', '"test-rpc-smoke-a-grocery"') ||
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-skip-meal', 'expectedVersions', jsonb_build_object(
       'mealPlanVersion', (select version from public.meal_plans where user_id=auth.uid() and week_of='2026-09-07' order by version desc,row_id desc limit 1),
       'groceryRevision', (select revision from public.grocery_lists where user_id=auth.uid() and week_of='2026-09-07')))
-  )
+  ))
 $$, 'skip_planned_meal creates a new meal-plan version');
 select is((select skipped from public.planned_meals where app_id = 'test-rpc-smoke-skip-planned-meal'), true, 'skip_planned_meal persists skipped state');
 select is((select skipped from public.planned_meals where app_id = 'test-rpc-smoke-a-planned-meal'), false, 'skip_planned_meal leaves the earlier plan unchanged');
@@ -238,16 +239,16 @@ select is((select count(*)::int from public.meal_plans where user_id = '00000000
 -- 15-27: User B owns a separate bundle and private food for isolation checks.
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000402';
 select lives_ok($$
-  select public.complete_onboarding(
+  select public.complete_onboarding(pg_temp.calendar_intent(
     pg_temp.rpc_smoke_bundle('test-rpc-smoke-b', 'metric', 'RPC Smoke User B') ||
     jsonb_build_object('idempotencyKey', 'test-rpc-smoke-onboarding-b')
-  )
+  ))
 $$, 'User B can create an independent bundle');
 select lives_ok($$select public.save_nutrition_log('{"entry":{"id":"test-rpc-smoke-nutrition-b","date":"2026-09-10","slot":"lunch","foodId":"food-egg","servings":1,"servingQuantity":1,"servingUnit":"piece","calories":72,"proteinG":6.3,"carbsG":0.4,"fatG":4.8,"fiberG":0,"estimated":true,"confidence":"high","source":"Starter Food Catalog","sourceVersion":"2026.09","preparationBasis":"as_labeled"},"idempotencyKey":"test-rpc-smoke-nutrition-b"}'::jsonb)$$, 'User B creates a nutrition row for cross-user checks');
 
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000401';
-select throws_ok($$select public.save_saved_meal('{"meal":{"id":"test-rpc-smoke-private-food-meal","name":"Should fail","servings":1,"ingredients":[{"foodId":"test-rpc-smoke-food-b","servings":1}]},"idempotencyKey":"test-rpc-smoke-private-food"}'::jsonb)$$, 'P0001', null, 'User A cannot use User B private food');
-select throws_ok($$select public.toggle_grocery_item('{"itemId":"test-rpc-smoke-b-grocery-item","idempotencyKey":"test-rpc-smoke-cross-grocery"}'::jsonb)$$, 'P0001', null, 'User A cannot toggle User B grocery data');
+select throws_ok($$select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"test-rpc-smoke-private-food-meal","name":"Should fail","servings":1,"ingredients":[{"foodId":"test-rpc-smoke-food-b","servings":1}]},"idempotencyKey":"test-rpc-smoke-private-food"}'::jsonb))$$, 'P0001', null, 'User A cannot use User B private food');
+select throws_ok($$select public.toggle_grocery_item(pg_temp.calendar_intent('{"itemId":"test-rpc-smoke-b-grocery-item","idempotencyKey":"test-rpc-smoke-cross-grocery"}'::jsonb))$$, 'P0001', null, 'User A cannot toggle User B grocery data');
 select throws_ok($$select public.delete_nutrition_log('{"nutritionLogId":"test-rpc-smoke-nutrition-b","idempotencyKey":"test-rpc-smoke-cross-nutrition"}'::jsonb)$$, 'P0001', null, 'User A cannot delete User B nutrition data');
 
 -- 28-40: workout lifecycle, including a second session for abandonment.
@@ -277,27 +278,27 @@ select is((select count(*)::int from public.nutrition_logs where app_id = 'test-
 select is((select public.delete_nutrition_log('{"nutritionLogId":"test-rpc-smoke-nutrition-custom","idempotencyKey":"test-rpc-smoke-delete-nutrition"}'::jsonb)->>'replayed'), 'true', 'delete_nutrition_log replays safely');
 select lives_ok($$select public.save_weight_entry('{"entry":{"id":"test-rpc-smoke-weight-a","date":"2026-09-10","weightKg":65.2},"idempotencyKey":"test-rpc-smoke-weight-a"}'::jsonb)$$, 'save_weight_entry stores an observation');
 select is((select weight_kg from public.weight_entries where app_id = 'test-rpc-smoke-weight-a'), 65.2::numeric, 'weight observation is preserved');
-select lives_ok($$select public.save_saved_meal('{"meal":{"id":"test-rpc-smoke-saved-meal","name":"Smoke-test meal","servings":2,"complexity":"easy","notes":"fixture","ingredients":[{"foodId":"food-egg","servings":2},{"foodId":"food-milk","servings":1}]},"idempotencyKey":"test-rpc-smoke-saved-meal"}'::jsonb)$$, 'save_saved_meal stores a user-owned meal');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"test-rpc-smoke-saved-meal","name":"Smoke-test meal","servings":2,"complexity":"easy","notes":"fixture","ingredients":[{"foodId":"food-egg","servings":2},{"foodId":"food-milk","servings":1}]},"idempotencyKey":"test-rpc-smoke-saved-meal"}'::jsonb))$$, 'save_saved_meal stores a user-owned meal');
 select is((select count(*)::int from public.meal_ingredients mi join public.meals m on m.row_id = mi.meal_row_id where m.app_id = 'test-rpc-smoke-saved-meal'), 2, 'saved meal stores all ordered ingredients');
-select lives_ok($$select public.save_recipe('{"meal":{"id":"test-rpc-smoke-recipe","name":"Smoke-test recipe","complexity":"easy","notes":"Prepare and serve.","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"test-rpc-smoke-recipe"}'::jsonb)$$, 'save_recipe wrapper delegates successfully');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent('{"meal":{"id":"test-rpc-smoke-recipe","name":"Smoke-test recipe","complexity":"easy","notes":"Prepare and serve.","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"test-rpc-smoke-recipe"}'::jsonb))$$, 'save_recipe wrapper delegates successfully');
 select is((select count(*)::int from public.meals where app_id = 'test-rpc-smoke-recipe' and owner_user_id = '00000000-0000-0000-0000-000000000401'), 1, 'save_recipe creates an owner meal');
-select is((select public.save_recipe('{"meal":{"id":"test-rpc-smoke-recipe","name":"Smoke-test recipe","complexity":"easy","notes":"Prepare and serve.","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"test-rpc-smoke-recipe"}'::jsonb)->>'replayed'), 'true', 'save_recipe replay is stable');
+select is((select public.save_recipe(pg_temp.calendar_intent('{"meal":{"id":"test-rpc-smoke-recipe","name":"Smoke-test recipe","complexity":"easy","notes":"Prepare and serve.","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"test-rpc-smoke-recipe"}'::jsonb))->>'replayed'), 'true', 'save_recipe replay is stable');
 
 -- 52-62: grocery operations and merge behavior.
-select lives_ok($$select public.set_grocery_quantity('{"itemId":"test-rpc-smoke-skip-grocery-item","quantity":5,"idempotencyKey":"test-rpc-smoke-set-grocery"}'::jsonb)$$, 'set_grocery_quantity accepts a user override');
-select lives_ok($$select public.toggle_grocery_item('{"itemId":"test-rpc-smoke-skip-grocery-item","idempotencyKey":"test-rpc-smoke-toggle-grocery"}'::jsonb)$$, 'toggle_grocery_item changes checked state');
-select lives_ok($$select public.remove_grocery_item('{"itemId":"test-rpc-smoke-skip-grocery-item","idempotencyKey":"test-rpc-smoke-remove-grocery"}'::jsonb)$$, 'remove_grocery_item soft-removes the item');
-select lives_ok($$select public.regenerate_grocery('{"grocery":{"id":"test-rpc-smoke-a-grocery","weekOf":"2026-09-07","items":[{"id":"test-rpc-smoke-skip-grocery-item","generatedQuantity":7}]},"idempotencyKey":"test-rpc-smoke-regenerate-grocery"}'::jsonb)$$, 'regenerate_grocery accepts generated quantities');
+select lives_ok($$select public.set_grocery_quantity(pg_temp.calendar_intent('{"itemId":"test-rpc-smoke-skip-grocery-item","quantity":5,"idempotencyKey":"test-rpc-smoke-set-grocery"}'::jsonb))$$, 'set_grocery_quantity accepts a user override');
+select lives_ok($$select public.toggle_grocery_item(pg_temp.calendar_intent('{"itemId":"test-rpc-smoke-skip-grocery-item","idempotencyKey":"test-rpc-smoke-toggle-grocery"}'::jsonb))$$, 'toggle_grocery_item changes checked state');
+select lives_ok($$select public.remove_grocery_item(pg_temp.calendar_intent('{"itemId":"test-rpc-smoke-skip-grocery-item","idempotencyKey":"test-rpc-smoke-remove-grocery"}'::jsonb))$$, 'remove_grocery_item soft-removes the item');
+select lives_ok($$select public.regenerate_grocery(pg_temp.calendar_intent('{"grocery":{"id":"test-rpc-smoke-a-grocery","weekOf":"2026-09-07","items":[{"id":"test-rpc-smoke-skip-grocery-item","generatedQuantity":7}]},"idempotencyKey":"test-rpc-smoke-regenerate-grocery"}'::jsonb))$$, 'regenerate_grocery accepts generated quantities');
 select is((select quantity from public.grocery_items where app_id = 'test-rpc-smoke-skip-grocery-item'), 5::numeric, 'regeneration preserves an explicit quantity override');
 select ok((select checked and removed and generated_quantity = 7 from public.grocery_items where app_id = 'test-rpc-smoke-skip-grocery-item'), 'regeneration preserves checked, removed, and generated state');
-select is((select public.regenerate_grocery('{"grocery":{"id":"test-rpc-smoke-a-grocery","weekOf":"2026-09-07","items":[{"id":"test-rpc-smoke-skip-grocery-item","generatedQuantity":7}]},"idempotencyKey":"test-rpc-smoke-regenerate-grocery"}'::jsonb)->>'replayed'), 'true', 'regenerate_grocery replays safely');
-select lives_ok($$select public.add_custom_grocery_item('{"grocery":{"id":"test-rpc-smoke-a-grocery","weekOf":"2026-09-07"},"item":{"id":"test-rpc-smoke-custom-grocery","name":"Custom smoke item","category":"Other","unit":"pack","quantity":1},"idempotencyKey":"test-rpc-smoke-add-custom-grocery"}'::jsonb)$$, 'add_custom_grocery_item creates a custom row');
+select is((select public.regenerate_grocery(pg_temp.calendar_intent('{"grocery":{"id":"test-rpc-smoke-a-grocery","weekOf":"2026-09-07","items":[{"id":"test-rpc-smoke-skip-grocery-item","generatedQuantity":7}]},"idempotencyKey":"test-rpc-smoke-regenerate-grocery"}'::jsonb))->>'replayed'), 'true', 'regenerate_grocery replays safely');
+select lives_ok($$select public.add_custom_grocery_item(pg_temp.calendar_intent('{"grocery":{"id":"test-rpc-smoke-a-grocery","weekOf":"2026-09-07"},"item":{"id":"test-rpc-smoke-custom-grocery","name":"Custom smoke item","category":"Other","unit":"pack","quantity":1},"idempotencyKey":"test-rpc-smoke-add-custom-grocery"}'::jsonb))$$, 'add_custom_grocery_item creates a custom row');
 select is((select custom_item from public.grocery_items where app_id = 'test-rpc-smoke-custom-grocery'), true, 'custom grocery state is persisted');
-select throws_ok($$select public.set_grocery_quantity('{"itemId":"test-rpc-smoke-b-grocery-item","quantity":9,"idempotencyKey":"test-rpc-smoke-cross-grocery-set"}'::jsonb)$$, 'P0001', null, 'grocery quantity cannot cross user ownership');
+select throws_ok($$select public.set_grocery_quantity(pg_temp.calendar_intent('{"itemId":"test-rpc-smoke-b-grocery-item","quantity":9,"idempotencyKey":"test-rpc-smoke-cross-grocery-set"}'::jsonb))$$, 'P0001', null, 'grocery quantity cannot cross user ownership');
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000402';
 select is((select checked from public.grocery_items where app_id = 'test-rpc-smoke-b-grocery-item'), false, 'cross-user grocery attempts leave the target unchanged');
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000401';
-select throws_ok($$select public.save_saved_meal('{"meal":{"id":"meal-yogurt-bowl","name":"overwrite","servings":1,"ingredients":[]},"idempotencyKey":"test-rpc-smoke-system-meal"}'::jsonb)$$, 'P0001', null, 'system meals cannot be overwritten');
+select throws_ok($$select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"meal-yogurt-bowl","name":"overwrite","servings":1,"ingredients":[]},"idempotencyKey":"test-rpc-smoke-system-meal"}'::jsonb))$$, 'P0001', null, 'system meals cannot be overwritten');
 
 -- 63-68: export and account deletion are run after all other operations.
 select lives_ok($$select public.export_account_data('{"idempotencyKey":"test-rpc-smoke-export-a"}'::jsonb)$$, 'export_account_data returns the authenticated owner document');
@@ -309,11 +310,11 @@ select is((select public.export_account_data('{"idempotencyKey":"test-rpc-smoke-
 
 -- Anonymous execution is denied for the complete public wrapper inventory.
 set local role anon;
-select throws_ok($$select public.complete_onboarding('{}'::jsonb)$$, '42501', null, 'anon cannot execute complete_onboarding');
-select throws_ok($$select public.update_profile('{}'::jsonb)$$, '42501', null, 'anon cannot execute update_profile');
-select throws_ok($$select public.update_units('{}'::jsonb)$$, '42501', null, 'anon cannot execute update_units');
-select throws_ok($$select public.reset_plan('{}'::jsonb)$$, '42501', null, 'anon cannot execute reset_plan');
-select throws_ok($$select public.skip_planned_meal('{}'::jsonb)$$, '42501', null, 'anon cannot execute skip_planned_meal');
+select throws_ok($$select public.complete_onboarding(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute complete_onboarding');
+select throws_ok($$select public.update_profile(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute update_profile');
+select throws_ok($$select public.update_units(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute update_units');
+select throws_ok($$select public.reset_plan(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute reset_plan');
+select throws_ok($$select public.skip_planned_meal(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute skip_planned_meal');
 select throws_ok($$select public.start_workout_session('{}'::jsonb)$$, '42501', null, 'anon cannot execute start_workout_session');
 select throws_ok($$select public.save_workout_session('{}'::jsonb)$$, '42501', null, 'anon cannot execute save_workout_session');
 select throws_ok($$select public.finish_workout_session('{}'::jsonb)$$, '42501', null, 'anon cannot execute finish_workout_session');
@@ -321,13 +322,13 @@ select throws_ok($$select public.abandon_workout_session('{}'::jsonb)$$, '42501'
 select throws_ok($$select public.save_nutrition_log('{}'::jsonb)$$, '42501', null, 'anon cannot execute save_nutrition_log');
 select throws_ok($$select public.delete_nutrition_log('{}'::jsonb)$$, '42501', null, 'anon cannot execute delete_nutrition_log');
 select throws_ok($$select public.save_weight_entry('{}'::jsonb)$$, '42501', null, 'anon cannot execute save_weight_entry');
-select throws_ok($$select public.save_saved_meal('{}'::jsonb)$$, '42501', null, 'anon cannot execute save_saved_meal');
-select throws_ok($$select public.save_recipe('{}'::jsonb)$$, '42501', null, 'anon cannot execute save_recipe');
-select throws_ok($$select public.toggle_grocery_item('{}'::jsonb)$$, '42501', null, 'anon cannot execute toggle_grocery_item');
-select throws_ok($$select public.set_grocery_quantity('{}'::jsonb)$$, '42501', null, 'anon cannot execute set_grocery_quantity');
-select throws_ok($$select public.remove_grocery_item('{}'::jsonb)$$, '42501', null, 'anon cannot execute remove_grocery_item');
-select throws_ok($$select public.add_custom_grocery_item('{}'::jsonb)$$, '42501', null, 'anon cannot execute add_custom_grocery_item');
-select throws_ok($$select public.regenerate_grocery('{}'::jsonb)$$, '42501', null, 'anon cannot execute regenerate_grocery');
+select throws_ok($$select public.save_saved_meal(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute save_saved_meal');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute save_recipe');
+select throws_ok($$select public.toggle_grocery_item(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute toggle_grocery_item');
+select throws_ok($$select public.set_grocery_quantity(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute set_grocery_quantity');
+select throws_ok($$select public.remove_grocery_item(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute remove_grocery_item');
+select throws_ok($$select public.add_custom_grocery_item(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute add_custom_grocery_item');
+select throws_ok($$select public.regenerate_grocery(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anon cannot execute regenerate_grocery');
 select throws_ok($$select public.export_account_data('{}'::jsonb)$$, '42501', null, 'anon cannot execute export_account_data');
 select throws_ok($$select public.delete_account('{}'::jsonb)$$, '42501', null, 'anon cannot execute delete_account');
 

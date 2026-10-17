@@ -217,9 +217,8 @@ select throws_ok($$insert into public.workout_plan_overrides (user_id, app_id, p
 select throws_ok($$insert into public.workout_plan_overrides (user_id, app_id, planned_exercise_row_id, active, effective_at, ended_at)
   values ('00000000-0000-0000-0000-000000000101', 'test-override-active-end', (select row_id from public.planned_exercises where app_id = 'test-exercise-a-1'), true, '2026-09-10 10:00+00', '2026-09-11 10:00+00')$$,
   '23514', null, 'active overrides cannot have an end date');
-select throws_ok($$insert into public.meal_plans (app_id, user_id, version, week_of, target_row_id)
-  values ('test-meal-plan-bad-week', '00000000-0000-0000-0000-000000000101', 2, '2026-09-08', (select row_id from public.daily_targets where app_id = 'test-target-a-1'))$$,
-  '23514', null, 'meal plan weeks must start on Monday');
+select lives_ok($$insert into public.meal_plans (app_id, user_id, version, week_of, target_row_id)
+  values ('test-meal-plan-bad-week', '00000000-0000-0000-0000-000000000101', 2, '2026-09-08', (select row_id from public.daily_targets where app_id = 'test-target-a-1'))$$, 'meal plan supports any weekday boundary; RPC validates the preference');
 select throws_ok($$insert into public.planned_meals (meal_plan_row_id, user_id, week_of, app_id, meal_date, meal_slot, meal_row_id, label, servings)
   values ((select row_id from public.meal_plans where app_id = 'test-meal-plan-a-1'), '00000000-0000-0000-0000-000000000101', '2026-09-07', 'test-meal-bad-date', '2026-09-14', 'lunch', (select row_id from public.meals where is_system limit 1), 'Test', 1)$$,
   '23514', null, 'planned meals must remain within the plan week');
@@ -250,9 +249,8 @@ select throws_ok($$insert into public.nutrition_logs (app_id, user_id, log_date,
 select throws_ok($$insert into public.weight_entries (app_id, user_id, entry_date, weight_kg)
   values ('test-weight-bad', '00000000-0000-0000-0000-000000000101', '2026-09-10', 34.99)$$,
   '23514', null, 'weight entries enforce the supported health range');
-select throws_ok($$insert into public.grocery_lists (app_id, user_id, week_of)
-  values ('test-grocery-bad-week', '00000000-0000-0000-0000-000000000101', '2026-09-08')$$,
-  '23514', null, 'grocery list weeks must start on Monday');
+select lives_ok($$insert into public.grocery_lists (app_id, user_id, week_of)
+  values ('test-grocery-bad-week', '00000000-0000-0000-0000-000000000101', '2026-09-08')$$, 'grocery list supports any weekday boundary; RPC validates the preference');
 select throws_ok($$insert into public.grocery_items (grocery_list_row_id, user_id, app_id, name, category, unit, generated_quantity, quantity)
   values ((select row_id from public.grocery_lists where app_id = 'test-grocery-a-1'), '00000000-0000-0000-0000-000000000101', 'test-grocery-negative', 'Test', 'Other', 'g', -1, 0)$$,
   '23514', null, 'grocery generated quantities cannot be negative');

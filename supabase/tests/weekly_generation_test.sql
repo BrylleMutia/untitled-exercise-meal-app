@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select no_plan();
 insert into auth.users(id,email) values ('00000000-0000-0000-0000-000000001901','generation-a@example.test'),('00000000-0000-0000-0000-000000001902','generation-b@example.test');
 insert into public.profiles(id,name,age,sex,height_cm,weight_kg,units,experience,equipment,days_per_week,session_minutes,goal)
@@ -24,44 +25,44 @@ select ok(not exists(select 1 from public.meals where servings<>trunc(servings))
 select ok(not has_function_privilege('authenticated','private.generate_nutrition_week(jsonb)','execute'),'private generator inaccessible');
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001901';
-select throws_ok($$select public.generate_nutrition_week(pg_temp.generation('wrong-slot',pg_temp.assignment('wrong','2026-10-12','breakfast')))$$,'P0001',null,'recipe meal eligibility enforced');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('wrong-slot',pg_temp.assignment('wrong','2026-10-12','breakfast'))))$$,'P0001',null,'recipe meal eligibility enforced');
 create temp table generation_retry as select pg_temp.generation('batch-one',pg_temp.assignment('a','2026-10-12')||pg_temp.assignment('b','2026-10-13')||pg_temp.assignment('c','2026-10-14')) payload;
-select lives_ok($$select public.generate_nutrition_week((select payload from generation_retry))$$,'empty week can receive an atomic generated batch');
-select is(public.generate_nutrition_week((select payload from generation_retry))->>'replayed','true','lost-response retry replays');
+select lives_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent((select payload from generation_retry)))$$,'empty week can receive an atomic generated batch');
+select is(public.generate_nutrition_week(pg_temp.calendar_intent((select payload from generation_retry)))->>'replayed','true','lost-response retry replays');
 select is(jsonb_array_length(public.get_nutrition_week('2026-10-12')->'plannedMeals'),3,'retry creates exactly three assignments');
 select is((public.get_nutrition_week('2026-10-12')->'plannedMeals'->0->>'expected_calories')::numeric,560::numeric,'server supplies authoritative recipe macros');
-select throws_ok($$select public.generate_nutrition_week(jsonb_set((select payload from generation_retry),'{idempotencyKey}','"stale-batch"'))$$,'P0001',null,'stale week rejected');
-select throws_ok($$select public.generate_nutrition_week(pg_temp.generation('occupied',pg_temp.assignment('occupied','2026-10-12')))$$,'P0001',null,'occupied planned slot rejected');
-select throws_ok($$select public.generate_nutrition_week(pg_temp.generation('over-yield',pg_temp.assignment('d','2026-10-15')||pg_temp.assignment('e','2026-10-16')))$$,'P0001',null,'existing usage reduces capacity');
-select throws_ok($$select public.generate_nutrition_week(pg_temp.generation('fraction',jsonb_set(pg_temp.assignment('d','2026-10-15'),'{0,servings}','0.5')))$$,'P0001',null,'generated portions must be one whole serving');
-select throws_ok($$select public.generate_nutrition_week(pg_temp.generation('duplicate',pg_temp.assignment('d','2026-10-15')||pg_temp.assignment('e','2026-10-15')))$$,'P0001',null,'duplicate slot rejected');
-select lives_ok($$select public.generate_nutrition_week(pg_temp.generation('last-serving',pg_temp.assignment('d','2026-10-15')))$$,'remaining fourth serving can be added');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(jsonb_set((select payload from generation_retry),'{idempotencyKey}','"stale-batch"')))$$,'P0001',null,'stale week rejected');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('occupied',pg_temp.assignment('occupied','2026-10-12'))))$$,'P0001',null,'occupied planned slot rejected');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('over-yield',pg_temp.assignment('d','2026-10-15')||pg_temp.assignment('e','2026-10-16'))))$$,'P0001',null,'existing usage reduces capacity');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('fraction',jsonb_set(pg_temp.assignment('d','2026-10-15'),'{0,servings}','0.5'))))$$,'P0001',null,'generated portions must be one whole serving');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('duplicate',pg_temp.assignment('d','2026-10-15')||pg_temp.assignment('e','2026-10-15'))))$$,'P0001',null,'duplicate slot rejected');
+select lives_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('last-serving',pg_temp.assignment('d','2026-10-15'))))$$,'remaining fourth serving can be added');
 select is(jsonb_array_length(public.get_nutrition_week('2026-10-12')->'plannedMeals'),4,'yield is shared across all generation attempts');
-select lives_ok($$select public.generate_nutrition_week(pg_temp.generation('future-week',pg_temp.assignment('future','2026-10-19'),'2026-10-19'))$$,'another selected week has separate capacity');
+select lives_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.generation('future-week',pg_temp.assignment('future','2026-10-19'),'2026-10-19')))$$,'another selected week has separate capacity');
 select is(jsonb_array_length(public.get_nutrition_week('2026-10-12')->'plannedMeals'),4,'other week unchanged');
-select throws_ok($$select public.generate_nutrition_week(jsonb_set(pg_temp.generation('stale-recipe',pg_temp.assignment('future2','2026-10-20'),'2026-10-19'),'{recipes,0,revision}','0'))$$,'P0001',null,'changed recipe revision rejected');
-select throws_ok($$select public.generate_nutrition_week(jsonb_set(pg_temp.generation('tamper',pg_temp.assignment('future2','2026-10-20'),'2026-10-19'),'{mealPlan,meals,0,servings}','2'))$$,'P0001',null,'generation cannot modify existing prescriptions');
-select throws_ok($$select public.save_recipe('{"idempotencyKey":"fractional-recipe","newFoods":[],"meal":{"id":"fractional-recipe","name":"Test","servings":2.5,"complexity":"easy","notes":"Prepare.","mealSlots":["lunch"],"ingredients":[{"foodId":"food-egg","servings":1}]}}')$$,'P0001',null,'authoring rejects fractional yield');
-select throws_ok($$select public.save_recipe('{"idempotencyKey":"empty-slots","newFoods":[],"meal":{"id":"empty-slots","name":"Test","servings":2,"complexity":"easy","notes":"Prepare.","mealSlots":[],"ingredients":[{"foodId":"food-egg","servings":1}]}}')$$,'P0001',null,'explicit empty assignments rejected');
-select throws_ok($$select public.save_recipe('{"idempotencyKey":"duplicate-slots","newFoods":[],"meal":{"id":"duplicate-slots","name":"Test","servings":2,"complexity":"easy","notes":"Prepare.","mealSlots":["lunch","lunch"],"ingredients":[{"foodId":"food-egg","servings":1}]}}')$$,'P0001',null,'duplicate assignments rejected');
-select lives_ok($$select public.save_recipe('{"idempotencyKey":"assigned-recipe","newFoods":[],"meal":{"id":"assigned-recipe","name":"Test","servings":2,"complexity":"easy","notes":"Prepare.","mealSlots":["breakfast","snack"],"ingredients":[{"foodId":"food-egg","servings":1}]}}')$$,'multiple meal assignments saved');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(jsonb_set(pg_temp.generation('stale-recipe',pg_temp.assignment('future2','2026-10-20'),'2026-10-19'),'{recipes,0,revision}','0')))$$,'P0001',null,'changed recipe revision rejected');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(jsonb_set(pg_temp.generation('tamper',pg_temp.assignment('future2','2026-10-20'),'2026-10-19'),'{mealPlan,meals,0,servings}','2')))$$,'P0001',null,'generation cannot modify existing prescriptions');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent('{"idempotencyKey":"fractional-recipe","newFoods":[],"meal":{"id":"fractional-recipe","name":"Test","servings":2.5,"complexity":"easy","notes":"Prepare.","mealSlots":["lunch"],"ingredients":[{"foodId":"food-egg","servings":1}]}}'))$$,'P0001',null,'authoring rejects fractional yield');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent('{"idempotencyKey":"empty-slots","newFoods":[],"meal":{"id":"empty-slots","name":"Test","servings":2,"complexity":"easy","notes":"Prepare.","mealSlots":[],"ingredients":[{"foodId":"food-egg","servings":1}]}}'))$$,'P0001',null,'explicit empty assignments rejected');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent('{"idempotencyKey":"duplicate-slots","newFoods":[],"meal":{"id":"duplicate-slots","name":"Test","servings":2,"complexity":"easy","notes":"Prepare.","mealSlots":["lunch","lunch"],"ingredients":[{"foodId":"food-egg","servings":1}]}}'))$$,'P0001',null,'duplicate assignments rejected');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent('{"idempotencyKey":"assigned-recipe","newFoods":[],"meal":{"id":"assigned-recipe","name":"Test","servings":2,"complexity":"easy","notes":"Prepare.","mealSlots":["breakfast","snack"],"ingredients":[{"foodId":"food-egg","servings":1}]}}'))$$,'multiple meal assignments saved');
 select is((select meal_slots from public.meals where app_id='assigned-recipe'),array['breakfast','snack'],'saved assignments round trip');
-select lives_ok($$select public.save_recipe(jsonb_build_object('idempotencyKey','legacy-edit','newFoods','[]'::jsonb,'expectedVersions',jsonb_build_object('recordRevision',(select revision from public.meals where app_id='assigned-recipe')),'meal',jsonb_build_object('id','assigned-recipe','name','Legacy edit','servings',2,'complexity','easy','notes','Prepare.','ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',1)))))$$,'older client edit remains compatible');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_build_object('idempotencyKey','legacy-edit','newFoods','[]'::jsonb,'expectedVersions',jsonb_build_object('recordRevision',(select revision from public.meals where app_id='assigned-recipe')),'meal',jsonb_build_object('id','assigned-recipe','name','Legacy edit','servings',2,'complexity','easy','notes','Prepare.','ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',1))))))$$,'older client edit remains compatible');
 select is((select meal_slots from public.meals where app_id='assigned-recipe'),array['breakfast','snack'],'older edit preserves meal assignments');
-select lives_ok($$select public.save_recipe(jsonb_build_object('idempotencyKey','scoped-recipe-grocery','newFoods','[]'::jsonb,
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_build_object('idempotencyKey','scoped-recipe-grocery','newFoods','[]'::jsonb,
  'grocery',jsonb_build_object('id','generated-grocery-2026-10-12','weekOf','2026-10-12','items','[]'::jsonb),
  'expectedVersions',jsonb_build_object('recordRevision',(select revision from public.meals where app_id='assigned-recipe'),'groceryRevision',(select revision from public.grocery_lists where user_id=auth.uid() and week_of='2026-10-12')),
- 'meal',jsonb_build_object('id','assigned-recipe','name','Scoped grocery edit','servings',2,'complexity','easy','notes','Prepare.','mealSlots',jsonb_build_array('breakfast','snack'),'ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',1)))))$$,'recipe revision check uses submitted grocery week after future generation');
-select throws_ok($$select public.save_recipe(jsonb_build_object('idempotencyKey','stale-scoped-recipe-grocery','newFoods','[]'::jsonb,
+ 'meal',jsonb_build_object('id','assigned-recipe','name','Scoped grocery edit','servings',2,'complexity','easy','notes','Prepare.','mealSlots',jsonb_build_array('breakfast','snack'),'ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',1))))))$$,'recipe revision check uses submitted grocery week after future generation');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_build_object('idempotencyKey','stale-scoped-recipe-grocery','newFoods','[]'::jsonb,
  'grocery',jsonb_build_object('id','generated-grocery-2026-10-12','weekOf','2026-10-12','items','[]'::jsonb),
  'expectedVersions',jsonb_build_object('recordRevision',(select revision from public.meals where app_id='assigned-recipe'),'groceryRevision',0),
- 'meal',jsonb_build_object('id','assigned-recipe','name','Stale grocery edit','servings',2,'complexity','easy','notes','Prepare.','mealSlots',jsonb_build_array('breakfast','snack'),'ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',1)))))$$,'P0001',null,'submitted grocery week retains stale-write protection');
+ 'meal',jsonb_build_object('id','assigned-recipe','name','Stale grocery edit','servings',2,'complexity','easy','notes','Prepare.','mealSlots',jsonb_build_array('breakfast','snack'),'ingredients',jsonb_build_array(jsonb_build_object('foodId','food-egg','servings',1))))))$$,'P0001',null,'submitted grocery week retains stale-write protection');
 select throws_ok($$update public.meals set meal_slots=array['dinner'] where app_id='assigned-recipe'$$,'42501',null,'direct meal preference write denied');
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001902';
-select throws_ok($$select public.generate_nutrition_week((select payload from generation_retry))$$,'P0001',null,'cross-owner generation denied');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent((select payload from generation_retry)))$$,'P0001',null,'cross-owner generation denied');
 reset role;
 set local role anon;
-select throws_ok($$select public.generate_nutrition_week('{}')$$,'42501',null,'anonymous generation denied');
+select throws_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent('{}'))$$,'42501',null,'anonymous generation denied');
 reset role;
 select * from finish();
 rollback;

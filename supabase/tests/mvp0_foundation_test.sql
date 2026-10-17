@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 
 select plan(34);
 
@@ -46,11 +47,11 @@ set local role authenticated;
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000901';
 
 select throws_ok($$
-  select public.toggle_grocery_item('{"itemId":"mvp0-item","expectedVersions":{"groceryRevision":1},"idempotencyKey":"mvp0-stale"}'::jsonb)
+  select public.toggle_grocery_item(pg_temp.calendar_intent('{"itemId":"mvp0-item","expectedVersions":{"groceryRevision":1},"idempotencyKey":"mvp0-stale"}'::jsonb))
 $$, 'P0001', 'stale_version', 'stale grocery edits return a stable conflict code');
 
 select lives_ok($$
-  select public.set_grocery_quantity('{"itemId":"mvp0-item","quantity":101,"expectedVersions":{"groceryRevision":2},"idempotencyKey":"mvp0-grocery-revision-bump"}'::jsonb)
+  select public.set_grocery_quantity(pg_temp.calendar_intent('{"itemId":"mvp0-item","quantity":101,"expectedVersions":{"groceryRevision":2},"idempotencyKey":"mvp0-grocery-revision-bump"}'::jsonb))
 $$, 'a grocery item mutation succeeds against the current revision');
 select is((select revision from public.grocery_lists where app_id = 'mvp0-grocery'), 3, 'grocery item mutations bump the parent list revision');
 
@@ -59,14 +60,14 @@ select throws_ok($$
 $$, 'P0001', null, 'non-finite numeric input is rejected before persistence');
 
 select lives_ok($$
-  select public.complete_onboarding('{"profile":{"name":"Unsafe","age":30,"sex":"female","heightCm":165,"weightKg":65,"units":"metric","experience":"beginner","equipment":["none"],"daysPerWeek":3,"sessionMinutes":30,"goal":"maintain","targetEligibility":"unsupported"},"idempotencyKey":"mvp0-unsupported"}'::jsonb)
+  select public.complete_onboarding(pg_temp.calendar_intent('{"profile":{"name":"Unsafe","age":30,"sex":"female","heightCm":165,"weightKg":65,"units":"metric","experience":"beginner","equipment":["none"],"daysPerWeek":3,"sessionMinutes":30,"goal":"maintain","targetEligibility":"unsupported"},"idempotencyKey":"mvp0-unsupported"}'::jsonb))
 $$, 'unsupported screening saves a profile-only onboarding result for manual logging');
 
 select is((select count(*)::int from public.daily_targets where user_id = '00000000-0000-0000-0000-000000000901'), 0, 'unsupported onboarding creates no automated target row');
 select is((select count(*)::int from public.workout_plans where user_id = '00000000-0000-0000-0000-000000000901'), 0, 'unsupported onboarding creates no automated workout plan');
 
 select lives_ok($$
-  select public.update_units('{"profile":{"name":"Unsafe","age":30,"sex":"female","heightCm":165,"weightKg":65,"units":"imperial","experience":"beginner","equipment":["none"],"daysPerWeek":3,"sessionMinutes":30,"goal":"maintain","dietaryPattern":"","allergies":[],"foodPreferences":[]},"profileOnly":true,"expectedVersions":{"profileRevision":3},"idempotencyKey":"mvp0-profile-only-units"}'::jsonb)
+  select public.update_units(pg_temp.calendar_intent('{"profile":{"name":"Unsafe","age":30,"sex":"female","heightCm":165,"weightKg":65,"units":"imperial","experience":"beginner","equipment":["none"],"daysPerWeek":3,"sessionMinutes":30,"goal":"maintain","dietaryPattern":"","allergies":[],"foodPreferences":[]},"profileOnly":true,"expectedVersions":{"profileRevision":3},"idempotencyKey":"mvp0-profile-only-units"}'::jsonb))
 $$, 'display-unit edits remain available for unsupported profiles');
 select is((select units from public.profiles where id = '00000000-0000-0000-0000-000000000901'), 'imperial', 'profile-only unit edits persist the selected display units');
 select is((select revision from public.profiles where id = '00000000-0000-0000-0000-000000000901'), 4, 'profile-only edits bump only the profile revision');
@@ -84,30 +85,30 @@ select throws_ok($$
 $$, 'P0001', 'session.startedAt is required', 'workout sessions require a started timestamp');
 
 select throws_ok($$
-  select public.save_saved_meal('{"meal":{"id":"mvp0-empty-meal","name":"Empty","servings":1,"ingredients":[]},"idempotencyKey":"mvp0-empty-meal"}'::jsonb)
+  select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"mvp0-empty-meal","name":"Empty","servings":1,"ingredients":[]},"idempotencyKey":"mvp0-empty-meal"}'::jsonb))
 $$, 'P0001', 'meal ingredients are required', 'saved meals require at least one validated ingredient');
 
 select throws_ok($$
-  select public.toggle_grocery_item('{"itemId":"mvp0-item","expectedVersions":{"unknown":1},"idempotencyKey":"mvp0-unknown-version"}'::jsonb)
+  select public.toggle_grocery_item(pg_temp.calendar_intent('{"itemId":"mvp0-item","expectedVersions":{"unknown":1},"idempotencyKey":"mvp0-unknown-version"}'::jsonb))
 $$, 'P0001', 'unknown expected version field', 'unknown expected-version fields are rejected');
 select throws_ok($$
-  select public.toggle_grocery_item('{"itemId":"mvp0-item","expectedVersions":{"groceryRevision":1.5},"idempotencyKey":"mvp0-decimal-version"}'::jsonb)
+  select public.toggle_grocery_item(pg_temp.calendar_intent('{"itemId":"mvp0-item","expectedVersions":{"groceryRevision":1.5},"idempotencyKey":"mvp0-decimal-version"}'::jsonb))
 $$, 'P0001', 'groceryRevision must be an integer', 'expected versions reject decimal counters');
 
 select lives_ok($$
-  select public.save_saved_meal('{"meal":{"id":"mvp0-owned-meal","name":"Owned meal","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-owned-meal-create"}'::jsonb)
+  select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"mvp0-owned-meal","name":"Owned meal","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-owned-meal-create"}'::jsonb))
 $$, 'saved meals can be created through the authenticated wrapper');
 select is((select revision from public.meals where app_id = 'mvp0-owned-meal'), 1, 'new saved meals start at revision one');
 select lives_ok($$
-  select public.save_saved_meal('{"meal":{"id":"mvp0-owned-meal","name":"Owned meal updated","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-owned-meal-update"}'::jsonb)
+  select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"mvp0-owned-meal","name":"Owned meal updated","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-owned-meal-update"}'::jsonb))
 $$, 'saved meal updates bump the row revision');
 select throws_ok($$
-  select public.save_saved_meal('{"meal":{"id":"mvp0-owned-meal","name":"Stale overwrite","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"expectedVersions":{"recordRevision":1},"idempotencyKey":"mvp0-owned-meal-stale"}'::jsonb)
+  select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"mvp0-owned-meal","name":"Stale overwrite","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"expectedVersions":{"recordRevision":1},"idempotencyKey":"mvp0-owned-meal-stale"}'::jsonb))
 $$, 'P0001', 'stale_version', 'saved meal edits reject stale revisions');
 
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000902';
 select throws_ok($$
-  select public.save_saved_meal('{"meal":{"id":"mvp0-owned-meal","name":"Cross-account overwrite","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-cross-account-meal"}'::jsonb)
+  select public.save_saved_meal(pg_temp.calendar_intent('{"meal":{"id":"mvp0-owned-meal","name":"Cross-account overwrite","servings":1,"ingredients":[{"foodId":"food-egg","servings":1}]},"idempotencyKey":"mvp0-cross-account-meal"}'::jsonb))
 $$, 'P0001', null, 'saved meal edits cannot cross account ownership');
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000901';
 

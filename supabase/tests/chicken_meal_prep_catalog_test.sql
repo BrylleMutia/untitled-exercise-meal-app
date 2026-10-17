@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select no_plan();
 select is((select count(*)::int from public.meals where is_system and archived_at is null),4,'four active recipes');
 select is((select count(*)::int from public.foods where app_id like 'food-chicken-prep-%' and value_source='trusted_catalog'),9,'nine reviewed USDA foods');
@@ -43,8 +44,8 @@ select jsonb_build_object('weekOf','2026-10-19','idempotencyKey','chicken-genera
 'expectedVersions',jsonb_build_object('profileRevision',(select revision from public.profiles where id=auth.uid()),'mealPlanVersion',0,'groceryRevision',0));$$;
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000007901';
-select lives_ok($$select public.generate_nutrition_week(pg_temp.chicken_generation())$$,'both recipes generate through authorized transaction');
-select is(public.generate_nutrition_week(pg_temp.chicken_generation())->>'replayed','true','generation retries do not duplicate');
+select lives_ok($$select public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.chicken_generation()))$$,'both recipes generate through authorized transaction');
+select is(public.generate_nutrition_week(pg_temp.calendar_intent(pg_temp.chicken_generation()))->>'replayed','true','generation retries do not duplicate');
 select is(jsonb_array_length(public.get_nutrition_week('2026-10-19')->'plannedMeals'),8,'four occurrences each');
 select is((select count(*)::int from public.nutrition_logs where user_id=auth.uid()),0,'generation does not record intake');
 select ok(not exists(select 1 from public.grocery_items where user_id=auth.uid() and lower(name)~'sesame|spring onion|coriander'),'unmeasured garnishes excluded from grocery quantities');

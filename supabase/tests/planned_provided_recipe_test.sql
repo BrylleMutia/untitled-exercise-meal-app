@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select plan(16);
 insert into auth.users(id,email) values
   ('00000000-0000-0000-0000-000000009301','provided-plan-a@example.test'),
@@ -22,30 +23,30 @@ select jsonb_build_object('kind','meal','plannedMealId','provided-plan-beef','ex
 $$;
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000009301';
-select is((public.log_planned_meal(pg_temp.planned_provided('provided-plan-first',1.5))->>'status'),'completed','planned supplied-macro recipe logs on its first attempt');
+select is((public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-first',1.5)))->>'status'),'completed','planned supplied-macro recipe logs on its first attempt');
 select is((select calories from public.nutrition_logs where user_id=auth.uid()),840::numeric,'stored calories scale by actual portion rather than planned portion');
 select is((select protein_g from public.nutrition_logs where user_id=auth.uid()),67.5::numeric,'stored supplied protein scales exactly');
 select is((select carbs_g from public.nutrition_logs where user_id=auth.uid()),87::numeric,'stored supplied carbs scale exactly');
 select is((select fat_g from public.nutrition_logs where user_id=auth.uid()),24::numeric,'stored supplied fat scales exactly');
 select is((select planned_meal_app_id from public.logged_meals where user_id=auth.uid()),'provided-plan-beef','grouped log links to its planned entry');
 select is((select servings from public.planned_meals where user_id=auth.uid()),0.5::numeric,'logging preserves the planned portion');
-select is((public.log_planned_meal(pg_temp.planned_provided('provided-plan-first',1.5))->>'replayed'),'true','planned supplied-macro retry replays original intent');
+select is((public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-first',1.5)))->>'replayed'),'true','planned supplied-macro retry replays original intent');
 select is((select count(*)::integer from public.logged_meals where user_id=auth.uid()),1,'retry counts one eaten meal');
-select throws_ok($$select public.log_planned_meal(pg_temp.planned_provided('provided-plan-first',2))$$,'P0001',null,'reusing a key for a changed portion fails');
+select throws_ok($$select public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-first',2)))$$,'P0001',null,'reusing a key for a changed portion fails');
 reset role;
 update public.meal_plans set version=2 where app_id='provided-plan-plan';
 set local role authenticated;
-select is((public.log_planned_meal(pg_temp.planned_provided('provided-plan-first',1.5))->>'replayed'),'true','completed retry survives a later plan revision');
-select throws_ok($$select public.log_planned_meal(pg_temp.planned_provided('provided-plan-stale',1.5))$$,'P0001',null,'new stale intent still fails');
+select is((public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-first',1.5)))->>'replayed'),'true','completed retry survives a later plan revision');
+select throws_ok($$select public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-stale',1.5)))$$,'P0001',null,'new stale intent still fails');
 reset role;
 delete from public.mutation_idempotency where user_id='00000000-0000-0000-0000-000000009301' and operation='log_planned_meal';
 set local role authenticated;
-select is((public.log_planned_meal(pg_temp.planned_provided('provided-plan-first',1.5))->>'replayed'),'true','pre-migration completed claim remains retryable');
+select is((public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-first',1.5)))->>'replayed'),'true','pre-migration completed claim remains retryable');
 select is((select count(*)::integer from public.nutrition_logs where user_id=auth.uid()),1,'legacy retry cannot duplicate intake');
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000009302';
-select throws_ok($$select public.log_planned_meal(jsonb_set(pg_temp.planned_provided('provided-plan-foreign',1),'{expectedMealPlanVersion}','2'))$$,'P0001',null,'cross-account planned intent is denied');
+select throws_ok($$select public.log_planned_meal(pg_temp.calendar_intent(jsonb_set(pg_temp.planned_provided('provided-plan-foreign',1),'{expectedMealPlanVersion}','2')))$$,'P0001',null,'cross-account planned intent is denied');
 set local role anon;
-select throws_ok($$select public.log_planned_meal(pg_temp.planned_provided('provided-plan-anon',1))$$,'42501',null,'anonymous planned logging remains denied');
+select throws_ok($$select public.log_planned_meal(pg_temp.calendar_intent(pg_temp.planned_provided('provided-plan-anon',1)))$$,'42501',null,'anonymous planned logging remains denied');
 reset role;
 select * from finish();
 rollback;

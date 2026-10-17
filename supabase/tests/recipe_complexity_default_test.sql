@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select plan(20);
 select is((select count(*)::integer from public.meals where complexity is null),0,'all catalog and legacy recipes have complexity');
 select is((select complexity from public.meals where app_id='meal-creamy-lemon-chicken'),'easy','configured chicken complexity retained');
@@ -14,19 +15,19 @@ select jsonb_build_object('meal',jsonb_build_object('id','default-personal','nam
 $$;
 set local role authenticated;
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000001401';
-select lives_ok($$select public.save_saved_meal(pg_temp.recipe_default('default-create'))$$,'legacy creation omitting complexity succeeds');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(pg_temp.recipe_default('default-create')))$$,'legacy creation omitting complexity succeeds');
 select is((select complexity from public.meals where app_id='default-personal'),'medium','legacy creation stores Medium');
-select lives_ok($$select public.save_saved_meal(jsonb_set(pg_temp.recipe_default('default-hard'),'{meal,complexity}','"hard"'))$$,'supported Hard remains writable');
-select lives_ok($$select public.save_saved_meal(jsonb_set(pg_temp.recipe_default('default-null'),'{meal,complexity}','null'))$$,'legacy explicit null remains compatible');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(jsonb_set(pg_temp.recipe_default('default-hard'),'{meal,complexity}','"hard"')))$$,'supported Hard remains writable');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(jsonb_set(pg_temp.recipe_default('default-null'),'{meal,complexity}','null')))$$,'legacy explicit null remains compatible');
 select is((select complexity from public.meals where app_id='default-personal'),'hard','legacy null update preserves Hard');
-select lives_ok($$select public.save_saved_meal(pg_temp.recipe_default('default-omit'))$$,'legacy omission remains compatible');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(pg_temp.recipe_default('default-omit')))$$,'legacy omission remains compatible');
 select is((select complexity from public.meals where app_id='default-personal'),'hard','legacy omission preserves Hard');
-select throws_ok($$select public.save_saved_meal(jsonb_set(pg_temp.recipe_default('default-invalid'),'{meal,complexity}','"expert"'))$$,'P0001',null,'invalid complexity denied');
+select throws_ok($$select public.save_saved_meal(pg_temp.calendar_intent(jsonb_set(pg_temp.recipe_default('default-invalid'),'{meal,complexity}','"expert"')))$$,'P0001',null,'invalid complexity denied');
 select throws_ok($$update public.meals set complexity='easy' where app_id='default-personal'$$,'42501',null,'direct recipe update denied');
-select lives_ok($$select public.save_saved_meal(jsonb_set(jsonb_set(pg_temp.recipe_default('default-new-null'),'{meal,id}','"default-new-null"'),'{meal,complexity}','null'))$$,'legacy explicit null insert succeeds');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(jsonb_set(jsonb_set(pg_temp.recipe_default('default-new-null'),'{meal,id}','"default-new-null"'),'{meal,complexity}','null')))$$,'legacy explicit null insert succeeds');
 select is((select complexity from public.meals where app_id='default-new-null'),'medium','legacy explicit null insert stores Medium');
 set local role anon;
-select throws_ok($$select public.save_saved_meal(pg_temp.recipe_default('default-anon'))$$,'42501',null,'anonymous mutation denied');
+select throws_ok($$select public.save_saved_meal(pg_temp.calendar_intent(pg_temp.recipe_default('default-anon')))$$,'42501',null,'anonymous mutation denied');
 reset role;
 select * from finish();
 rollback;

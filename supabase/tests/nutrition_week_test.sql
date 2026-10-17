@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select plan(27);
 insert into auth.users(id,email) values ('00000000-0000-0000-0000-000000009701','week-a@example.test'),('00000000-0000-0000-0000-000000009702','week-b@example.test');
 insert into public.profiles(id,name,age,sex,height_cm,weight_kg,units,experience,equipment,days_per_week,session_minutes,goal)
@@ -31,31 +32,31 @@ create function pg_temp.week_edit(p_key text, p_version integer, p_skip boolean,
  'expectedVersions',jsonb_build_object('mealPlanVersion',p_version,'groceryRevision',(select revision from public.grocery_lists where user_id=auth.uid() and week_of='2026-10-05')));
 $$;
 create temp table week_retry as select pg_temp.week_edit('week-skip',1,true) payload;
-select lives_ok($$select public.edit_meal_plan((select payload from week_retry))$$,'older week remains editable after a newer week exists');
-select is(public.edit_meal_plan((select payload from week_retry))->>'replayed','true','unchanged retry returns authoritative result');
+select lives_ok($$select public.edit_meal_plan(pg_temp.calendar_intent((select payload from week_retry)))$$,'older week remains editable after a newer week exists');
+select is(public.edit_meal_plan(pg_temp.calendar_intent((select payload from week_retry)))->>'replayed','true','unchanged retry returns authoritative result');
 select is((public.get_nutrition_week('2026-10-05')->'mealPlan'->>'version')::int,2,'edit appends selected week version');
 select is((public.get_nutrition_week('2026-10-05')->'plannedMeals'->0->>'expected_calories')::numeric,280::numeric,'skip ignores client macro tampering and preserves prescription');
 select is((public.get_nutrition_week('2026-10-12')->'mealPlan'->>'version')::int,1,'other week version unchanged');
 select is((select count(*)::int from public.nutrition_logs where user_id=auth.uid()),110,'eaten history unchanged');
-select throws_ok($$select public.edit_meal_plan(pg_temp.week_edit('week-stale',1,false))$$,'P0001',null,'stale selected week version denied');
-select lives_ok($$select public.edit_meal_plan(pg_temp.week_edit('week-portion',2,false,1))$$,'explicit portion edit is allowed');
+select throws_ok($$select public.edit_meal_plan(pg_temp.calendar_intent(pg_temp.week_edit('week-stale',1,false)))$$,'P0001',null,'stale selected week version denied');
+select lives_ok($$select public.edit_meal_plan(pg_temp.calendar_intent(pg_temp.week_edit('week-portion',2,false,1)))$$,'explicit portion edit is allowed');
 select is((public.get_nutrition_week('2026-10-05')->'plannedMeals'->0->>'expected_calories')::numeric,560::numeric,'changed portion uses supplied macros');
 select is((select expected_calories from public.planned_meals where meal_plan_row_id=(select row_id from public.meal_plans where user_id=auth.uid() and week_of='2026-10-05' and version=1)),280::numeric,'original prescription version unchanged');
 create temp table skip_retry as select pg_temp.week_edit('week-public-skip',3,true,1) payload;
-select lives_ok($$select public.skip_planned_meal((select payload from skip_retry))$$,'legacy public skip uses selected week');
-select is(public.skip_planned_meal((select payload from skip_retry))->>'replayed','true','public skip retries preserve their operation receipt');
+select lives_ok($$select public.skip_planned_meal(pg_temp.calendar_intent((select payload from skip_retry)))$$,'legacy public skip uses selected week');
+select is(public.skip_planned_meal(pg_temp.calendar_intent((select payload from skip_retry)))->>'replayed','true','public skip retries preserve their operation receipt');
 select is((public.get_nutrition_week('2026-10-05')->'mealPlan'->>'version')::int,4,'retry does not append another plan version');
 select ok(position('pg_advisory_xact_lock' in (select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='log_planned_meal')) > 0,'linked logging shares the week edit lock');
 reset role;
 update public.meals set archived_at=now(), provided_nutrition=jsonb_set(provided_nutrition,'{calories}','999') where app_id='meal-korean-beef-bowl';
 set local role authenticated;
 select ok((public.get_nutrition_week('2026-10-05')->'recipes'->0->>'archived_at') is not null,'weekly reads include archived prescription references');
-select lives_ok($$select public.edit_meal_plan(pg_temp.week_edit('week-archived-restore',4,false,1))$$,'unchanged archived prescription can be restored');
+select lives_ok($$select public.edit_meal_plan(pg_temp.calendar_intent(pg_temp.week_edit('week-archived-restore',4,false,1)))$$,'unchanged archived prescription can be restored');
 select is((public.get_nutrition_week('2026-10-05')->'plannedMeals'->0->>'expected_calories')::numeric,560::numeric,'current recipe changes do not recalculate saved unchanged nutrition');
 select ok(not has_table_privilege('authenticated','public.planned_meals','INSERT'),'direct writes remain denied');
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000009702';
-select is(jsonb_array_length(public.get_nutrition_week('2026-10-05')->'nutritionLogs'),0,'cross-user weekly history not visible');
-select throws_ok($$select public.edit_meal_plan(pg_temp.week_edit('week-foreign',3,false))$$,'P0001',null,'cross-user plan edit denied');
+select is(jsonb_array_length(public.get_nutrition_week('2026-10-04')->'nutritionLogs'),0,'cross-user weekly history not visible');
+select throws_ok($$select public.edit_meal_plan(pg_temp.calendar_intent(pg_temp.week_edit('week-foreign',3,false)))$$,'P0001',null,'cross-user plan edit denied');
 set local "request.jwt.claim.sub" = '';
 select throws_ok($$select public.get_nutrition_week('2026-10-05')$$,'P0001',null,'identity required even for authenticated role');
 select * from finish();

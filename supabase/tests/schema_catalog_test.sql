@@ -32,14 +32,14 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r'
-), 29, 'the public application schema contains exactly 29 tables');
+), 30, 'the public application schema contains exactly 30 tables');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 29, 'every public application table has RLS enabled');
+), 30, 'every public application table has RLS enabled');
 
 select ok((
   select count(*) = 10
@@ -71,7 +71,7 @@ select ok((
 ), 'application-facing app_id columns are present and non-null');
 
 select ok((
-  select count(*) = 24
+  select count(*) = 25
   from information_schema.columns c
   join pg_class t on t.relname = c.table_name
   join pg_namespace n on n.oid = t.relnamespace and n.nspname = 'public'

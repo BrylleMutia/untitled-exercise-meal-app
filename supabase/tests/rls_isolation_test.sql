@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 
 select plan(38);
 
@@ -152,7 +153,7 @@ select is((select count(*)::int from public.meals where not is_system), 0, 'anon
 select throws_ok($$select count(*) from public.profiles$$, '42501', null, 'anonymous users cannot read durable profiles');
 select throws_ok($$insert into public.weight_entries (app_id, user_id, entry_date, weight_kg) values ('test-anon-weight', '00000000-0000-0000-0000-000000000201', '2026-09-10', 65)$$,
   '42501', null, 'anonymous users cannot write durable tables');
-select throws_ok($$select public.complete_onboarding('{}'::jsonb)$$, '42501', null, 'anonymous users cannot execute mutation RPCs');
+select throws_ok($$select public.complete_onboarding(pg_temp.calendar_intent('{}'::jsonb))$$, '42501', null, 'anonymous users cannot execute mutation RPCs');
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000201';
@@ -195,7 +196,7 @@ select throws_ok($$update public.profiles set name = 'hijacked' where id = '0000
   '42501', null, 'User A cannot update User B through a direct table write');
 select throws_ok($$delete from public.profiles where id = '00000000-0000-0000-0000-000000000202'$$,
   '42501', null, 'User A cannot delete User B through a direct table write');
-select throws_ok($$select public.toggle_grocery_item(jsonb_build_object('itemId', 'test-rls-grocery-item-b', 'idempotencyKey', 'test-cross-user-toggle'))$$,
+select throws_ok($$select public.toggle_grocery_item(pg_temp.calendar_intent(jsonb_build_object('itemId', 'test-rls-grocery-item-b', 'idempotencyKey', 'test-cross-user-toggle')))$$,
   'P0001', null, 'User A cannot mutate User B grocery data through an RPC');
 select is((select count(*)::int from public.meal_ingredients mi join public.meals m on m.row_id = mi.meal_row_id where m.app_id = 'test-rls-meal-b'), 0, 'User A cannot see User B custom meal ingredients');
 

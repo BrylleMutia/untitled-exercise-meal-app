@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/calendar_intent.inc
 select no_plan();
 insert into auth.users(id,email) values
 ('00000000-0000-0000-0000-000000004001','card-a@example.test'),
@@ -50,14 +51,14 @@ select lives_ok($$select public.set_recipe_favorite(pg_temp.favorite_payload('ca
 select is((pg_temp.card_meta('card-1')->>'favoriteRevision')::integer,2,'removal keeps concurrency history');
 select is(pg_temp.card_meta('card-1')->>'favorite','false','removal persists');
 select throws_ok($$insert into public.recipe_favorites(user_id,meal_row_id) select auth.uid(),row_id from public.meals limit 1$$,'42501',null,'direct favorite writes denied');
-select throws_ok($$select public.save_recipe(pg_temp.card_recipe('card-unknown','card-unknown'))$$,'P0001',null,'authoring requires complexity');
-select lives_ok($$select public.save_saved_meal(pg_temp.card_recipe('card-legacy','card-legacy'))$$,'legacy saves remain compatible');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(pg_temp.card_recipe('card-unknown','card-unknown')))$$,'P0001',null,'authoring requires complexity');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(pg_temp.card_recipe('card-legacy','card-legacy')))$$,'legacy saves remain compatible');
 select is((select complexity from public.meals where app_id='card-legacy'),'medium','legacy recipes default to Medium');
-select lives_ok($$select public.save_recipe(jsonb_set(pg_temp.card_recipe('card-authored','card-authored'),'{meal,complexity}','"medium"'))$$,'authoring saves manual complexity');
+select lives_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_set(pg_temp.card_recipe('card-authored','card-authored'),'{meal,complexity}','"medium"')))$$,'authoring saves manual complexity');
 select is((select complexity from public.meals where app_id='card-authored'),'medium','manual complexity persists');
-select lives_ok($$select public.save_saved_meal(pg_temp.card_recipe('card-authored','card-omit'))$$,'legacy mutation can omit complexity');
+select lives_ok($$select public.save_saved_meal(pg_temp.calendar_intent(pg_temp.card_recipe('card-authored','card-omit')))$$,'legacy mutation can omit complexity');
 select is((select complexity from public.meals where app_id='card-authored'),'medium','omission preserves authored complexity');
-select throws_ok($$select public.save_recipe(jsonb_set(pg_temp.card_recipe('card-invalid','card-invalid'),'{meal,complexity}','"automatic"'))$$,'P0001',null,'unsupported complexity rejected');
+select throws_ok($$select public.save_recipe(pg_temp.calendar_intent(jsonb_set(pg_temp.card_recipe('card-invalid','card-invalid'),'{meal,complexity}','"automatic"')))$$,'P0001',null,'unsupported complexity rejected');
 select ok((public.export_account_data('{"idempotencyKey":"card-export"}')->'data') ? 'recipeFavorites','account export includes favorites');
 reset role;
 insert into public.logged_meals(app_id,user_id,log_date,meal_slot,name,meal_row_id,source_mode)
