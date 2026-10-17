@@ -5,10 +5,12 @@ import { ListChecks, ListX, Shuffle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { HelpPopover } from "@/components/ui/HelpPopover";
+import { DayCheckboxStrip } from "@/components/DayStrip";
 import { GenerationRecipeCard } from "./GenerationRecipeCard";
+import { MealRow } from "./MealRow";
 import { useApp } from "@/contexts/AppContext";
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
-import { addDays, formatCompactWeekRange, formatFullDate, weekDates, weekdayShort } from "@/utility/dates";
+import { formatFullDate, weekDates } from "@/utility/dates";
 import { mealSlotLabels } from "@/utility/recipeMealSlots";
 import { defaultPlanningDates, generateWeeklyMeals, generationBasis, weeklyRecipeOptions, type GenerationPreview } from "@/utility/weeklyMealGeneration";
 import type { AppSnapshot } from "@/types/domain";
@@ -19,12 +21,15 @@ type GenerationDraft = {
   expectedVersions: ExpectedVersions; recipes: GenerateNutritionWeekInput["recipes"]; acknowledged: boolean;
 };
 
+const bulkActionClassName = "!min-h-11 min-w-11 !gap-0 !px-0 whitespace-nowrap text-xs md:!gap-2 md:!px-3";
+
 export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, unavailable, onSave, onClose, onRefresh }: {
   snapshot: AppSnapshot; weekOf: string; returnFocus: RefObject<HTMLElement | null>; pending: boolean; unavailable: boolean;
   onSave: (input: Omit<GenerateNutritionWeekInput, "currentSnapshot">) => Promise<boolean>;
   onClose: () => void; onRefresh: () => void;
 }) {
   const { error } = useApp();
+  const dayHeadingId = useId();
   const recipeHeadingId = useId();
   const [draft, setDraft] = useState<GenerationDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -95,22 +100,27 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
         <Button disabled={busy || unavailable || !draft || changed || !draft.preview.assignments.length || Boolean(draft.preview.unused.length && !draft.acknowledged)} onClick={() => void save()}>{saving ? "Saving…" : "Save plan"}</Button></div>
     </div>}>
     <div className="grid min-w-0 gap-5">
-      <p className="font-bold"><span aria-hidden="true">{formatCompactWeekRange(weekOf)}</span><span className="sr-only">{formatFullDate(weekOf)} – {formatFullDate(addDays(weekOf, 6))}</span></p>
       {storageFailed ? <p className="text-sm" role="status">Draft recovery is unavailable. Keep this dialog open until saved.</p> : null}
       {unavailable ? <p className="text-sm" role="status">Refresh recipes and this week before saving. Your preview is retained.</p> : null}
       {changed ? <div className="grid gap-2 rounded-2xl bg-peach-50 p-3" role="status"><p className="text-sm">This week, a recipe, or your planning settings changed. Review a fresh preview before saving.</p><Button variant="soft" disabled={busy || unavailable} onClick={() => update(draft!.selected.filter(id => options.some(option => option.recipe.id === id)))}>Review updated preview</Button></div> : null}
-      <fieldset disabled={selectionDisabled} className="min-w-0">
-        <legend className="font-extrabold">Choose days</legend>
-        <div className="my-2 flex flex-wrap justify-end gap-2"><Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={() => update(draft!.selected, weekDates(weekOf))}>Select all days</Button><Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={() => update(draft!.selected, [])}>Clear days</Button></div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{weekDates(weekOf).map(date => <label key={date} className="flex min-h-11 items-center gap-2 rounded-xl border border-ink/15 px-3 py-2 text-sm font-bold"><input type="checkbox" aria-label={formatFullDate(date)} checked={draft?.selectedDates.includes(date) ?? false} onChange={event => update(draft!.selected, event.target.checked ? [...draft!.selectedDates, date].sort() : draft!.selectedDates.filter(value => value !== date))} />{weekdayShort(date)} {Number(date.slice(8))}</label>)}</div>
+      <fieldset disabled={selectionDisabled} aria-labelledby={dayHeadingId} className="min-w-0">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 id={dayHeadingId} className="font-extrabold">Choose days</h3>
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+            <Button variant="primary" className={bulkActionClassName} disabled={selectionDisabled} onClick={() => update(draft!.selected, weekDates(weekOf))}><ListChecks className="h-4 w-4 shrink-0" aria-hidden /><span className="sr-only md:not-sr-only">Select all</span></Button>
+            <Button variant="soft" className={bulkActionClassName} disabled={selectionDisabled} onClick={() => update(draft!.selected, [])}><ListX className="h-4 w-4 shrink-0" aria-hidden /><span className="sr-only md:not-sr-only">Clear</span></Button>
+          </div>
+        </div>
+        <DayCheckboxStrip weekOf={weekOf} selectedDates={draft?.selectedDates ?? []} disabled={selectionDisabled}
+          onToggle={(date, checked) => update(draft!.selected, checked ? [...draft!.selectedDates, date].sort() : draft!.selectedDates.filter(value => value !== date))} />
         {!draft?.selectedDates.length ? <p className="mt-2 text-sm text-ink-soft" role="status">Choose at least one day to preview meals.</p> : null}
       </fieldset>
       <fieldset disabled={selectionDisabled} aria-labelledby={recipeHeadingId} className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 id={recipeHeadingId} className="font-extrabold">Choose recipes</h3>
           <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
-            <Button variant="primary" className="!min-h-11 !px-3 whitespace-nowrap text-xs" disabled={selectionDisabled} onClick={() => update(options.map(option => option.recipe.id))}><ListChecks className="h-4 w-4 shrink-0" aria-hidden />Select all</Button>
-            <Button variant="soft" className="!min-h-11 !px-3 whitespace-nowrap text-xs" disabled={selectionDisabled} onClick={() => update([])}><ListX className="h-4 w-4 shrink-0" aria-hidden />Clear</Button>
+            <Button variant="primary" className={bulkActionClassName} disabled={selectionDisabled} onClick={() => update(options.map(option => option.recipe.id))}><ListChecks className="h-4 w-4 shrink-0" aria-hidden /><span className="sr-only md:not-sr-only">Select all</span></Button>
+            <Button variant="soft" className={bulkActionClassName} disabled={selectionDisabled} onClick={() => update([])}><ListX className="h-4 w-4 shrink-0" aria-hidden /><span className="sr-only md:not-sr-only">Clear</span></Button>
           </div>
         </div>
         <div className="@container"><ul aria-label="Recipe choices" className="grid grid-cols-1 gap-2 @min-[17.5rem]:grid-cols-2 @min-[40rem]:grid-cols-4">{options.map(option => <li key={option.recipe.id} className="min-w-0">
@@ -120,8 +130,12 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
         </li>)}</ul></div>
         {!options.length ? <p className="text-sm text-ink-soft">Create a recipe and assign its meals in Details to begin.</p> : null}
       </fieldset>
-      <section className="grid min-w-0 gap-3" aria-label="Generated plan preview"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-extrabold">Preview · {draft?.preview.assignments.length ?? 0} meals</h3><Button variant="soft" disabled={busy || unavailable || !draft || changed || !draft.selected.length} onClick={() => update(draft!.selected)}><Shuffle className="h-4 w-4" aria-hidden />Shuffle</Button></div>
-        {draft?.preview.assignments.length ? <ul className="grid gap-2">{draft.preview.assignments.map(row => <li key={row.id} className="grid min-w-0 gap-1 border-b border-ink/10 pb-2 text-sm"><span className="font-bold">{formatFullDate(row.date)} · {mealSlotLabels[row.slot]}</span><span className="break-words">{row.label} · 1 serving</span></li>)}</ul> : <p className="text-sm text-ink-soft">No meals fit the selected days, recipes, empty slots, and eligible daily targets.</p>}
+      <section className="grid min-w-0 gap-3" aria-label="Generated plan preview"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-extrabold">Preview · {draft?.preview.assignments.length ?? 0} {draft?.preview.assignments.length === 1 ? "meal" : "meals"}</h3><Button variant="soft" disabled={busy || unavailable || !draft || changed || !draft.selected.length} onClick={() => update(draft!.selected)}><Shuffle className="h-4 w-4" aria-hidden />Shuffle</Button></div>
+        {draft?.preview.assignments.length ? <ul className="grid gap-2">{draft.preview.assignments.map(row => <MealRow key={row.id} summary={<>
+          <span className="block text-[11px] font-bold text-ink-soft">{formatFullDate(row.date)}</span>
+          <span className="block break-words text-sm font-extrabold">{row.label}</span>
+          <span className="block text-[11px] font-semibold text-ink-soft">{mealSlotLabels[row.slot]} · {row.servings} {row.servings === 1 ? "serving" : "servings"}</span>
+        </>} />)}</ul> : <p className="text-sm text-ink-soft">No meals fit the selected days, recipes, empty slots, and eligible daily targets.</p>}
       </section>
       {draft?.preview.unused.length ? <section className="grid gap-2" aria-label="Unused servings"><h3 className="font-extrabold">Unused servings</h3><ul className="grid gap-2 text-sm">{draft.preview.unused.map(row => <li key={row.mealId}><span className="font-bold">{row.name}: {Number(row.servings.toFixed(4))}</span> — {row.reason}</li>)}</ul><label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" disabled={busy || changed} checked={draft.acknowledged} onChange={event => setDraft({ ...draft, acknowledged: event.target.checked })} />Save the meals shown, leaving these servings unused.</label></section> : null}
       <Button variant="ghost" disabled={busy} className="w-fit text-xs underline" onClick={onRefresh}>Refresh recipes and week</Button>

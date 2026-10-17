@@ -16,13 +16,13 @@ export function GenerationRecipeCard({ option, selected, disabled, onChange }: {
   const id = useId();
   const { recipe, used, remaining } = option;
   return <label className={`relative grid h-full min-h-11 min-w-0 content-start gap-2 rounded-2xl border p-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-lav-500 ${selected ? "border-ink bg-lav-50" : "border-ink/15 bg-white"} ${disabled ? "cursor-not-allowed" : "cursor-pointer hover:border-ink/60"}`}>
+    <input type="checkbox" className="sr-only"
+      aria-labelledby={`${id}-name`} aria-describedby={`${id}-details`} disabled={disabled} checked={selected}
+      onChange={event => onChange(event.target.checked)} />
     <span className="grid aspect-square min-w-0 rounded-xl bg-lav-100 p-[15px]">
       <RecipeCover image={recipe.image} name={recipe.name} selection />
     </span>
-    <span className="flex min-h-11 min-w-0 items-start gap-2">
-    <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-ink focus-visible:outline-none"
-      aria-labelledby={`${id}-name`} aria-describedby={`${id}-details`} disabled={disabled} checked={selected}
-      onChange={event => onChange(event.target.checked)} />
+    <span className="flex min-h-11 min-w-0 items-start">
     <span id={`${id}-name`} className="min-w-0 break-words text-sm font-extrabold leading-snug [overflow-wrap:anywhere]">{recipe.name}</span>
     </span>
     <span id={`${id}-details`} className="grid min-w-0 gap-2 break-words text-xs leading-relaxed text-ink-soft [overflow-wrap:anywhere]">
