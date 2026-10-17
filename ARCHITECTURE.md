@@ -841,7 +841,7 @@ the applicable database tests.
 ## Read Models and Snapshot Size
 
 `loadNutritionWeek(weekOf)` uses authenticated security-invoker
-`get_nutrition_week(date)` for one validated Monday-based local week. Its single
+`get_nutrition_week(date)` for one validated account-preferred local week. Its single
 read includes the latest version for that week, saved planned rows, complete
 seven-day logs and grouped meals, effective target versions, referenced recipes
 (including permitted archives), ingredients/foods/serving options and matching
@@ -884,6 +884,25 @@ plan and grocery versions, and checks the latest prescription row after a skip.
 Its recipe fixture includes authoring instructions, complexity and meal slots;
 the result uses the distinct `save_recipe` operation. The runner continues to
 verify original plan preservation, retry replay and two-account isolation.
+
+Grocery reuses the focused weekly read model and stale-response protection.
+Its selected-week context is passed through Context to existing grocery RPCs;
+global current-week state is refreshed after a mutation rather than replaced by
+the viewed week. Account/week keyed editor instances isolate draft recovery.
+Grocery payloads carry list identity, account week and expected list revision;
+regeneration also carries the selected plan version. Private preflight scopes
+these checks by week, and item updates/bumped parent revisions target one list,
+because ingredient item IDs may repeat in separate weeks. Legacy item payloads
+without list scope target only the latest list, never every matching item.
+ID-only legacy custom-item payloads remain supported.
+
+Explicit-week regeneration recomputes ingredient and standalone-food requirements
+from the latest authoritative plan and canonical food serving bases. It retains
+checked state, explicit quantities, custom items and removals, and reconciles
+obsolete generated rows. Empty-week extra-item creation accepts revision zero
+only for that explicit create path. These operations use existing authorized
+public wrappers, idempotency receipts, locks and privileges; no new public RPC,
+table or client write grant is introduced.
 
 The main app snapshot should contain only the compact state required to render
 the authenticated user's current profile, active targets, current plan, and
@@ -1219,3 +1238,67 @@ A feature is complete only when all applicable conditions are met:
 - [`DESIGN.md`](./DESIGN.md) owns current visual/design decisions, design tokens, UX patterns, responsive/navigation model, and auth-first setup.
 - [`AGENTS.md`](./AGENTS.md) owns mandatory agent workflow, task routing, product guardrails, engineering guardrails, and verification requirements.
 - Source code, tests, migrations, generated types, and deployed configuration remain the final truth for current implementation behavior.
+
+
+## Account calendar transitions
+
+`UserProfile.weekStartsOn` is a validated `Weekday` (Sunday=0 through Saturday=6).
+`profiles.week_starts_on` defaults to Sunday; `calendar_revision` changes only
+when week boundaries change. Date utilities accept the preference and operate on
+local date keys. Profile mapping, exports, current-week reads, focused week reads,
+and calendar consumers use the same boundary. Omitted fields on unrelated profile
+edits retain the saved preference. A dedicated typed Context/repository intent
+calls `set_week_start` with an optimistic profile revision and retry key.
+
+`private.regroup_calendar` captures source plans and groceries in owner-readable
+`calendar_transitions`, deactivates the old grouping with `calendar_active`, then
+creates new plan snapshots by unchanged meal date. A guarded transition reference
+allows exact copies of stored historical prescription values without applying
+new catalog or dietary calculations to those copies. Normal future plan edits
+continue through the original validation. Inactive snapshots remain available to
+account export. Grocery generation uses the same recipe-yield and grams/pieces
+basis as the client. Carried manual state has `carried_from_week`; destination
+lists require review. Reusing a former boundary clears its inactive destination
+items before transferring the current source state, preventing stale resurrection.
+
+All mutation claims acquire the account calendar lock before profile/week locks.
+Calendar-dependent writes carry the last authoritative `calendarRevision` and
+reject outdated clients with `stale_version`. This concurrency metadata is
+excluded from the business-intent request hash so a confirmed operation remains
+replayable after its own calendar revision changes. Preference updates and all
+regrouping commit or roll back together; no browser cache is authoritative.
+
+Generation intents and drafts carry `selectedDates`. Repository and RPC validation
+require a unique, nonempty subset of the displayed seven-day range and reject
+assignments outside it. Preview basis includes profile/calendar state, recipes,
+plans, groceries, targets and logs; stale data requires renewed review. These
+changes do not address the separately deferred mobile unresolved-meal report.
+
+Migration preflight for `20261017011755_configurable_week_starts.sql`: local and
+linked history matched through `20261016075845`; the linked dry run was up to date.
+Normalized dumps of public/private schemas matched exactly before implementation.
+No history repair or unrelated migration was needed. Verification artifacts are
+kept under ignored `output/calendar/verification/`.
+
+Deployment verification (2026-10-17): the linked project applied only
+`20261017011755`; migration history matches and the subsequent dry run is up to
+date. Normalized deployed public/private schemas match the verified local schema.
+All 240 latest prescribed rows were regrouped with zero changed or missing
+prescription facts, and original versions remain retained. Authenticated owner
+week reads and the preference RPC, cross-user isolation, and anonymous denial
+passed in a rolled-back verification transaction. That migration checkpoint
+verified the frontend locally; it did not publish a hosted frontend release.
+
+Verification: 425 local tests, 22 repository integration tests, 1,110 database
+assertions, the 31-wrapper local RPC smoke test, and the concurrency script passed.
+Desktop/mobile browser flows passed including keyboard selection, enlarged text,
+reduced motion, selected-day generation, and retained input after failed saves.
+Typecheck, ESLint and the Next.js production build passed. Database lint retains
+only the existing unused `p_payload` warning in `claim_deleted_recipe_images`.
+
+Frontend delivery uses the existing Vercel project `cali-exercise-meal-planner`
+and production domain `https://cali-meal-planner.vercel.app`. Its GitHub
+integration deploys `main`. Release verification must match the production
+deployment's source commit to the pushed Git head and confirm the production
+alias is ready. Both calendar migrations above are already deployed; packaging
+the frontend does not require reapplying them.

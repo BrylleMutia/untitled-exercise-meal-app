@@ -698,23 +698,27 @@ assumptions. No alternate image picker or new authoring control is introduced.
 The Nutrition recipe section is labeled “Recipes”, including its region and
 contextual help. Generate in the Planned header uses the shared navy primary
 button with a leading WandSparkles icon; Create in the Recipes header uses the
-soft/light button with a leading plus icon. Generate opens “Generate plan”. The
-visible range is compact, for example “Mon, Oct 12 - Sun, Oct 18”; assistive text
-retains both full dates and years. The one-batch explanation lives in the shared
+soft/light button with a leading plus icon. Generate opens “Generate plan” with
+Choose days first and no standalone week range. Each date retains its full date
+and year for assistive technology. The one-batch explanation lives in the shared
 header help popover. Selectable compact cards reuse recipe covers and the pastel
 surfaces, showing name, assigned meals, yield, already-planned and remaining
-servings. Each whole-card label owns a native checkbox with a recipe-name label,
+servings. Each whole-card label owns a visually hidden native checkbox with a recipe-name label,
 associated planning details, a thin navy selected border and visible focus.
 The square cover fills its image well inside a 15px background inset on every
-side; the checkbox sits beside the recipe name below the unobstructed image.
+side. The unobstructed name sits below the image without a visible checkbox.
+Selection is shown through the navy border and lavender background; the focus
+outline remains distinct from selection.
 Every displayed card is selectable, including exhausted or restricted recipes.
 Select all checks every displayed card; generation eligibility remains separate
 from selection. Cards end at the yield/planned/remaining counters, with no
 restriction or exclusion messages in their content or checkbox descriptions.
 Unused-serving explanations remain in the preview. The Choose recipes heading
-has right-aligned Select all (navy primary) and Clear (soft) text buttons with
-leading ListChecks/ListX icons and 44px targets. Their visible labels supply their
-accessible names without redundant tooltips. The header and action group wrap
+has right-aligned Select all (navy primary) and Clear (soft) actions with
+ListChecks/ListX icons. Both this header and Choose days use icon-only actions
+below 768px with at least 44 × 44px targets; icons and visible labels appear from
+768px upward. Screen-reader labels remain available at every width without
+redundant tooltips. The header and action group wrap
 with the actions right-aligned when needed. Interaction freezes
 during loading, stale review and saving.
 The container-based grid uses two columns at normal mobile text size and up to
@@ -823,14 +827,32 @@ bounded spelling suggestions show “Close match” and require explicit selecti
 
 ### Grocery custom-item form
 
+The mint week toolbar precedes the list with Previous / This week / Next controls
+and a labeled native calendar input for jumping directly to any week. Its compact
+preference-aligned seven-day range shows its year (both years across New Year) and retains full
+dates for assistive technology. Controls
+wrap at narrow widths and enlarged text without hiding the date input. Week
+navigation is frozen during a save; read transitions retain the toolbar and show
+an explicit loading or Retry state instead of another week's items.
+
 The weekly list explains that the form adds items outside the meal plan. On
 narrow screens, the item-name input takes a full row so entered text stays
 readable; quantity, unit, and Add sit below it. At wider widths, the controls
 share one row with fixed widths for quantity and unit. The item name has a
 descriptive accessible label, and an in-progress item remains a recoverable
-draft until it is saved. In the list below, narrow item rows keep the name and
-remove action above the quantity controls; names can wrap, and the checkbox
-has a 44px touch target.
+draft until it is saved. Category cards use available width rather than forcing
+two narrow columns. Each item puts its checkbox beside a wrapping name and
+generated quantity, followed by the editable quantity and unit across the row
+and then decrease, increase and Remove controls. Action targets remain 44px at
+enlarged text sizes; full quantities remain readable without squeezing the name.
+Week controls wrap when their labels need more room.
+
+The list heading is “Grocery list”; its help explains recipe-yield scaling,
+skipped meals and unmeasured exclusions. Generated quantities and “adjusted by
+you” remain visible. Each account/week has its own recoverable extra-item draft,
+including empty weeks. Fields and list mutations are disabled during loading,
+failed refreshes and pending saves. Extra-item fields also wait for draft recovery
+before accepting input, so recovery cannot replace newly typed text.
 
 ## Shared UI Component Inventory
 
@@ -1100,3 +1122,40 @@ status update. The auth-first boundary is consistently labeled in source and
 setup documentation; durable Supabase domain persistence is implemented. See
 the current RC3 verification record in `MVP_Priority_Matrix.md` for gates that
 remain unverified.
+
+
+## Start of week and generation date selection
+
+Onboarding's preferences include a labeled native Start of week select with seven
+weekday names, initially Sunday, and a review-summary row. Settings exposes the
+same control with a Save start of week action, pending feedback, retained input
+on failure, and an explicit Refresh and review action for stale profiles. The
+help explains unchanged dates/history and where grocery edits are carried. Success
+announces regrouping and asks the user to review grocery lists.
+
+Generate plan starts with Choose days before Choose recipes, without a separate
+week-range line. Its native checkboxes share Nutrition's day-strip tiles: weekday
+header, date number, month, dashed divider, dark selected header/border, and today
+marker. Only the generation dialog's unselected tiles have a 1px dashed outer
+border in ink at 50% opacity. The main Nutrition selector keeps its white outer
+border and blush hover border. Selected tiles retain a solid dark outer border
+in both selectors.
+Accessible names contain the full date and year. The seven-day strip scrolls
+within its own bounds where needed, with 44px minimum controls, visible keyboard
+focus, existing pastel tokens, and reduced-motion support. Clearing selections
+retains the displayed week. Choose days and Choose recipes each align their
+heading with a primary Select all/ListChecks action and soft Clear/ListX action.
+Both sets show icons only below 768px, retaining accessible labels and 44px
+targets, and show text with icons from 768px. Headers wrap at narrow widths.
+Empty selection has specific guidance and cannot
+be saved.
+
+Generated preview assignments reuse the Planned section's compact lavender meal
+rows. Each read-only row shows the full date, bold meal name, meal slot, and serving
+count, without nutrition pills, source details, or saved-meal actions. The preview
+count uses singular meal for one assignment and plural meals otherwise.
+
+Day strips, week navigators, Progress weekday headers and workout cards follow
+the account preference. Existing dates and today indicators remain unchanged.
+Grocery lists show a regrouping review notice and identify carried edits by their
+source week. Loading/error states remain distinct from genuinely empty weeks.

@@ -761,18 +761,22 @@ and release-packaging gates are tracked in
 [`MVP3_HANDOVER.md`](./MVP3_HANDOVER.md#pending-release-work).
 
 Nutrition's Planned section also offers Generate for the currently selected
-Monday–Sunday week. Users select assigned, active recipes and review a randomized
-preview in “Generate plan” before Save plan. Its compact week range retains full
-dates and years for screen readers; generation guidance is available in header
-help. Recipe choices are compact cover cards with assigned meals, yield, planned
-and remaining servings. Whole-card checkbox selection supports keyboard input;
-every displayed active recipe can be selected, and Select all checks all cards.
+account-preferred seven-day week. Users select assigned, active recipes and review a randomized
+preview in “Generate plan” before Save plan. The dialog starts with Choose days;
+individual date controls retain full dates and years for screen readers, without
+a separate week-range line. Generation guidance is available in header help.
+Recipe choices are compact cover cards with assigned meals, yield, planned
+and remaining servings. Visually hidden native checkboxes keep whole-card
+selection accessible by keyboard; selected cards use a dark border and lavender
+background without a visible checkbox.
+Every displayed active recipe can be selected, and Select all checks all cards.
 Selecting an exhausted or restricted recipe does not make it eligible or create
 another batch. Cards end at Remaining, without restriction messages in their
 content or checkbox descriptions. The preview's Unused servings section retains
 reasons and partial-result acknowledgment. Select all (primary) and Clear (soft)
-sit at the right of Choose recipes with visible labels and leading ListChecks/ListX
-icons. Nutrition's Saved meals section is displayed and announced as Recipes;
+sit at the right of Choose recipes and Choose days with ListChecks/ListX icons.
+Below 768px these are icon-only controls with accessible labels and 44px minimum
+touch targets; from 768px they also show text. Nutrition's Saved meals section is displayed and announced as Recipes;
 its Create action uses the soft/light button with a plus icon. The Planned
 header's Generate action remains primary with a leading WandSparkles icon.
 The grid uses two mobile columns
@@ -812,6 +816,10 @@ with one week.
 
 Required behavior:
 
+- Browse previous/next weeks, return to This week, or jump to a calendar date;
+  the chosen date selects its account-preferred week and its own saved grocery list.
+- Load the selected week independently of Nutrition's current-week snapshot.
+  Loading and failed reads must not appear as empty lists; Retry retains input.
 - Combine duplicate ingredients
 - Multiply quantities by planned servings
 - Group items by category
@@ -828,6 +836,19 @@ generated quantity separately from a user-adjusted quantity. Preserve checked
 state, explicit quantity overrides, removed items, and custom items when the
 list is regenerated; surface changed generated quantities without silently
 overwriting user corrections.
+
+Each grocery mutation targets the selected list and checks its revision. The
+same ingredient appearing in two weeks must never cause a checkbox, quantity,
+or removal action in one week to change the other. Custom-item drafts are scoped
+to account and week; older unscoped drafts remain recoverable in the current
+week. Adding an extra item to an empty week creates that week's list.
+
+Regenerate derives requirements from the authoritative latest plan for that
+week: each recipe ingredient is multiplied by planned servings divided by recipe
+yield; standalone foods are included, skipped entries are excluded, and totals
+are combined before rounding to whole grams or rounding pieces up. Unmeasured
+seasonings remain excluded; explicit quantified garnish assumptions remain
+included. User quantities are shown separately from generated requirements.
 
 The first version does not need store-specific pricing, inventory tracking, or
 online ordering.
@@ -1011,7 +1032,7 @@ Use a small navigation surface for the first release:
   completion with an optional rough workout-energy estimate
 - Workouts: weekly plan, workout details, and session logging
 - Nutrition: daily log, meal suggestions, and saved recipes
-- Grocery: current weekly grocery list
+- Grocery: selected weekly grocery list, with past/current/future navigation
 - Progress: calendar, trends, and history
 - Settings: profile, targets, preferences, and data controls
 
@@ -1181,3 +1202,33 @@ hidden ingredients → user correction → trusted nutrition calculation → exp
 save. Images are not retained by this app after analysis; provider-side
 handling must be disclosed and the photo flow needs separate accuracy,
 privacy, and usability verification before release.
+
+
+## Account calendar preference and selected planning days
+
+Start of week is an account preference covering Home weekly summaries, Nutrition,
+Grocery, workout ordering and weekly completion, and the Progress month calendar.
+Onboarding offers all seven weekdays and defaults to Sunday. Existing accounts
+also transition to Sunday. Settings can change the preference independently of
+health targets and workout prescriptions. Scheduled weekdays and actual dates do
+not move when the grouping changes.
+
+A confirmed change regroups the latest saved prescriptions into new versioned
+weeks, retaining original versions and their prescribed nutrition. Completed
+workouts, eaten history, and planned-to-actual links remain intact. Generated
+grocery ingredients follow the regrouped meals. Each source list's custom items,
+quantity overrides, checked state and removals move exactly once to the new week
+containing its former start date. Carried edits without a generated counterpart
+remain explicitly carried items. Grocery lists display a review notice. Switching
+back must not resurrect inactive lists or duplicate edits.
+
+Generate plan places Choose days before recipe choices. Its seven dated native
+checkboxes follow the saved week preference, with Select all and Clear actions.
+The current week starts with today onward selected; future weeks select all days;
+past weeks select none. Any displayed date can be selected explicitly. Generation
+fills selected empty slots only, retains the shared weekly recipe yield and all
+eligibility rules, and never replaces planned, skipped or eaten records. No dates
+means no assignments and a disabled save. Changing dates or shuffling creates a
+fresh preview while preserving the other choices. Partial results still require
+unused-serving acknowledgment. Recoverable drafts retain selected dates; old or
+stale previews require a fresh review before save.

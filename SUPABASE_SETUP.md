@@ -1494,3 +1494,43 @@ retry categories. Evidence and the nutrition/source/image-prompt report remain
 ignored under `output/chicken-recipe-catalog/`. Application changes remain
 uncommitted, with no Git push or hosted client deployment. `HANDOVER.md` stays
 deleted.
+
+### Week-scoped Grocery controls — 2026-10-16
+
+Forward migration `20261016075845_week_scoped_grocery_controls.sql` is deployed
+under standing authorization. Fresh preflight checked the 80-version linked
+baseline, immutable migration hashes, schema, routines, privileges and durable
+data fingerprints. The dry run contained only this migration. All 81 local and
+linked versions match after deployment; the final dry run is up to date.
+
+Seven existing private function bodies now scope grocery edits and revision
+checks to the requested week. Regeneration derives quantities from that week's
+authoritative plan and canonical recipe ingredients, then preserves user edits,
+checked items, removals and extras. An explicit-week custom-item request can
+create an absent list with expected revision zero. Existing authorized wrappers,
+ownership checks and legacy payload compatibility remain in place. No public
+RPC, table, column, generated public type or client write privilege was added.
+
+Clean replay applied all 81 migrations. Database verification passed 32 suites /
+1,079 assertions, authenticated repository verification passed 20 tests, and the
+application suite passed 420 tests. The repository audit compares every generated
+quantity and unit across two independent 14-entry weeks, then checks isolated
+edits, retry, stale revisions, regeneration and empty-week list creation.
+Database lint retains the existing unused image-cleanup parameter warning.
+Fresh local and linked public types agree structurally with the checked-in
+contract. Post-deployment schema/routine and privilege checks match the tested
+local database; durable data fingerprints were unchanged at deployment.
+
+Final authenticated desktop/mobile Grocery flows pass, including calendar jumps,
+week-isolated drafts and edits, retry feedback, empty-week extras, regeneration,
+320px, 200% text and reduced motion. TypeScript, ESLint and the clean production
+build pass. A separate read-only audit of the current account's October 19–25
+plan matched all 25 generated grocery quantities with zero discrepancies. It
+does not constitute creating or verifying sample plans in other account weeks.
+
+Evidence is retained locally under ignored `output/grocery-weeks/`. The Grocery
+client refinement was not yet committed or pushed at this database verification
+checkpoint. Subsequent frontend delivery uses the repository's existing GitHub
+and Vercel production integration. Sample plans in
+the user's account are a separate authorized operation and are not created by
+this migration. `HANDOVER.md` remains deleted.
