@@ -308,6 +308,30 @@ test("weekly grocery spending recovers drafts, retries safely, and follows respo
   } finally { await context.setOffline(false); await context.close(); await deleteLocalAccount(account); }
 });
 
+test("approved shared recipes show bundled covers and authored ingredients for new accounts", async ({ browser }, info) => {
+  const account = await createLocalAccount(`shared-defaults-${info.project.name}`);
+  const context = await createAuthenticatedContext(browser, baseURL, account);
+  const page = await context.newPage();
+  try {
+    await completeOnboarding(page, "Shared Recipes"); await openNutritionPage(page);
+    const recipes = page.getByRole("region", { name: "Recipes", exact: true });
+    for (const [name, slug, ingredient] of [
+      ["Hainanese Chicken Rice", "hainanese-chicken-rice", "Water"],
+      ["Korean Broccoli Side Dish", "korean-broccoli-side-dish", "Broccoli"],
+      ["Tortang Talong with Chicken", "tortang-talong-with-chicken", "Egg"],
+    ]) {
+      await recipes.getByRole("button", { name: `View recipe: ${name}`, exact: true }).click();
+      const overview = page.getByRole("dialog", { name: "Recipe overview", exact: true });
+      const cover = overview.getByRole("img", { name: `Cover for ${name}`, exact: true });
+      await expect(cover).toHaveAttribute("src", `/images/recipes/${slug}.webp`);
+      await expect.poll(() => cover.evaluate(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0)).toBe(true);
+      await overview.getByRole("tab", { name: "Ingredients", exact: true }).click();
+      await expect(overview.getByRole("tabpanel", { name: "Ingredients", exact: true })).toContainText(ingredient);
+      await overview.getByRole("button", { name: "Close", exact: true }).click();
+    }
+  } finally { await context.close(); await deleteLocalAccount(account); }
+});
+
 test("grocery quantity edits require save and preserve recoverable revisions", async ({ browser }, info) => {
   const account = await createLocalAccount(`grocery-quantity-${info.project.name}`);
   const context = await createAuthenticatedContext(browser, baseURL, account);
@@ -336,7 +360,7 @@ test("grocery quantity edits require save and preserve recoverable revisions", a
       await page.setViewportSize({width,height:930});
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
       for (const button of await row.getByRole("button").all()) { const box = await button.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(44); expect(box!.height).toBeGreaterThanOrEqual(44); }
-      const nameBox = await row.getByText(name, {exact:true}).boundingBox(); const fieldBox = await field.boundingBox();
+      const nameBox = await row.locator("p").first().boundingBox(); const fieldBox = await field.boundingBox();
       if (width < 768) expect(fieldBox!.y).toBeGreaterThanOrEqual(nameBox!.y+nameBox!.height);
       else expect(fieldBox!.y).toBeLessThan(nameBox!.y+nameBox!.height);
       if (width === 320) { const cancelBox=await cancel.boundingBox(); expect(cancelBox!.y).toBeGreaterThan(fieldBox!.y); }
@@ -379,6 +403,11 @@ test("grocery weeks audit generated recipe quantities and preserve isolated edit
       await page.getByRole("button", { name: "Next week", exact: true }).click();
       await page.getByRole("button", { name: "Generate", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Generate plan", exact: true });
+      const recipes = dialog.getByRole("group", { name: "Choose recipes", exact: true });
+      await recipes.getByRole("button", { name: "Clear", exact: true }).click();
+      for (const name of ["Creamy Lemon Chicken", "Korean Beef Bowl", "Sticky Teriyaki Chicken", "Chicken Burrito Protein Boxes"]) {
+        await dialog.getByRole("list", { name: "Recipe choices" }).getByText(name, { exact: true }).click();
+      }
       await expect(dialog.getByText("Preview · 14 meals", { exact: true })).toBeVisible();
       const saved = nextRpcResponse(page, "generate_nutrition_week");
       await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
@@ -1053,7 +1082,7 @@ test("predefined recipe catalog displays the replacement image, complete metadat
   }
   const cover = row.locator("img");
   await expect(cover).toHaveAttribute("src", "/images/recipes/creamy-lemon-chicken.png");
-  expect(await cover.evaluate(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect.poll(() => cover.evaluate(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0)).toBe(true);
   await expect(row.getByText("≈695 kcal", { exact: true })).toBeVisible();
   await expect(row.getByText("30 mins", { exact: true })).toBeVisible();
   await expect(row.getByText("Easy", { exact: true })).toBeVisible();
