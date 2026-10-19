@@ -864,7 +864,8 @@ its completion checkbox, wrapping name/metadata and quantity controls on one row
 Below 768px, controls fill a second row. Normal mode shows quantity/unit, Edit
 and Delete. Edit reveals Plus, a growing decimal field with its unit, Minus,
 a primary Save check, Cancel X and Delete. Cancel moves below the main row,
-aligned right, if the control group is too narrow. Icons retain 44px targets;
+aligned right, if the control group is too narrow. The quantity unit stacks below
+the number when necessary so it does not squeeze the editable value. Icons retain 44px targets;
 keyboard focus is separate from selection. Enter saves and Escape cancels.
 Only Save persists quantity changes; adjustments remain drafts until confirmed.
 Week controls wrap when their labels need more room.
