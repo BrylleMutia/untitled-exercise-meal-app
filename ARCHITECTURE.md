@@ -1335,3 +1335,35 @@ correction. Existing RLS exposes shared rows to current and future accounts
 without per-user backfill or new client write grants. Approved covers are bundled
 assets; client and existing server asset validation are extended together. No
 private upload paths or author identifiers appear in the published copies.
+
+### October 19, 2026 release continuation review
+
+The author-created commits and applied migrations were preserved. All 85 local
+migration versions match the linked history, and linked push dry-run reports no
+pending changes. Replaying every migration, including the generated remote-schema
+migration, produces an identical public/private schema (SHA-256
+`d8b68e6fbcdf10c46512e8b4531cbafa40d586a2b09e52a6d08a0f779379d273`).
+Committed generated database types match a fresh linked generation. Client table
+writes and anonymous/private grocery-spending execution remain denied; the
+updated-at trigger's controlled `pg_catalog` search path is intentional.
+
+The full local reset, 1,157 pgTAP assertions, 24 repository integration tests,
+468 local tests, TypeScript, ESLint and the production build passed. Affected
+browser scenarios cover quantity editing/retries/stale review, weekly spending,
+week-isolated groceries, unresolved planned slots, ingredient nutrition-basis
+review and the three shared recipe covers on desktop and mobile. Quantity layout
+checks include 320/390/430/668/767/768/1440px, enlarged text and reduced motion.
+A prior exact-text ingredient selector was corrected to account for its custom
+badge; grocery generation fixtures explicitly select their four reference
+recipes rather than assuming the shared catalog contains only four recipes.
+Supabase CLI stays pinned to 2.118.0 for reproducible migration tooling.
+
+Database lint retains the existing unused `p_payload` warning on the service-only
+recipe-image cleanup wrapper; no new database error was introduced. No migration
+was reapplied to the linked project during this review.
+
+The local port-3000 server encountered an existing Windows Turbopack junction
+error in its generated cache. Only the agent-started process was stopped; its
+`.next/dev` directory was moved aside and the server restarted outside the
+sandbox. A fresh Settings-page HEAD request returned HTTP 200. Browser test
+build output remains separately scoped to `.next-browser-tests`.
