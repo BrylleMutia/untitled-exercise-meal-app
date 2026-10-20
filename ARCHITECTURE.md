@@ -1367,3 +1367,26 @@ error in its generated cache. Only the agent-started process was stopped; its
 `.next/dev` directory was moved aside and the server restarted outside the
 sandbox. A fresh Settings-page HEAD request returned HTTP 200. Browser test
 build output remains separately scoped to `.next-browser-tests`.
+
+Local IPv4 previews explicitly allow `127.0.0.1` through Next.js
+`allowedDevOrigins`. The default `localhost` permission alone does not allow
+that development hostname to use HMR and debugging endpoints. After changing
+the dev host or restarting/rebuilding the server, reload the page to replace
+stale JavaScript and Server Action references. This allowlist is development-only
+and does not change production authentication or database permissions.
+
+## Cooking group persistence and privacy
+
+Typed Context/repository intents own membership, invitation review and consent, scoped week reads, server previews, atomic commit, edits and acknowledgments. Shared tables use membership RLS and deny direct client writes. Personal profile and log policies remain owner-only. PINs use cryptographic randomness, digest-only storage, 15-minute one-use expiry, replacement revocation, attempt throttling and short-lived consent reviews. Receipts never retain readable PINs.
+
+The cooking-group-preview Edge Function verifies the bearer token before a service-only helper checks membership and loads private planning facts. The pure deterministic allocator runs server-side. Its sanitized response contains assignments, portions, batches and explanations, plus an opaque 30-minute preview ID. Commit checks the complete planning basis again and atomically saves versioned personal plans, shared references, groceries, attribution and notices. Client-supplied actor IDs never establish authority. Stable idempotency keys replay unchanged retries.
+
+Group locks precede sorted member calendar locks and existing profile/week/receipt locks, including ordinary calendar-dependent mutations. Shared week revisions protect grocery and portion edits. Changed facts require renewed preview review. Private Realtime invalidations contain identifiers only; route/focus/online/reconnect reads and visible-page polling restore authoritative state.
+
+Group assignments reference canonical personal planned-meal identities across versions. Immutable per-owner recipe and food snapshots retain authored measurements and source nutrition; immutable cover objects use reference-aware cleanup and authorized private access after departure or source deletion. Recipe revisions remain separate cooking requirements. Group groceries reconcile whole batches once, and personal groceries exclude those projections. Departure revokes live access and invalidates proposals without copying shared spending. Account deletion removes owned references before catalog cascades.
+
+Group drafts are keyed by account, group, week and operation and retain input through failures. Stale quantities and amounts require explicit review. Export includes membership, shared weeks and generations, owned assignments and notices, and calendar audits, without other members' health facts or actual logs. Forward migrations, generated contracts, database reset/lint/security tests, repository and Edge verification, and isolated multi-account browser flows gate deployment.
+
+Retained ingredient snapshots include system catalog foods and their trusted serving-option rows. Frozen foods retain original provider IDs in `snapshot_fdc_id`, separate from the live-import uniqueness key; read models expose the original FDC provenance. Changes to a live food basis advance dependent live recipe revisions, so subsequent previews and cooking batches use a new basis while saved ingredient copies remain unchanged. Connection command retries retain their request identity after a lost response; invitation receipts contain no readable PIN, so an unrecoverable invitation requires generating a replacement.
+
+Hosted acceptance uses `SUPABASE_RPC_REMOTE_CONFIRM=ifunkhvbvkdxolhpxjvk` with `node scripts/test-cooking-groups-remote.mjs`. Provide a fresh confirmed disposable pair through the ignored remote-test environment fields. The runner refuses accounts with existing profiles, exercises the production client and authenticated preview/commit paths in separate browser contexts, saves sanitized screenshot evidence, and deletes only that verified disposable pair through the authorized account RPC. It never stores browser sessions or prints credentials.

@@ -1204,3 +1204,11 @@ uses the author-approved zero-calorie correction.
 
 Grocery Total Amount omits the redundant spending description and decimal-entry
 helper sentence; validation errors and carried-amount review guidance remain.
+
+## Cooking group interactions
+
+Settings uses the existing lavender card, member initials and display names, a privately shared one-use PIN, explicit consent and a connected-success modal. Shared access is explained before confirmation; emails and health measurements are omitted. Shared week proposals sit beside member controls, and the ordinary week preference points to this agreement flow.
+
+Personal/Group segmented controls scope Nutrition and Grocery. The Group view shows the cooking schedule and participants; actual logs remain personal. Generate group plan reuses existing modal, day tiles and recipe-card patterns, adding People, Fill/Replace radios, batch limits, editable estimated portions, replacement review, whole-batch cooking and leftovers. Hidden native recipe checkboxes retain keyboard behavior. Bulk controls show icons below 768px and text with icons above that breakpoint.
+
+Shared groceries reuse explicit quantity and PHP amount editors with account/group/week/item drafts, captured revisions and review-before-retry. Shared recipe overview reuses ingredient/instruction tabs and offers Save personal copy. Generation success shows recipe covers and participant names, with one acknowledgment shared by Nutrition and Grocery. Full dates remain accessible, controls retain 44px targets and layouts wrap at enlarged text sizes.

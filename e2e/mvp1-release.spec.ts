@@ -106,13 +106,16 @@ test("calendar preference and selected-day planning preserve dates across the ap
     }
     await days.screenshot({ path: `output/calendar/nutrition-day-strip-${info.project.name}.png` });
     await page.getByRole("button", { name: "Next week", exact: true }).click();
+    // A preserved onboarding week can spill into the next Saturday-based week.
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
     await page.getByRole("button", { name: "Generate", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Generate plan", exact: true });
     const dayChoices = dialog.getByRole("group", { name: "Choose days", exact: true });
-    const selectedDate = addDays(startOfWeek(todayKey(), 6), 7);
+    const selectedDate = addDays(startOfWeek(todayKey(), 6), 14);
     await expect(dialog.getByText(formatCompactWeekRange(selectedDate), { exact: true })).toHaveCount(0);
     await expect(dayChoices.getByRole("checkbox")).toHaveCount(7);
     if (info.project.name === "desktop") {
+      await expect(dialog).toHaveCSS("transform", /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
       for (const width of [320, 390, 596, 767, 768, 1440]) {
         await page.setViewportSize({ width, height: 930 });
         for (const groupName of ["Choose days", "Choose recipes"]) {
@@ -215,6 +218,7 @@ test("calendar preference and selected-day planning preserve dates across the ap
     await expect(dialog.getByRole("button", { name: "Save plan", exact: true })).toBeEnabled();
     await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
     await expect(dialog).not.toBeVisible();
+    await days.getByRole("button").first().click();
     await expect(page.getByRole("button", { name: "Log", exact: true }).first()).toBeVisible();
     await days.getByRole("button").nth(1).click();
     await expect(days.locator('button[aria-pressed="true"]')).toHaveCount(1);
