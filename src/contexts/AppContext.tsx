@@ -55,8 +55,14 @@ import { suggestProgression, type ProgressionSuggestion } from "@/utility/progre
 import { todayKey } from "@/utility/dates";
 import { nutritionWeekSnapshot } from "@/utility/nutritionWeek";
 import { validGroceryCentavos } from "@/utility/groceryAmount";
+import { cookingGroupRepository } from "@/services/cookingGroupRepository";
+import type { GroupCommand, GroupCommandResult, GroupPlanningInput, GroupPreview, GroupRecipeDetails, GroupWeek } from "@/types/cookingGroup";
 
 export interface AppActions {
+  loadCookingRecipe(id: string): Promise<GroupRecipeDetails>;
+  loadCookingGroupWeek(weekOf: string): Promise<GroupWeek>;
+  cookingGroupCommand(input: GroupCommand): Promise<GroupCommandResult>;
+  previewCookingGroup(input: GroupPlanningInput): Promise<GroupPreview>;
   loadNutritionWeek(weekOf: string): Promise<NutritionWeekReadModel>;
   loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel>;
   setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel>;
@@ -423,6 +429,41 @@ export function AppProvider({
   const actions = useMemo<AppActions>(
     () => ({
       notify,
+      async loadCookingRecipe(id) {
+        if (!supabase) throw new Error("Sign in to read shared recipes.");
+        return cookingGroupRepository(supabase).recipe(id);
+      },
+      async loadCookingGroupWeek(weekOf) {
+        if (!supabase) throw new Error("Sign in to read your cooking group.");
+        return cookingGroupRepository(supabase).load(weekOf);
+      },
+      async previewCookingGroup(input) {
+        if (!supabase) throw new Error("Sign in to generate a group plan.");
+        return cookingGroupRepository(supabase).preview(input);
+      },
+      async cookingGroupCommand(input) {
+        if (!supabase || !repository) throw new Error("Sign in to change your cooking group.");
+        if (pendingRef.current) throw new Error("Wait for the current save to finish.");
+        pendingRef.current = true;
+        setPendingMutation("cooking_group");
+        try {
+          const result = await cookingGroupRepository(supabase).command(input);
+          if (input.action === "leave") {
+            const drafts = await listDrafts(snapshotRef.current.userId);
+            await Promise.all(drafts.filter(draft => draft.draftType.includes(input.groupId)).map(draft => clearDraft(snapshotRef.current.userId, draft.draftType)));
+          }
+          if (input.action !== "inspect-pin") {
+            const refreshed = await repository.load();
+            if (refreshed) setSnapshot(refreshed);
+          }
+          setError(null);
+          return result;
+        } catch (reason) {
+          const message = reason instanceof Error ? reason.message : "Shared changes could not be saved.";
+          setError({ code: /changed|stale|latest|refresh.*review/i.test(message) ? "stale_version" : "retryable", message, retryable: true });
+          throw reason;
+        } finally { pendingRef.current = false; setPendingMutation(null); }
+      },
       async loadNutritionWeek(weekOf) {
         if (!repository) throw new Error("Sign in to load weekly nutrition.");
         return repository.loadNutritionWeek(weekOf);

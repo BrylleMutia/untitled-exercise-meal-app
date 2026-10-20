@@ -361,6 +361,8 @@ export interface LoggedMeal {
 }
 
 export interface PlannedMeal {
+  /** Shared cooking requirements are fulfilled once by the current group's list. */
+  sharedGrocery?: boolean;
   id: string;
   slotKey?: string;
   sortOrder?: number;

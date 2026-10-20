@@ -12,7 +12,7 @@ type QuantityDraft = { value: string; revision: number; calendarRevision: number
 const newKey = () => crypto.randomUUID();
 const iconClass = "grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full bg-white text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lav-500";
 
-export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange }: { item: GroceryItem; week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void }) {
+export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange, groupId }: { item: GroceryItem; week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void; groupId?: string }) {
   const { snapshot, actions, error } = useApp();
   const [draft, setDraft] = useState<QuantityDraft | null>(null);
   const [ready, setReady] = useState(false);
@@ -30,7 +30,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const fieldId = useId();
   const userId = snapshot.userId;
-  const draftType = `grocery-quantity:${week.weekOf}:${item.id}`;
+  const draftType = `grocery-quantity:${groupId ? `group:${groupId}:` : ""}${week.weekOf}:${item.id}`;
   const revision = week.grocery?.revision ?? 0;
   const calendarRevision = snapshot.profile?.calendarRevision ?? 0;
   const listId = week.grocery?.id ?? "";
@@ -85,7 +85,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
     submitting.current = true; setBusy(true); onSavingChange(true); setFailed(false);
     try {
       await queue.current;
-      const saved = await actions.setGroceryQuantity(item.id, quantity, week, { calendarRevision: draft.calendarRevision, groceryRevision: draft.revision, idempotencyKey: draft.saveKey });
+      const saved = groupId ? await actions.cookingGroupCommand({ action: "grocery", groupId, weekOf: week.weekOf, revision: draft.revision, operation: "quantity", itemId: item.id, quantity, idempotencyKey: draft.saveKey }).then(() => true).catch(() => false) : await actions.setGroceryQuantity(item.id, quantity, week, { calendarRevision: draft.calendarRevision, groceryRevision: draft.revision, idempotencyKey: draft.saveKey });
       if (!active.current) return;
       if (!saved) { setFailed(true); onRefresh(); return; }
       await clearDraft(userId, draftType);
@@ -102,7 +102,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
       const focusTarget = row.current?.nextElementSibling?.querySelector<HTMLButtonElement>('button[aria-label^="Edit quantity for"]')
         ?? row.current?.previousElementSibling?.querySelector<HTMLButtonElement>('button[aria-label^="Edit quantity for"]')
         ?? document.querySelector<HTMLElement>("[data-grocery-heading]");
-      const removed = await actions.removeGroceryItem(item.id, week);
+      const removed = groupId ? await actions.cookingGroupCommand({ action: "grocery", groupId, weekOf: week.weekOf, revision, operation: "remove", itemId: item.id, idempotencyKey: newKey() }).then(() => true).catch(() => false) : await actions.removeGroceryItem(item.id, week);
       if (removed) { await clearDraft(userId, draftType); onRefresh(); requestAnimationFrame(() => focusTarget?.focus()); }
       else if (active.current) { setFailed(true); onRefresh(); }
     } finally { submitting.current = false; onSavingChange(false); if (active.current) setBusy(false); }
@@ -110,7 +110,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
 
   const deleteButton = <button type="button" disabled={locked} onClick={() => void remove()} aria-label={`Remove ${item.name}`} className={`${iconClass} ${draft ? "col-start-5 row-start-1 @[18rem]:col-start-6" : ""}`}><Trash2 className="h-4 w-4" aria-hidden /></button>;
   return <li ref={row} aria-label={item.name} className={`grid min-w-0 grid-cols-[44px_minmax(0,1fr)] items-center gap-x-2 gap-y-1 rounded-xl px-2 py-1.5 md:grid-cols-[44px_minmax(0,1fr)_minmax(0,22rem)] ${item.checked ? "bg-mint-50" : "bg-cream"}`}>
-    <label className="col-start-1 row-start-1 grid h-[44px] w-[44px] place-items-center"><input type="checkbox" checked={item.checked} disabled={locked} onChange={() => actions.toggleGrocery(item.id, week)} aria-label={`Mark ${item.name} as done`} className="h-5 w-5 accent-lav-500" /></label>
+    <label className="col-start-1 row-start-1 grid h-[44px] w-[44px] place-items-center"><input type="checkbox" checked={item.checked} disabled={locked} onChange={() => { if (groupId) void actions.cookingGroupCommand({ action: "grocery", groupId, weekOf: week.weekOf, revision, operation: "toggle", itemId: item.id, idempotencyKey: newKey() }).then(onRefresh).catch(onRefresh); else void actions.toggleGrocery(item.id, week); }} aria-label={`Mark ${item.name} as done`} className="h-5 w-5 accent-lav-500" /></label>
     <div className="col-start-2 row-start-1 min-w-0">
       <p className={`break-words text-sm font-bold [overflow-wrap:anywhere] ${item.checked ? "line-through opacity-60" : ""}`}>{item.name}{item.custom ? <span className="ml-1 rounded-full bg-lav-100 px-1.5 text-[9px] uppercase">custom</span> : null}</p>
       <p className="break-words text-[10px] font-semibold text-muted">generated {item.generatedQuantity} {item.unit}{item.carriedFromWeek ? ` | Carried from ${item.carriedFromWeek}` : ""}{item.quantity !== item.generatedQuantity ? " · adjusted by you" : ""}</p>

@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { FOODS } from "@/constants/foods";
 import { generateGroceryList, mergeGroceryLists } from "./grocery";
 describe("week-specific grocery reconciliation", () => {
+  it("buys shared projections once and restores personal fulfilment after leaving", () => {
+    const food = { ...FOODS[0], id: "shared-food", unit: "g" as const, servingGrams: 100 };
+    const recipe = { id: "shared-bowl", name: "Bowl", servings: 4, ingredients: [{ foodId: food.id, servings: 6 }] };
+    const meal = { id: "gp-portion", label: "Bowl", date: "2026-10-05", slot: "lunch" as const, servings: 1, mealId: recipe.id, sharedGrocery: true };
+    const plan = { id: "week", weekOf: meal.date, version: 1, targetId: "t", meals: [meal] };
+    expect(generateGroceryList(plan, [recipe], [food], plan.weekOf).items).toEqual([]);
+    expect(generateGroceryList({ ...plan, meals: [{ ...meal, sharedGrocery: false }] }, [recipe], [food], plan.weekOf).items[0].quantity).toBe(150);
+  });
   it("scales whole-recipe ingredient quantities by recipe yield", () => {
     const food = { ...FOODS[0], id: "beef", unit: "g" as const, servingGrams: 100 };
     const recipe = { id: "bowl", name: "Bowl", servings: 4, ingredients: [{ foodId: "beef", servings: 6 }] };

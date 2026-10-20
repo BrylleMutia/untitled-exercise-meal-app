@@ -98,6 +98,12 @@ export interface SetRecipeFavoriteInput {
 
 /** The exact scalar and entity collections returned by export_account_data. */
 export type AccountExport = {
+  cookingGroup?: AccountExportRow | null;
+  cookingGroupWeeks?: AccountExportRow[];
+  cookingGenerations?: AccountExportRow[];
+  cookingAssignments?: AccountExportRow[];
+  cookingGenerationNotices?: AccountExportRow[];
+  cookingCalendarTransitions?: AccountExportRow[];
   exportedAt: string;
   profile: AccountExportRow | null;
   goals: AccountExportRow[];

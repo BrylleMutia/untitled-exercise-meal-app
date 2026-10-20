@@ -19,7 +19,7 @@ export type GenerationPreview = { assignments: PlannedMeal[]; unused: Array<{ me
 
 export function weeklyRecipeOptions(snapshot: AppSnapshot, weekOf: string): WeeklyRecipeOption[] {
   const planned = snapshot.mealPlan?.weekOf === weekOf ? snapshot.mealPlan.meals : [];
-  return snapshot.savedMeals.filter(recipe => !recipe.archivedAt).map(recipe => {
+  return snapshot.savedMeals.filter(recipe => !recipe.archivedAt && !recipe.id.startsWith("group-copy-")).map(recipe => {
     const used = planned.filter(row => row.mealId === recipe.id && !row.skipped).reduce((sum, row) => sum + row.servings, 0);
     const remaining = Math.max(0, recipe.servings - used);
     const reasonCode: WeeklyRecipeExclusion | undefined = !validRecipeYield(recipe.servings) ? "invalid-yield"

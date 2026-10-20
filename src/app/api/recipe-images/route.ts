@@ -63,7 +63,18 @@ export async function GET(request: Request) {
   const client = await createClient(); const { data, error: authError } = await client.auth.getUser();
   if (authError || !data.user) return error("Sign in to view this image.", 401);
   const image = parseRecipeImage({ kind: "upload", path: new URL(request.url).searchParams.get("path") });
-  if (!image || image.kind !== "upload" || !image.path.startsWith(`${data.user.id}/`)) return error("This image is unavailable.", 404);
+  if (!image || image.kind !== "upload") return error("This image is unavailable.", 404);
+  if (!image.path.startsWith(`${data.user.id}/`)) {
+    const allowed = await client.rpc("can_read_cooking_recipe_image", { p_path: image.path });
+    if (allowed.error || allowed.data !== true) return error("This image is unavailable.", 404);
+    // A group URL must recheck membership on every image fetch, including after leaving.
+    if (new URL(request.url).searchParams.get("content") === "1") {
+      const downloaded = await client.storage.from(recipeImageBucket).download(image.path);
+      if (downloaded.error || !downloaded.data) return error("This image is unavailable.", 404);
+      return new Response(downloaded.data, { headers: { ...headers, "Content-Type": "image/webp" } });
+    }
+    return Response.json({ url: `/api/recipe-images?path=${encodeURIComponent(image.path)}&content=1` }, { headers });
+  }
   const signed = await client.storage.from(recipeImageBucket).createSignedUrl(image.path, 3600);
   if (signed.error) return error("This image is unavailable.", 404);
   return Response.json({ url: signed.data.signedUrl }, { headers });

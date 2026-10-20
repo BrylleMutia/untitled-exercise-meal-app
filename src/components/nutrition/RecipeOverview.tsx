@@ -15,9 +15,9 @@ import { safeRecipeReference } from "@/utility/recipeEditor";
 import { formatCookingMeasurement } from "@/utility/cookingMeasurement";
 import type { Food, Meal } from "@/types/domain";
 
-export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit }: {
+export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, editLabel = "Edit" }: {
   meal: Meal; foods: Food[]; returnFocus: RefObject<HTMLElement | null>;
-  onClose: () => void; onEdit: () => void;
+  onClose: () => void; onEdit: () => void; editLabel?: string;
 }) {
   const [tab, setTab] = useState<RecipeTab>("details");
   const known = meal.ingredients.length > 0 && meal.ingredients.every(item => foods.some(food => food.id === item.foodId));
@@ -31,7 +31,7 @@ export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit }: {
     help={<HelpPopover title="Saved recipe"><p>Ingredient quantities describe the whole recipe. Nutrition is estimated per serving. Editing this recipe does not rewrite logged meals.</p></HelpPopover>}
     footer={<div className="grid gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="soft" onClick={onClose}>Close</Button>
-        <Button onClick={onEdit}><Pencil className="h-4 w-4" aria-hidden />Edit</Button>
+        <Button onClick={onEdit}><Pencil className="h-4 w-4" aria-hidden />{editLabel}</Button>
       </div>
     </div>}>
     <div className="grid min-w-0 gap-5">

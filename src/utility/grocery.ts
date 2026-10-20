@@ -22,6 +22,8 @@ export function generateGroceryList(
   const totals = new Map<string, { food: Food; grams: number; pieces: number }>();
 
   for (const planned of mealPlan.meals) {
+    // Group allocations are bought once in the shared list, never per personal projection.
+    if (planned.sharedGrocery) continue;
     if (planned.skipped) continue;
     if (planned.mealId) {
       const meal = meals.find((m) => m.id === planned.mealId);

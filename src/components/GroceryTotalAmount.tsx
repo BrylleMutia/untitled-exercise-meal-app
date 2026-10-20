@@ -12,7 +12,7 @@ import type { NutritionWeekReadModel } from "@/types/backend";
 type AmountDraft = { value: string; revision: number; calendarRevision: number; saveKey: string };
 const saveKey = () => crypto.randomUUID();
 
-export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void }) {
+export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange, groupId }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void; groupId?: string }) {
   const { snapshot, actions, error } = useApp();
   const [draft, setDraft] = useState<AmountDraft | null>(null);
   const [ready, setReady] = useState(false);
@@ -27,7 +27,7 @@ export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange }
   const active = useRef(true);
   const submitting = useRef(false);
   const returnFocus = useRef(false);
-  const draftType = `grocery-total:${week.weekOf}`;
+  const draftType = `grocery-total:${groupId ? `group:${groupId}:` : ""}${week.weekOf}`;
   const userId = snapshot.userId;
   const revision = week.grocery?.revision ?? 0;
   const calendarRevision = snapshot.profile?.calendarRevision ?? 0;
@@ -84,7 +84,7 @@ export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange }
     submitting.current = true; setBusy(true); onSavingChange(true); setFailed(false);
     try {
       await queue.current;
-      const saved = await actions.setGroceryTotalAmount({ weekOf: week.weekOf, calendarRevision: draft.calendarRevision, totalAmountCentavos: parsed.centavos, expectedVersions: { groceryRevision: draft.revision }, idempotencyKey: draft.saveKey }, week);
+      const saved = groupId ? await actions.cookingGroupCommand({ action: "grocery", groupId, weekOf: week.weekOf, revision: draft.revision, operation: "amount", amount: parsed.centavos, idempotencyKey: draft.saveKey }).then(() => true).catch(() => false) : await actions.setGroceryTotalAmount({ weekOf: week.weekOf, calendarRevision: draft.calendarRevision, totalAmountCentavos: parsed.centavos, expectedVersions: { groceryRevision: draft.revision }, idempotencyKey: draft.saveKey }, week);
       if (!active.current) return;
       if (!saved) { setFailed(true); onRefresh(); return; }
       await clearDraft(userId, draftType);

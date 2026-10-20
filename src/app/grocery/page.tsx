@@ -18,6 +18,8 @@ import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } fr
 
 const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", "Pantry", "Other"];
 
+import { CookingGroupSurface } from "@/components/cooking/CookingGroupSurface";
+
 export default function GroceryPage() {
   const { snapshot, pendingMutation } = useApp();
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -26,13 +28,13 @@ export default function GroceryPage() {
   const weekOf = startOfWeek(selectedDate, snapshot.profile?.weekStartsOn ?? 0);
   const week = useNutritionWeek(weekOf);
   const disabled = Boolean(pendingMutation) || amountSaving || itemSaving || week.loading || Boolean(week.error);
-  return <div className="grid min-w-0 gap-4 pb-4">
+  return <CookingGroupSurface weekOf={weekOf} onWeekChange={setSelectedDate} kind="grocery"><div className="grid min-w-0 gap-4 pb-4">
     <Card tone="mint"><WeekNavigator weekOf={weekOf} onChange={setSelectedDate} weekStartsOn={snapshot.profile?.weekStartsOn ?? 0} disabled={Boolean(pendingMutation) || amountSaving || itemSaving} />{week.data ? <GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={setAmountSaving} /> : null}</Card>
     {week.loading ? <p role="status">Loading this week&apos;s groceries…</p> : null}
     {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-peach-100 p-4"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
     {week.data?.grocery?.calendarReviewRequired ? <p role="status" className="rounded-2xl bg-peach-100 p-4 text-sm font-semibold">This list was regrouped after your start of week changed. Review ingredients and carried grocery edits.</p> : null}
     {week.data ? <GroceryWeek key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={setItemSaving} /> : null}
-  </div>;
+  </div></CookingGroupSurface>;
 }
 
 function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void }) {

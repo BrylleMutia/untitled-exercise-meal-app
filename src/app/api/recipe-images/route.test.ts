@@ -5,10 +5,10 @@ import { POST, GET } from "./route";
 const owner = "00000000-0000-0000-0000-000000000001";
 const uploadId = "00000000-0000-0000-0000-000000000002";
 const path = `${owner}/${uploadId}.webp`;
-const { auth, rpc, upload, signed, remove } = vi.hoisted(() => ({ auth: vi.fn(), rpc: vi.fn(), upload: vi.fn(), signed: vi.fn(), remove: vi.fn() }));
+const { auth, rpc, upload, signed, remove, download } = vi.hoisted(() => ({ auth: vi.fn(), rpc: vi.fn(), upload: vi.fn(), signed: vi.fn(), remove: vi.fn(), download: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: { getUser: auth }, rpc,
-  storage: { from: () => ({ upload, createSignedUrl: signed, remove }) },
+  storage: { from: () => ({ upload, createSignedUrl: signed, remove, download }) },
 }) }));
 
 beforeEach(() => {
@@ -75,5 +75,16 @@ describe("authenticated recipe image boundary", () => {
     const response = await GET(new Request(`http://localhost/api/recipe-images?path=${path}`));
     expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(signed).toHaveBeenCalledWith(path, 3600);
+  });
+  it("serves shared covers through a fresh membership check rather than a reusable signed URL", async () => {
+    const otherPath = path.replace(owner, "00000000-0000-0000-0000-000000000003");
+    rpc.mockResolvedValue({ data: true, error: null });
+    const response = await GET(new Request(`http://localhost/api/recipe-images?path=${otherPath}`));
+    const data = await response.json(); expect(data.url).toContain("content=1"); expect(signed).not.toHaveBeenCalled();
+    download.mockResolvedValue({ data: new Blob(["image"]), error: null });
+    expect((await GET(new Request(`http://localhost${data.url}`))).status).toBe(200);
+    rpc.mockResolvedValue({ data: false, error: null });
+    expect((await GET(new Request(`http://localhost${data.url}`))).status).toBe(404);
+    expect(download).toHaveBeenCalledTimes(1);
   });
 });

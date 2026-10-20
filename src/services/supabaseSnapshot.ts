@@ -152,7 +152,7 @@ function mapFood(row: FoodRow, servingOptions: FoodServingOptionRow[] = []): Foo
     confidence: row.confidence as Food["confidence"],
     category: row.category as Food["category"],
     preparationBasis: row.preparation_basis as PreparationBasis,
-    ...(row.fdc_id ? { fdcId: row.fdc_id } : {}),
+    ...(row.fdc_id || row.snapshot_fdc_id ? { fdcId: row.fdc_id ?? row.snapshot_fdc_id! } : {}),
     ...(row.record_type ? { recordType: row.record_type } : {}),
     ...(row.provider_revision ? { providerRevision: row.provider_revision } : {}),
     ...(row.provider_imported_at ? { providerImportedAt: row.provider_imported_at } : {}),
@@ -277,6 +277,7 @@ function mapMealPlan(
         const foodRef = meal.food_row_id === null ? undefined : foodsByRow.get(meal.food_row_id);
         return {
           id: meal.app_id,
+        sharedGrocery: meal.shared_grocery,
           slotKey: meal.slot_key,
           sortOrder: meal.sort_order,
           date: meal.meal_date,

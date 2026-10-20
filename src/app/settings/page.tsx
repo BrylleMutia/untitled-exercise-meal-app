@@ -17,6 +17,7 @@ import { signOutAction } from "@/app/auth/actions";
 import { clearUserDrafts } from "@/services/draftStore";
 import { buildAccountExportZip } from "@/utility/exportBundle";
 import { WeekStartSettings } from "@/components/WeekStartSettings";
+import { CookingGroupSettings } from "@/components/cooking/CookingGroupSettings";
 import { DailyStepTargetSettings } from "@/components/DailyStepTargetSettings";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 
@@ -232,6 +233,7 @@ export default function SettingsPage() {
       </Card>
 
       <DailyStepTargetSettings />
+      <CookingGroupSettings />
       <WeekStartSettings />
 
       <Card>
