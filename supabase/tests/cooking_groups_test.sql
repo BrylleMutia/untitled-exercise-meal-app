@@ -80,7 +80,22 @@ select lives_ok($$select public.cooking_group_command(jsonb_build_object('action
 select is((select sum((grocery->>'totalAmountCentavos')::numeric) from public.cooking_group_weeks),120550::numeric,'reused weeks cannot resurrect stale spending');
 select is((select count(*) from public.cooking_calendar_transitions),3::bigint,'every shared transition remains auditable');
 select ok(not exists(select 1 from jsonb_array_elements(public.get_cooking_group_week('2026-10-17')->'assignments') a where a->>'date'<>'2026-10-18'),'actual meal dates never move during regrouping');
+reset role;
+insert into group_test_state values('protected-assignment',(select jsonb_build_object('id',id,'memberId',user_id,'date',meal_date,'slot',meal_slot,'name','Saved basis') from public.cooking_assignments where user_id='00000000-0000-0000-0000-000000004101' limit 1));
+insert into public.nutrition_logs(app_id,user_id,log_date,meal_slot,custom_name,servings,serving_quantity,calories,protein_g,carbs_g,fat_g,estimated,confidence,source,value_source,planned_meal_app_id)
+values('corrected-linked-history','00000000-0000-0000-0000-000000004101','2026-10-19','snack','Corrected actual',1,1,100,10,10,2,true,'medium','User provided','user_provided',(select value->>'id' from group_test_state where name='protected-assignment'));
+set local role service_role;
+set local "request.jwt.claim.role"='service_role';
+update group_test_state set value=value||'{"weekOf":"2026-10-17","mode":"replace"}'::jsonb where name='input';
+insert into group_test_state values('protected-context',public.get_group_planning_context('00000000-0000-0000-0000-000000004101',(select value from group_test_state where name='input')));
+select is((select a->>'protected' from jsonb_array_elements((select value->'members' from group_test_state where name='protected-context')) m cross join lateral jsonb_array_elements(m->'occupied') a where m->>'id'='00000000-0000-0000-0000-000000004101' and a->>'id'=(select value->>'id' from group_test_state where name='protected-assignment')),'true','linked history remains protected after its actual date and slot change');
+insert into group_test_state values('protected-preview',public.store_group_planning_preview('00000000-0000-0000-0000-000000004101',(select value from group_test_state where name='input'),jsonb_build_object('basis',(select value->>'basis' from group_test_state where name='protected-context'),'warnings','[]'::jsonb,'batches','[]'::jsonb,'replacements',jsonb_build_array((select value from group_test_state where name='protected-assignment')),'assignments',jsonb_build_array(jsonb_build_object('id','protected-replacement','memberId','00000000-0000-0000-0000-000000004102','recipeId','meal-korean-beef-bowl','date','2026-10-18','slot','dinner','servings',1)))));
+set local role authenticated;
+set local "request.jwt.claim.role"='authenticated';
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000004101';
+select throws_ok($$select public.commit_cooking_group_plan(jsonb_build_object('previewId',(select value->>'id' from group_test_state where name='protected-preview'),'acknowledged',true,'idempotencyKey','protected-replacement-commit'))$$,'P0001',null,'commit rejects replacement of a moved linked log basis');
+select is((select count(*) from public.cooking_generations),1::bigint,'failed protected replacement creates no generation');
+select is((select log_date::text||':'||meal_slot from public.nutrition_logs where app_id='corrected-linked-history'),'2026-10-19:snack','failed replacement never changes actual history');
 select lives_ok($$select public.cooking_group_command(jsonb_build_object('action','leave','groupId',(select value->'group'->>'id' from group_test_state where name='invite'),'groupRevision',(public.get_cooking_group_week('2026-10-17')->'group'->>'revision')::integer,'idempotencyKey','leave-group'))$$,'member may leave');
 select is(public.get_cooking_group_week('2026-10-17')->'group','null'::jsonb,'leaving revokes group access');
 select is((select count(*) from public.cooking_group_weeks),0::bigint,'former member cannot read shared groceries');
