@@ -47,6 +47,274 @@ export type Database = {
         }
         Relationships: []
       }
+      cooking_assignments: {
+        Row: {
+          generation_id: string
+          group_id: string
+          id: string
+          meal_date: string
+          meal_slot: string
+          recipe_id: string
+          recipe_snapshot_row_id: number
+          user_id: string
+        }
+        Insert: {
+          generation_id: string
+          group_id: string
+          id: string
+          meal_date: string
+          meal_slot: string
+          recipe_id: string
+          recipe_snapshot_row_id: number
+          user_id: string
+        }
+        Update: {
+          generation_id?: string
+          group_id?: string
+          id?: string
+          meal_date?: string
+          meal_slot?: string
+          recipe_id?: string
+          recipe_snapshot_row_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_assignments_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_generations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cooking_assignments_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cooking_assignments_recipe_snapshot_row_id_fkey"
+            columns: ["recipe_snapshot_row_id"]
+            isOneToOne: false
+            referencedRelation: "meals"
+            referencedColumns: ["row_id"]
+          },
+        ]
+      }
+      cooking_calendar_transitions: {
+        Row: {
+          created_at: string
+          destination_state: Json
+          group_id: string
+          id: string
+          source_state: Json
+        }
+        Insert: {
+          created_at?: string
+          destination_state: Json
+          group_id: string
+          id?: string
+          source_state: Json
+        }
+        Update: {
+          created_at?: string
+          destination_state?: Json
+          group_id?: string
+          id?: string
+          source_state?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_calendar_transitions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cooking_generation_notices: {
+        Row: {
+          acknowledged_at: string | null
+          generation_id: string
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          generation_id: string
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          generation_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_generation_notices_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cooking_generations: {
+        Row: {
+          created_at: string
+          generated_by: string | null
+          generator_name: string
+          group_id: string
+          id: string
+          member_ids: string[]
+          summary: Json
+          week_of: string
+        }
+        Insert: {
+          created_at?: string
+          generated_by?: string | null
+          generator_name: string
+          group_id: string
+          id?: string
+          member_ids: string[]
+          summary: Json
+          week_of: string
+        }
+        Update: {
+          created_at?: string
+          generated_by?: string | null
+          generator_name?: string
+          group_id?: string
+          id?: string
+          member_ids?: string[]
+          summary?: Json
+          week_of?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_generations_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cooking_group_members: {
+        Row: {
+          group_id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cooking_group_weeks: {
+        Row: {
+          grocery: Json
+          group_id: string
+          revision: number
+          week_of: string
+        }
+        Insert: {
+          grocery?: Json
+          group_id: string
+          revision?: number
+          week_of: string
+        }
+        Update: {
+          grocery?: Json
+          group_id?: string
+          revision?: number
+          week_of?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_group_weeks_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cooking_groups: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          revision: number
+          week_starts_on: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          revision?: number
+          week_starts_on: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          revision?: number
+          week_starts_on?: number
+        }
+        Relationships: []
+      }
+      cooking_week_proposals: {
+        Row: {
+          approvals: string[]
+          created_at: string
+          day: number
+          group_id: string
+          id: string
+          status: string
+        }
+        Insert: {
+          approvals?: string[]
+          created_at?: string
+          day: number
+          group_id: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          approvals?: string[]
+          created_at?: string
+          day?: number
+          group_id?: string
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooking_week_proposals_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_workout_sessions: {
         Row: {
           actual: Json
@@ -481,6 +749,7 @@ export type Database = {
           serving_label: string
           serving_options: Json | null
           serving_unit: string
+          snapshot_fdc_id: string | null
           source: string
           source_version: string
           updated_at: string
@@ -512,6 +781,7 @@ export type Database = {
           serving_label: string
           serving_options?: Json | null
           serving_unit: string
+          snapshot_fdc_id?: string | null
           source: string
           source_version: string
           updated_at?: string
@@ -543,6 +813,7 @@ export type Database = {
           serving_label?: string
           serving_options?: Json | null
           serving_unit?: string
+          snapshot_fdc_id?: string | null
           source?: string
           source_version?: string
           updated_at?: string
@@ -1245,6 +1516,7 @@ export type Database = {
           preparation_basis: string | null
           row_id: number
           servings: number
+          shared_grocery: boolean
           skipped: boolean
           slot_key: string
           sort_order: number
@@ -1273,6 +1545,7 @@ export type Database = {
           preparation_basis?: string | null
           row_id?: never
           servings: number
+          shared_grocery?: boolean
           skipped?: boolean
           slot_key: string
           sort_order: number
@@ -1301,6 +1574,7 @@ export type Database = {
           preparation_basis?: string | null
           row_id?: never
           servings?: number
+          shared_grocery?: boolean
           skipped?: boolean
           slot_key?: string
           sort_order?: number
@@ -1836,8 +2110,13 @@ export type Database = {
       apply_progression_decision: { Args: { p_payload: Json }; Returns: Json }
       apply_workout_override: { Args: { p_payload: Json }; Returns: Json }
       archive_saved_meal: { Args: { p_payload: Json }; Returns: Json }
+      can_read_cooking_recipe_image: {
+        Args: { p_path: string }
+        Returns: boolean
+      }
       claim_deleted_recipe_images: { Args: { p_payload: Json }; Returns: Json }
       claim_recipe_image_cleanup: { Args: { p_payload: Json }; Returns: Json }
+      commit_cooking_group_plan: { Args: { p_payload: Json }; Returns: Json }
       complete_deleted_recipe_images: {
         Args: { p_payload: Json }
         Returns: Json
@@ -1851,6 +2130,9 @@ export type Database = {
         Args: { p_kind: string }
         Returns: Json
       }
+      cooking_group_command: { Args: { p_payload: Json }; Returns: Json }
+      copy_cooking_recipe: { Args: { p_payload: Json }; Returns: Json }
+      current_cooking_group: { Args: never; Returns: string }
       delete_account: { Args: { p_payload: Json }; Returns: Json }
       delete_daily_steps: { Args: { p_payload: Json }; Returns: Json }
       delete_logged_meal: { Args: { p_payload: Json }; Returns: Json }
@@ -1859,10 +2141,17 @@ export type Database = {
       export_account_data: { Args: { p_payload: Json }; Returns: Json }
       finish_workout_session: { Args: { p_payload: Json }; Returns: Json }
       generate_nutrition_week: { Args: { p_payload: Json }; Returns: Json }
+      get_cooking_group_week: { Args: { p_week_of: string }; Returns: Json }
+      get_cooking_recipe: { Args: { p_recipe_id: string }; Returns: Json }
+      get_group_planning_context: {
+        Args: { p_actor: string; p_input: Json }
+        Returns: Json
+      }
       get_nutrition_week: { Args: { p_week_of: string }; Returns: Json }
       get_recipe_card_metadata: { Args: { p_payload: Json }; Returns: Json }
       log_planned_meal: { Args: { p_payload: Json }; Returns: Json }
       log_saved_meal: { Args: { p_payload: Json }; Returns: Json }
+      mutate_cooking_group_week: { Args: { p_payload: Json }; Returns: Json }
       recipe_image_access: {
         Args: { p_path: string; p_write?: boolean }
         Returns: boolean
@@ -1892,6 +2181,10 @@ export type Database = {
       skip_planned_meal: { Args: { p_payload: Json }; Returns: Json }
       start_custom_workout: { Args: { p_payload: Json }; Returns: Json }
       start_workout_session: { Args: { p_payload: Json }; Returns: Json }
+      store_group_planning_preview: {
+        Args: { p_actor: string; p_input: Json; p_preview: Json }
+        Returns: Json
+      }
       toggle_grocery_item: { Args: { p_payload: Json }; Returns: Json }
       update_logged_meal: { Args: { p_payload: Json }; Returns: Json }
       update_notification_preference: {

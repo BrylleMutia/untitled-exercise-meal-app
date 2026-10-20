@@ -36,9 +36,9 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 30, 'every public application table has RLS enabled');
+), 38, 'every public application table has RLS enabled');
 
-select is((select count(*)::int from pg_policies where schemaname = 'public'), 29, 'owner/catalog policies are present');
+select is((select count(*)::int from pg_policies where schemaname = 'public'), 37, 'owner/catalog policies are present');
 
 select is((
   select count(*)::int
@@ -58,7 +58,7 @@ select is((
   select count(*)::int
   from information_schema.role_table_grants
   where table_schema = 'public' and grantee = 'authenticated' and privilege_type = 'SELECT'
-), 30, 'authenticated reads are granted');
+), 38, 'authenticated reads are granted');
 
 select is((
   select count(*)::int

@@ -1,0 +1,65 @@
+begin;
+select no_plan();
+insert into auth.users(id,email) select ('00000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'connections-'||i||'@example.test' from generate_series(4201,4209) i;
+insert into public.profiles(id,name,age,sex,height_cm,weight_kg,units,experience,equipment,days_per_week,session_minutes,goal)
+select id,'Connection '||right(id::text,4),30,'female',165,65,'metric','beginner',array['none'],3,30,'maintain' from auth.users where email like 'connections-%@example.test';
+create temp table connection_state(name text primary key,value jsonb);
+grant all on connection_state to authenticated;
+create function pg_temp.connection_command(p_person integer,p_payload jsonb) returns jsonb language plpgsql as $$
+begin
+ perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-'||lpad(p_person::text,12,'0'),true);
+ return public.cooking_group_command(p_payload);
+end;
+$$;
+set local role authenticated;
+set local "request.jwt.claim.role"='authenticated';
+insert into connection_state values('first',pg_temp.connection_command(4201,'{"action":"invite","idempotencyKey":"connection-first"}'));
+select ok(pg_temp.connection_command(4201,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='first'))) ? 'error','self inspection denied');
+insert into connection_state values('second',pg_temp.connection_command(4201,'{"action":"invite","idempotencyKey":"connection-second"}'));
+select ok(pg_temp.connection_command(4202,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='first'))) ? 'error','replacement revokes old PIN');
+select throws_ok($$select pg_temp.connection_command(4202,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='second'),'groupRevision',1,'idempotencyKey','no-consent'))$$,'P0001',null,'join requires prior consent inspection');
+reset role;
+update public.profiles set week_starts_on=1 where id='00000000-0000-0000-0000-000000004202';
+set local role authenticated;
+select matches(pg_temp.connection_command(4202,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='second')))->>'error','Start of week','mismatched week requires explicit preference change');
+reset role;
+update public.profiles set week_starts_on=0 where id='00000000-0000-0000-0000-000000004202';
+set local role authenticated;
+select is(pg_temp.connection_command(4202,jsonb_build_object('action','inspect-pin','pin',lower((select value->>'pin' from connection_state where name='second'))))->>'inviter','Connection 4201','PIN inspection is case insensitive');
+reset role;
+update private.cooking_pin_reviews set expires_at=now()-interval '1 second' where user_id='00000000-0000-0000-0000-000000004202';
+set local role authenticated;
+select throws_ok($$select pg_temp.connection_command(4202,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='second'),'groupRevision',1,'idempotencyKey','expired-consent'))$$,'P0001',null,'expired consent requires renewed inspection');
+reset role;
+update private.cooking_invitations set expires_at=now()-interval '1 second' where created_by='00000000-0000-0000-0000-000000004201';
+set local role authenticated;
+select is(pg_temp.connection_command(4202,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='second')))->>'error','This PIN is invalid or expired.','expired PIN uses generic error');
+insert into connection_state values('live',pg_temp.connection_command(4201,'{"action":"invite","idempotencyKey":"connection-live"}'));
+insert into connection_state values('review',pg_temp.connection_command(4202,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='live'))));
+select lives_ok($$select pg_temp.connection_command(4202,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='live'),'groupRevision',1,'idempotencyKey','connection-join'))$$,'join succeeds after renewed consent');
+select is(pg_temp.connection_command(4202,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='live'),'groupRevision',1,'idempotencyKey','connection-join'))->>'success','true','successful join replay is idempotent');
+select ok(pg_temp.connection_command(4203,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='live'))) ? 'error','PIN cannot be reused');
+insert into connection_state values('pending',pg_temp.connection_command(4201,'{"action":"invite","idempotencyKey":"connection-pending"}'));
+insert into connection_state values('pending-review',pg_temp.connection_command(4203,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='pending'))));
+insert into connection_state values('other',pg_temp.connection_command(4202,'{"action":"invite","idempotencyKey":"connection-other"}'));
+insert into connection_state values('other-review',pg_temp.connection_command(4204,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='other'))));
+select lives_ok($$select pg_temp.connection_command(4204,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='other'),'groupRevision',2,'idempotencyKey','connection-four'))$$,'any member can invite');
+select throws_ok($$select pg_temp.connection_command(4203,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='pending'),'groupRevision',2,'idempotencyKey','stale-consent'))$$,'P0001',null,'membership change invalidates captured consent revision');
+insert into connection_state values('new-review',pg_temp.connection_command(4203,jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from connection_state where name='pending'))));
+select lives_ok($$select pg_temp.connection_command(4203,jsonb_build_object('action','join','pin',(select value->>'pin' from connection_state where name='pending'),'groupRevision',3,'idempotencyKey','fresh-consent'))$$,'renewed consent allows joining');
+do $$ declare person integer; invitation jsonb; review jsonb; begin
+ for person in 4205..4206 loop
+   invitation:=pg_temp.connection_command(4201,jsonb_build_object('action','invite','idempotencyKey','capacity-invite-'||person));
+   review:=pg_temp.connection_command(person,jsonb_build_object('action','inspect-pin','pin',invitation->>'pin'));
+   perform pg_temp.connection_command(person,jsonb_build_object('action','join','pin',invitation->>'pin','groupRevision',review->'group'->'revision','idempotencyKey','capacity-join-'||person));
+ end loop;
+end $$;
+select is(jsonb_array_length(public.get_cooking_group_week('2026-10-18')->'group'->'members'),6,'capacity is six accounts');
+select throws_ok($$select pg_temp.connection_command(4201,'{"action":"invite","idempotencyKey":"over-capacity"}')$$,'P0001',null,'full group cannot issue further invites');
+do $$ begin for i in 1..10 loop perform pg_temp.connection_command(4209,'{"action":"inspect-pin","pin":"INVALID"}'); end loop; end $$;
+select matches(pg_temp.connection_command(4209,'{"action":"inspect-pin","pin":"INVALID"}')->>'error','Too many attempts','server rate limits PIN attempts');
+reset role;
+select ok(not exists(select 1 from information_schema.columns where table_schema='private' and table_name='cooking_invitations' and column_name in('pin','plaintext','code')),'invitation table stores no plaintext PIN');
+select ok(not exists(select 1 from public.mutation_idempotency where operation like 'cooking_group_%' and result_refs ? 'pin'),'mutation receipts do not retain recoverable PINs');
+select * from finish();
+rollback;

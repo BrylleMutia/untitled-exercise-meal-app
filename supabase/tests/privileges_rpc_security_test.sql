@@ -16,7 +16,7 @@ select is((
   where table_schema = 'public'
     and grantee = 'authenticated'
     and privilege_type = 'SELECT'
-), 30, 'authenticated has SELECT on all public read models');
+), 38, 'authenticated has SELECT on all public read models');
 
 select is((
   select count(*)::int
@@ -45,9 +45,9 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 30, 'RLS is enabled on every public table');
+), 38, 'RLS is enabled on every public table');
 
-select is((select count(*)::int from pg_policies where schemaname = 'public'), 29,
+select is((select count(*)::int from pg_policies where schemaname = 'public'), 37,
   'the expected catalog and durable read policies exist');
 
 select is((
@@ -90,6 +90,7 @@ select is((
       ,'users can read their recipe favorites'
       ,'users can read their catalog preferences'
       ,'users can read their calendar transitions'
+      ,'cooking_groups_read','cooking_members_read','cooking_proposals_read','cooking_weeks_read','cooking_generations_read','cooking_notices_read','cooking_assignments_read','cooking_transitions_read'
     )
 ), 0, 'policy names remain explicit and reviewable');
 
@@ -123,7 +124,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and p.prorettype = '3802'::oid
-), 52, 'the public API exposes the 52 jsonb RPC interfaces');
+), 56, 'the public API exposes the 56 jsonb RPC interfaces');
 
 select is((
   select count(*)::int
@@ -132,7 +133,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-), 50, 'authenticated execution is granted for every current wrapper');
+), 54, 'authenticated execution is granted for every current wrapper');
 
 select is((
   select count(*)::int
@@ -148,7 +149,7 @@ select is((
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prosecdef
-), 54, 'only the deliberate public mutation wrappers are SECURITY DEFINER');
+), 64, 'only the deliberate public mutation wrappers are SECURITY DEFINER');
 
 select is((
   select count(*)::int
@@ -157,7 +158,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and p.proconfig @> ARRAY['search_path=""']::text[]
-), 52, 'public RPCs use a controlled empty search_path');
+), 56, 'public RPCs use a controlled empty search_path');
 
 select is((
   select count(*)::int
@@ -196,7 +197,7 @@ select is((
   where n.nspname = 'public'
     and p.proargtypes::oidvector = '3802'::oidvector
     and pg_get_functiondef(p.oid) not ilike '%user_metadata%'
-), 52, 'authorization does not rely on editable user metadata');
+), 56, 'authorization does not rely on editable user metadata');
 
 select is((
   select count(*)::int
@@ -211,7 +212,7 @@ select is((
 ), 0, 'PUBLIC has no implicit execute privilege on exposed mutation wrappers');
 
 select ok((
-  select count(*) = 29
+  select count(*) = 37
   from pg_policies
   where schemaname = 'public'
     and (with_check is null)
