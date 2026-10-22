@@ -984,6 +984,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async generateNutritionWeek(input: GenerateNutritionWeekInput): Promise<MutationOutcome> {
+    if (!input.reviewAcknowledged || input.reviewPolicyVersion !== "advisory_v1") throw repositoryException(toRepositoryError("validation_failed: Refresh and acknowledge the current generation review."));
     const current = input.currentSnapshot;
     if (!input.selectedDates?.length || new Set(input.selectedDates).size !== input.selectedDates.length || input.selectedDates.some(date => !weekDates(input.weekOf).includes(date)) || input.assignments.some(row => !input.selectedDates.includes(row.date)) || !input.assignments.length || input.assignments.length > 28 || startOfWeek(input.weekOf, current.profile?.weekStartsOn ?? 0) !== input.weekOf) {
       throw repositoryException(toRepositoryError("validation_failed: Review the selected week and generated meals."));
@@ -997,7 +998,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       meals: [...(existing?.meals ?? []), ...input.assignments] };
     const generated = generateGroceryList(mealPlan, current.savedMeals, current.foods, input.weekOf);
     const grocery = current.grocery?.weekOf === input.weekOf ? mergeGroceryLists(current.grocery, generated) : generated;
-    return this.mutate("generate_nutrition_week", { weekOf: input.weekOf, selectedDates: input.selectedDates, recipes: input.recipes, assignments: input.assignments,
+    return this.mutate("generate_nutrition_week", { reviewAcknowledged: input.reviewAcknowledged, reviewPolicyVersion: input.reviewPolicyVersion, weekOf: input.weekOf, selectedDates: input.selectedDates, recipes: input.recipes, assignments: input.assignments,
       mealPlan, grocery, expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey ?? idempotencyKey() },
       [{ type: "plan-edited", planId: mealPlan.id }, { type: "grocery-list-updated", listId: grocery.id }]);
   }

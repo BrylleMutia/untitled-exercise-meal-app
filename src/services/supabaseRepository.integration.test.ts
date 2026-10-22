@@ -206,7 +206,7 @@ describe("Supabase repository against the disposable local stack", () => {
       const selected = base.savedMeals.filter(recipe => recipe.isSystem && !recipe.archivedAt && !recipe.id.startsWith("meal-default-"));
       const preview = generateWeeklyMeals(context, weekOf, selected.map(recipe => recipe.id), "grocery-audit");
       expect(preview.assignments).toHaveLength(14);
-      await account.repository.generateNutritionWeek({ weekOf, selectedDates: weekDates(weekOf), recipes: selected.map(recipe => ({ id: recipe.id, revision: recipe.revision! })), assignments: preview.assignments,
+      await account.repository.generateNutritionWeek({ reviewAcknowledged: true, reviewPolicyVersion: "advisory_v1", weekOf, selectedDates: weekDates(weekOf), recipes: selected.map(recipe => ({ id: recipe.id, revision: recipe.revision! })), assignments: preview.assignments,
         currentSnapshot: context, expectedVersions: { profileRevision: base.profile!.revision, mealPlanVersion: 0, groceryRevision: 0 }, idempotencyKey: randomUUID() });
       const saved = await account.repository.loadNutritionWeek(weekOf);
       const scoped = nutritionWeekSnapshot(base, saved);
@@ -264,7 +264,7 @@ describe("Supabase repository against the disposable local stack", () => {
     const preview = generateWeeklyMeals(current, weekOf, [id], "repository-preview");
     expect(preview.assignments).toHaveLength(3);
     expect(preview.unused).toEqual([]);
-    const input = { weekOf, selectedDates: weekDates(weekOf), recipes: [{ id, revision: saved.revision! }], assignments: preview.assignments, currentSnapshot: current,
+    const input = { reviewAcknowledged: true, reviewPolicyVersion: "advisory_v1" as const, weekOf, selectedDates: weekDates(weekOf), recipes: [{ id, revision: saved.revision! }], assignments: preview.assignments, currentSnapshot: current,
       expectedVersions: { profileRevision: base.profile!.revision, mealPlanVersion: week.mealPlan!.version, groceryRevision: week.grocery!.revision }, idempotencyKey: randomUUID() };
     const outcomes = await Promise.all([account.repository.generateNutritionWeek(input), account.repository.generateNutritionWeek(input)]);
     expect(outcomes[0].snapshot.mealPlan).toEqual(base.mealPlan);

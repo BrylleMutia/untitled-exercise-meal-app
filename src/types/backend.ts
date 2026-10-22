@@ -267,6 +267,8 @@ export type EditMealPlanInput = IdempotentInput & {
 };
 
 export type GenerateNutritionWeekInput = IdempotentInput & {
+  reviewAcknowledged: boolean;
+  reviewPolicyVersion: "advisory_v1";
   weekOf: string;
   selectedDates: string[];
   recipes: Array<{ id: string; revision: number }>;

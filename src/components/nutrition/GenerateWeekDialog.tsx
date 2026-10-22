@@ -6,7 +6,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { HelpPopover } from "@/components/ui/HelpPopover";
 import { DayCheckboxStrip } from "@/components/DayStrip";
+import { editedDefaultRecipeIds, recipeDisplayName } from "@/utility/recipeLibrary";
 import { GenerationRecipeCard } from "./GenerationRecipeCard";
+import { RecipeWarningReview, DailyWarningReview, planningAcknowledgment } from "./PreferenceReview";
+import { PLANNING_REVIEW_POLICY } from "@/types/planningPreferences";
 import { MealRow } from "./MealRow";
 import { useApp } from "@/contexts/AppContext";
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
@@ -41,6 +44,7 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
   const userId = snapshot.userId, draftType = `nutrition-generation:${weekOf}`;
   const basis = generationBasis(snapshot, weekOf);
   const options = weeklyRecipeOptions(snapshot, weekOf);
+  const editedIds = editedDefaultRecipeIds(snapshot.savedMeals);
   const changed = Boolean(draft && draft.basis !== basis);
   const busy = saving || pending;
   const selectionDisabled = busy || unavailable || !draft || changed;
@@ -59,7 +63,7 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
       if (!active) return;
       const value = saved?.payload;
       if (value && Array.isArray(value.selectedDates) && value.selectedDates.every(date => weekDates(weekOf).includes(date)) && new Set(value.selectedDates).size === value.selectedDates.length && Array.isArray(value.selected) && value.preview && Array.isArray(value.preview.assignments) && Array.isArray(value.preview.unused) && typeof value.basis === "string" && value.expectedVersions && Array.isArray(value.recipes) && value.key) {
-        setDraft(value); setMessage("Weekly plan draft restored. Review the preview before saving.");
+        setDraft(create(value.selected, initial.current, value.selectedDates)); setMessage("Weekly plan draft restored. Review the preview before saving.");
       } else {
         const source = initial.current;
         setDraft(create(weeklyRecipeOptions(source, weekOf).filter(option => !option.reason).map(option => option.recipe.id), source));
@@ -82,10 +86,10 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
 
   function update(selected: string[], selectedDates = draft?.selectedDates ?? defaultPlanningDates(weekOf)) { setDraft(create(selected, snapshot, selectedDates)); setMessage(""); }
   async function save() {
-    if (!draft || changed || unavailable || busy || submitting.current || !draft.preview.assignments.length || draft.preview.unused.length && !draft.acknowledged) return;
+    if (!draft || changed || unavailable || busy || submitting.current || !draft.preview.assignments.length || !draft.acknowledged) return;
     submitting.current = true; setSaving(true); setMessage("");
     try {
-      const confirmed = await onSave({ weekOf, selectedDates: draft.selectedDates, assignments: draft.preview.assignments, recipes: draft.recipes, expectedVersions: draft.expectedVersions, idempotencyKey: draft.key });
+      const confirmed = await onSave({ reviewAcknowledged: draft.acknowledged, reviewPolicyVersion: PLANNING_REVIEW_POLICY, weekOf, selectedDates: draft.selectedDates, assignments: draft.preview.assignments, recipes: draft.recipes, expectedVersions: draft.expectedVersions, idempotencyKey: draft.key });
       if (confirmed) { completed.current = true; await writes.current; await clearDraft(userId, draftType); onClose(); }
       else setMessage("The save was not confirmed. Your preview is retained; retry or refresh and review changes.");
     } catch { setMessage("The save was not confirmed. Your preview is retained; reconnect and retry."); }
@@ -95,11 +99,11 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
     help={<HelpPopover title="Generate plan" label="About generate plan"><p>Fill this week’s empty meals with one serving per entry. Each recipe has one weekly batch; existing active planned servings count toward its yield.</p></HelpPopover>}
     footer={<div className="grid gap-2">
       {message ? <p className="text-sm text-ink-soft" role="status">{message}</p> : null}
-      {error ? <p className="text-sm text-ink-soft" role="alert">{error.message}</p> : null}
+      {error ? <p className="text-sm text-danger-900" role="alert">{error.message}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="soft" disabled={busy} onClick={onClose}>Close</Button>
-        <Button disabled={busy || unavailable || !draft || changed || !draft.preview.assignments.length || Boolean(draft.preview.unused.length && !draft.acknowledged)} onClick={() => void save()}>{saving ? "Saving…" : "Save plan"}</Button></div>
+        <Button disabled={busy || unavailable || !draft || changed || !draft.preview.assignments.length || Boolean(!draft.acknowledged)} onClick={() => void save()}>{saving ? "Saving…" : "Save plan"}</Button></div>
     </div>}>
-    <div className="grid min-w-0 gap-5">
+    <div className="grid min-w-0 gap-5"><p className="text-xs text-ink-soft">Cost checks are temporarily paused.</p>
       {storageFailed ? <p className="text-sm" role="status">Draft recovery is unavailable. Keep this dialog open until saved.</p> : null}
       {unavailable ? <p className="text-sm" role="status">Refresh recipes and this week before saving. Your preview is retained.</p> : null}
       {changed ? <div className="grid gap-2 rounded-2xl bg-peach-50 p-3" role="status"><p className="text-sm">This week, a recipe, or your planning settings changed. Review a fresh preview before saving.</p><Button variant="soft" disabled={busy || unavailable} onClick={() => update(draft!.selected.filter(id => options.some(option => option.recipe.id === id)))}>Review updated preview</Button></div> : null}
@@ -124,12 +128,13 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
           </div>
         </div>
         <div className="@container"><ul aria-label="Recipe choices" className="grid grid-cols-1 gap-2 @min-[17.5rem]:grid-cols-2 @min-[40rem]:grid-cols-4">{options.map(option => <li key={option.recipe.id} className="min-w-0">
-          <GenerationRecipeCard option={option} selected={draft?.selected.includes(option.recipe.id) ?? false}
+          <GenerationRecipeCard option={option} displayName={recipeDisplayName(option.recipe, editedIds)} selected={draft?.selected.includes(option.recipe.id) ?? false}
             disabled={selectionDisabled}
             onChange={selected => update(selected ? [...draft!.selected, option.recipe.id] : draft!.selected.filter(id => id !== option.recipe.id))} />
         </li>)}</ul></div>
         {!options.length ? <p className="text-sm text-ink-soft">Create a recipe and assign its meals in Details to begin.</p> : null}
       </fieldset>
+      {!changed && !unavailable && draft?.preview.preferenceReview ? <RecipeWarningReview review={draft.preview.preferenceReview} disabled={selectionDisabled} onRemove={id => update(draft.selected.filter(selected => selected !== id))} /> : null}
       <section className="grid min-w-0 gap-3" aria-label="Generated plan preview"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-extrabold">Preview · {draft?.preview.assignments.length ?? 0} {draft?.preview.assignments.length === 1 ? "meal" : "meals"}</h3><Button variant="soft" disabled={busy || unavailable || !draft || changed || !draft.selected.length} onClick={() => update(draft!.selected)}><Shuffle className="h-4 w-4" aria-hidden />Shuffle</Button></div>
         {draft?.preview.assignments.length ? <ul className="grid gap-2">{draft.preview.assignments.map(row => <MealRow key={row.id} summary={<>
           <span className="block text-[11px] font-bold text-ink-soft">{formatFullDate(row.date)}</span>
@@ -137,7 +142,9 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
           <span className="block text-[11px] font-semibold text-ink-soft">{mealSlotLabels[row.slot]} · {row.servings} {row.servings === 1 ? "serving" : "servings"}</span>
         </>} />)}</ul> : <p className="text-sm text-ink-soft">No meals fit the selected days, recipes, empty slots, and eligible daily targets.</p>}
       </section>
-      {draft?.preview.unused.length ? <section className="grid gap-2" aria-label="Unused servings"><h3 className="font-extrabold">Unused servings</h3><ul className="grid gap-2 text-sm">{draft.preview.unused.map(row => <li key={row.mealId}><span className="font-bold">{row.name}: {Number(row.servings.toFixed(4))}</span> — {row.reason}</li>)}</ul><label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" disabled={busy || changed} checked={draft.acknowledged} onChange={event => setDraft({ ...draft, acknowledged: event.target.checked })} />Save the meals shown, leaving these servings unused.</label></section> : null}
+      {draft?.preview.unused.length ? <section className="grid gap-2" aria-label="Unused servings"><h3 className="font-extrabold">Unused servings</h3><ul className="grid gap-2 text-sm">{draft.preview.unused.map(row => <li key={row.mealId}><span className="font-bold">{row.name}: {Number(row.servings.toFixed(4))}</span> — {row.reason}</li>)}</ul></section> : null}
+      {!changed && !unavailable && draft?.preview.preferenceReview ? <DailyWarningReview review={draft.preview.preferenceReview} /> : null}
+      {draft ? <label className="flex min-h-11 items-start gap-2 rounded-xl bg-lav-50 p-3 text-sm"><input type="checkbox" className="mt-1" checked={!changed && draft.acknowledged} disabled={busy || changed || unavailable} onChange={event => setDraft({ ...draft, acknowledged: event.target.checked })} /><span>{planningAcknowledgment}</span></label> : null}
       <Button variant="ghost" disabled={busy} className="w-fit text-xs underline" onClick={onRefresh}>Refresh recipes and week</Button>
     </div>
   </Modal>;
