@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Check, ChevronLeft, ChevronRight, Pencil, Plus, Sparkles, Trash2, TriangleAlert, WandSparkles } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Sparkles, Trash2, TriangleAlert, WandSparkles, SlidersHorizontal } from "lucide-react";
 import { useApp, type AppActions } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { DailyNutritionSummary } from "@/components/nutrition/DailyNutritionSummary";
@@ -13,11 +13,13 @@ import { type NutritionMetric } from "@/components/ui/nutritionMetrics";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
 import { RecipeEditor } from "@/components/nutrition/RecipeEditor";
 import { ConnectedGenerateDialog as GenerateWeekDialog } from "@/components/cooking/ConnectedGenerateDialog";
-import { CookingGroupSurface, GenerationAttribution } from "@/components/cooking/CookingGroupSurface";
+import { CookingGroupSurface, CookingOverviewButton, GenerationAttribution } from "@/components/cooking/CookingGroupSurface";
+import { CombinedRecipeLibrary } from "@/components/cooking/CombinedRecipeLibrary";
 import { RecipeOverview } from "@/components/nutrition/RecipeOverview";
 import { RecipeCard } from "@/components/nutrition/RecipeCard";
 import { RecipePortionReview } from "@/components/nutrition/RecipePortionReview";
-import { SavedRecipePlanReview } from "@/components/nutrition/SavedRecipePlanReview";
+import { RecipeFilterDialog } from "@/components/nutrition/RecipeFilterDialog";
+import { activeRecipeFilterCount, emptyRecipeFilters } from "@/utility/recipeFilters";
 import { LoggedRecipeServingsEditor } from "@/components/nutrition/LoggedRecipeServingsEditor";
 import { MealRow } from "@/components/nutrition/MealRow";
 import { useRecipeCardMetadata } from "@/components/nutrition/useRecipeCardMetadata";
@@ -133,15 +135,10 @@ export default function NutritionPage() {
   }, [loggingOpen, entrySaving, pendingMutation, week.loading, week.error]);
   const [logSlot, setLogSlot] = useState<MealSlot | null>(null);
   const [mode, setMode] = useState<Mode>("search");
-  const [savedMealToPlan, setSavedMealToPlan] = useState<{ id: string; name: string } | null>(null);
-  const [savingSavedMeal, setSavingSavedMeal] = useState(false);
-  const savedPlanReturnFocus = useRef<string | null>(null);
-  useEffect(() => {
-    if (!savedMealToPlan && !savingSavedMeal && !pendingMutation && !week.loading && !week.error && savedPlanReturnFocus.current) {
-      document.getElementById(`plan-saved-${savedPlanReturnFocus.current}`)?.focus();
-      savedPlanReturnFocus.current = null;
-    }
-  }, [savedMealToPlan, savingSavedMeal, pendingMutation, week.loading, week.error]);
+  const [recipeFilters, setRecipeFilters] = useState(emptyRecipeFilters);
+  const [recipeFiltersOpen, setRecipeFiltersOpen] = useState(false);
+  const recipeFilterTrigger = useRef<HTMLButtonElement>(null);
+  const filterCount = activeRecipeFilterCount(recipeFilters);
   const [editingPlannedMealId, setEditingPlannedMealId] = useState<string | null>(null);
   const plannedEditReturnFocus = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -183,6 +180,7 @@ export default function NutritionPage() {
   const [viewingRecipeId, setViewingRecipeId] = useState<string | null>(null);
   const [returnToRecipeOverview, setReturnToRecipeOverview] = useState<string | null>(null);
   const recipeReturnFocus = useRef<HTMLElement | null>(null);
+  const createRecipeButton = useRef<HTMLButtonElement>(null);
   const recipeReadRequest = useRef(0);
   useEffect(() => () => { recipeReadRequest.current += 1; }, []);
   const recipeReadAccount = useRef(appSnapshot.userId);
@@ -265,7 +263,7 @@ export default function NutritionPage() {
   }
 
   function selectDay(date: string) {
-    if (date === selected || savingSavedMeal || savingPlannedLog || entrySaving || pendingMutation) return;
+    if (date === selected || savingPlannedLog || entrySaving || pendingMutation) return;
     setSelected(date);
     setLoggingOpen(false);
     setEntryReviewing(false);
@@ -275,7 +273,6 @@ export default function NutritionPage() {
     setPlannedMealToLog(null);
     setEditingLoggedMealId(null);
     setEditingNutritionId(null);
-    setSavedMealToPlan(null);
   }
 
   function closeLogEditor() {
@@ -330,7 +327,7 @@ export default function NutritionPage() {
       await appActions.cookingGroupCommand({ action: "copy-recipe", recipeId: id, idempotencyKey: crypto.randomUUID() });
       setRecipeRead(null); setViewingRecipeId(null); week.refresh();
       appActions.notify("Personal recipe copy saved. Open its Edit control to change it.");
-    } catch (reason) { appActions.notify(reason instanceof Error ? reason.message : "Copy failed. Retry when connected.", "warn"); }
+    } catch (reason) { appActions.notify(reason instanceof Error ? reason.message : "Copy failed. Retry when connected.", "error"); }
   }
 
   function canLogPlanned(meal: PlannedMeal) {
@@ -367,7 +364,7 @@ export default function NutritionPage() {
             </button>
           } actions={<>
               <button id={`edit-logged-${meal.id}`} type="button" disabled={Boolean(pendingMutation)} data-planned-meal-id={meal.plannedMealId} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink disabled:opacity-50" aria-label={`Edit ${meal.name}`} onClick={() => setEditingLoggedMealId(meal.id)}><Pencil className="h-4 w-4" aria-hidden /></button>
-              <button type="button" disabled={Boolean(pendingMutation)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink disabled:opacity-50" aria-label={`Delete ${meal.name}`} onClick={() => void actions.deleteLoggedMeal(meal.id)}><Trash2 className="h-4 w-4" aria-hidden /></button>
+              <button type="button" disabled={Boolean(pendingMutation)} className="grid h-11 w-11 place-items-center rounded-full bg-danger-200 text-danger-900 hover:bg-danger-300 disabled:opacity-50" aria-label={`Delete ${meal.name}`} onClick={() => void actions.deleteLoggedMeal(meal.id)}><Trash2 className="h-4 w-4" aria-hidden /></button>
           </>}>
           {expanded ? <div className="grid gap-1 border-t border-white pt-2">{childEntries.map((entry) => <div key={entry.id} className="grid min-w-0 gap-1 rounded-lg bg-white px-2 py-2 text-xs"><span className="break-words">{entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName} ×{entry.servings} · {entry.preparationBasis ?? "basis unknown"}</span><NutritionPills values={entry} precision={0} /><span className="font-semibold text-ink-soft">{entry.valueSource === "ai_estimate" ? "AI estimate" : entry.valueSource === "trusted_catalog" ? "USDA/catalog" : "user value"}</span></div>)}<p className="text-[11px] font-semibold text-muted">Historical corrections affect this logged meal only. The reusable recipe remains unchanged.</p></div> : null}
           {editingLoggedMealId === meal.id ? meal.sourceMode === "saved_meal" ? (
@@ -404,7 +401,7 @@ export default function NutritionPage() {
           </div>
         } actions={<>
             <button type="button" data-planned-meal-id={entry.plannedMealId} onClick={() => setEditingNutritionId(entry.id)} aria-label={`Edit ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink"><Pencil className="h-4 w-4" aria-hidden /></button>
-            <button type="button" onClick={() => actions.deleteNutrition(entry.id)} aria-label={`Delete ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink"><Trash2 className="h-4 w-4" aria-hidden /></button>
+            <button type="button" onClick={() => actions.deleteNutrition(entry.id)} aria-label={`Delete ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-danger-200 text-danger-900 hover:bg-danger-300"><Trash2 className="h-4 w-4" aria-hidden /></button>
         </>}>
           {editingNutritionId === entry.id ? <NutritionEditForm entry={entry} foods={foods} onSave={async (next) => { const saved = await actions.updateNutrition(next); if (saved) setEditingNutritionId(null); return saved; }} onCancel={() => setEditingNutritionId(null)} /> : null}
         </MealRow>;
@@ -422,9 +419,9 @@ export default function NutritionPage() {
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2" role="group" aria-label="Choose a nutrition week" aria-describedby="nutrition-week-range">
           <span id="nutrition-week-range" className="sr-only">Week of {formatFullDate(weekOf)} through {formatFullDate(addDays(weekOf, 6))}.</span>
           <div className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-1">
-            <IconButton size="compact" label="Previous week" tooltip="Previous week" disabled={entrySaving || savingSavedMeal || savingPlannedLog || Boolean(pendingMutation)} onClick={() => selectDay(addDays(selected, -7))}><ChevronLeft className="h-4 w-4" aria-hidden /></IconButton>
-            <Button variant="soft" className="!min-h-11 !h-11 !min-w-11 !px-2.5 text-xs" disabled={entrySaving || savingSavedMeal || savingPlannedLog || Boolean(pendingMutation)} onClick={() => selectDay(todayKey())}>Today</Button>
-            <IconButton size="compact" label="Next week" tooltip="Next week" disabled={entrySaving || savingSavedMeal || savingPlannedLog || Boolean(pendingMutation)} onClick={() => selectDay(addDays(selected, 7))}><ChevronRight className="h-4 w-4" aria-hidden /></IconButton>
+            <IconButton size="compact" label="Previous week" tooltip="Previous week" disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} onClick={() => selectDay(addDays(selected, -7))}><ChevronLeft className="h-4 w-4" aria-hidden /></IconButton>
+            <Button variant="soft" className="!min-h-11 !h-11 !min-w-11 !px-2.5 text-xs" disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} onClick={() => selectDay(todayKey())}>Today</Button>
+            <IconButton size="compact" label="Next week" tooltip="Next week" disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} onClick={() => selectDay(addDays(selected, 7))}><ChevronRight className="h-4 w-4" aria-hidden /></IconButton>
           </div>
           <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
             <div className="flex w-fit max-w-full flex-wrap rounded-2xl bg-white/70" role="group" aria-label="Nutrition summary view">
@@ -432,9 +429,9 @@ export default function NutritionPage() {
             </div>
           </div>
         </div>
-        <DayStrip weekStartsOn={appSnapshot.profile?.weekStartsOn ?? 0} selected={selected} onSelect={selectDay} disabled={entrySaving || savingSavedMeal || savingPlannedLog || Boolean(pendingMutation)} />
+        <DayStrip weekStartsOn={appSnapshot.profile?.weekStartsOn ?? 0} selected={selected} onSelect={selectDay} disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} />
         {week.loading ? <p className="mt-3 text-xs font-bold text-ink-soft" role="status">Loading this week’s nutrition…</p> : null}
-        {week.error ? <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-ink-soft" role="alert"><span>{week.error}</span><Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={week.refresh}>Retry week</Button></div> : null}
+        {week.error ? <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-danger-900" role="alert"><span>{week.error}</span><Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={week.refresh}>Retry week</Button></div> : null}
         {week.data ? <>
         {summaryMode === "planned" ? <>
           <PlannedNutritionSummary heading={isToday ? "Today" : selected} summary={plannedDayNutrition(todaysPlan, selected)} target={target}
@@ -458,12 +455,13 @@ export default function NutritionPage() {
             <h2 id="planned-meals-heading" className="font-extrabold">Planned</h2>
             <HelpPopover title="Planned meals"><p>Planned and eaten meals appear together by slot. Editing or skipping a plan does not change food already logged.</p><p>Planned nutrition describes the shown planned portion. Eaten nutrition is the amount saved in your food log. Recipe cards in Recipes show nutrition per serving.</p></HelpPopover>
           </div><GenerationAttribution /></div>
-          <Button variant="primary" className="!min-h-11 !px-3 text-xs"
-            disabled={!week.data || week.loading || Boolean(week.error) || entrySaving || savingPlannedLog || savingSavedMeal || Boolean(pendingMutation)}
-            onClick={event => { generationReturnFocus.current = event.currentTarget; setGenerationOpen(true); }}><WandSparkles className="h-4 w-4 shrink-0" aria-hidden />Generate</Button>
+          <div className="flex min-w-0 flex-wrap items-center gap-2"><CookingOverviewButton disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} />
+          <IconButton variant="primary" size="compact" label="Generate" tooltip="Generate"
+            disabled={!week.data || week.loading || Boolean(week.error) || entrySaving || savingPlannedLog || Boolean(pendingMutation)}
+            onClick={event => { generationReturnFocus.current = event.currentTarget; setGenerationOpen(true); }}><WandSparkles className="h-5 w-5" aria-hidden /></IconButton></div>
         </div>
         {week.data && !canAddPlan ? <p className="mt-2 text-xs font-semibold text-muted">Set an eligible daily goal to add to the plan. You can still log food you ate.</p> : null}
-        <fieldset className="min-w-0" disabled={!week.data || week.loading || Boolean(week.error) || entrySaving || savingPlannedLog || savingSavedMeal || Boolean(pendingMutation)}>
+        <fieldset className="min-w-0" disabled={!week.data || week.loading || Boolean(week.error) || entrySaving || savingPlannedLog || Boolean(pendingMutation)}>
         <div className="mt-5 grid gap-4">
           {SLOTS.map((slot) => {
             const planned = todaysPlan.filter((meal) => meal.slot === slot && !loggedPlannedIds.has(meal.id) && canLogPlanned(meal)).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
@@ -471,10 +469,10 @@ export default function NutritionPage() {
             return <section key={slot} className="min-w-0 border-t border-ink/10 pt-4" aria-label={slotLabels[slot]}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-extrabold">{slotLabels[slot]}</h3>
-                <Button id={`add-meal-${slot}`} variant="soft" className="!min-h-11 !px-3 text-xs" disabled={entrySaving || Boolean(pendingMutation)} aria-expanded={loggingOpen && logSlot === slot} aria-controls={loggingOpen && logSlot === slot ? "nutrition-log-editor" : undefined} onClick={() => {
+                <IconButton id={`add-meal-${slot}`} size="compact" label="Add meal" tooltip={`Add meal to ${slotLabels[slot]}`} disabled={entrySaving || Boolean(pendingMutation)} aria-expanded={loggingOpen && logSlot === slot} aria-controls={loggingOpen && logSlot === slot ? "nutrition-log-editor" : undefined} onClick={() => {
                   if (loggingOpen && logSlot === slot) closeLogEditor();
                   else { setEntryReviewing(false); setLoggingOpen(true); setLogSlot(slot); setMode("search"); }
-                }}><Plus className="h-4 w-4" aria-hidden /> Add meal</Button>
+                }}><Plus className="h-5 w-5" aria-hidden /></IconButton>
               </div>
               {loggingOpen && logSlot === slot ? <div id="nutrition-log-editor" className="mt-3 min-w-0 rounded-2xl bg-cream p-3 max-[400px]:p-2" role="group" aria-label="Add meal">
                 {!entryReviewing ? <div className="flex flex-wrap items-center justify-between gap-2">
@@ -502,7 +500,7 @@ export default function NutritionPage() {
                   return <MealRow key={pm.id} summary={recipe
                     ? <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left" aria-label={`View recipe: ${pm.label}`} onClick={event => openRecipe(recipe, event.currentTarget)}>{summary}</button>
                     : <div className="min-w-0">{summary}</div>} actions={<>
-                        <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink" aria-label="Edit" title={`Edit planned ${pm.label}`} aria-expanded={editingPlannedMealId === pm.id} onClick={event => { if (pm.sharedGrocery) { window.dispatchEvent(new Event("cali:open-cooking-group")); } else { plannedEditReturnFocus.current = event.currentTarget; setEditingPlannedMealId(pm.id); } }}><Pencil className="h-4 w-4" aria-hidden /></button>
+                        <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink" aria-label="Edit" title={`Edit planned ${pm.label}`} aria-expanded={editingPlannedMealId === pm.id} onClick={event => { if (pm.sharedGrocery) { window.dispatchEvent(new CustomEvent("cali:open-cooking-group", { detail: { assignmentId: pm.id } })); } else { plannedEditReturnFocus.current = event.currentTarget; setEditingPlannedMealId(pm.id); } }}><Pencil className="h-4 w-4" aria-hidden /></button>
                         <Button variant="soft" className="!min-h-11 !rounded-full !px-3 text-xs" onClick={() => void actions.skipPlannedMeal(pm.id)}>{pm.skipped ? "Plan again" : "Skip"}</Button>
                         <Button id={`log-planned-${pm.id}`} className="!min-h-11 !rounded-full !px-3 text-xs" onClick={() => openPlannedLog(pm, pm.id)}>Log</Button>
                       </>}>
@@ -523,16 +521,19 @@ export default function NutritionPage() {
       <Card role="region" aria-labelledby="saved-meals-heading">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="flex flex-wrap items-center gap-1"><h2 id="saved-meals-heading" className="font-extrabold">Recipes</h2><HelpPopover title="Recipes"><p>Create, reuse, or adjust recipes without changing logged history.</p><p>Card calories are per serving. The pie pill shows how many servings the whole recipe yields. Add to plan reviews a meal slot and portion for the selected day without recording intake. Log food you ate from a meal-entry review or a planned meal.</p></HelpPopover></div>
+            <div className="flex flex-wrap items-center gap-1"><h2 id="saved-meals-heading" className="font-extrabold">Recipes</h2><HelpPopover title="Recipes"><p>Create, reuse, or adjust recipes without changing logged history.</p><p>Card calories are per serving. The pie pill shows how many servings the whole recipe yields. Open a recipe from its image or title. Use Add meal to review a recipe portion for planning or logging, or Generate to build a plan. Log food you ate from a meal-entry review or a planned meal.</p></HelpPopover></div>
           </div>
-          <Button
-            variant="soft"
-            className="!min-h-11 !px-3 text-xs"
-            disabled={savingSavedMeal || Boolean(pendingMutation)}
-            onClick={(event) => { recipeReadRequest.current += 1; setRecipeRead(null); recipeReturnFocus.current = event.currentTarget; setReturnToRecipeOverview(null); setViewingRecipeId(null); setShowNewRecipe(true); setEditingRecipeId(null); setRecipeModalOpen(true); }}
-          >
-            <Plus className="h-4 w-4" aria-hidden /> Create
-          </Button>
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+            <span className="relative inline-flex">
+              <IconButton size="compact" buttonRef={recipeFilterTrigger} label="Filter recipes" tooltip="Filter recipes" aria-description={`${filterCount} active filter categories`} aria-expanded={recipeFiltersOpen} onClick={() => setRecipeFiltersOpen(true)}><SlidersHorizontal className="h-5 w-5" aria-hidden /></IconButton>
+              {filterCount ? <span aria-hidden className="pointer-events-none absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-ink px-1 text-xs font-bold text-white">{filterCount}</span> : null}
+              <span className="sr-only">{filterCount} active filter categories</span>
+            </span>
+            <IconButton buttonRef={createRecipeButton} variant="primary" size="compact" label="Create" tooltip="Create"
+              disabled={Boolean(pendingMutation)}
+              onClick={(event) => { recipeReadRequest.current += 1; setRecipeRead(null); recipeReturnFocus.current = event.currentTarget; setReturnToRecipeOverview(null); setViewingRecipeId(null); setShowNewRecipe(true); setEditingRecipeId(null); setRecipeModalOpen(true); }}
+            ><Plus className="h-5 w-5" aria-hidden /></IconButton>
+          </div>
         </div>
         {showNewRecipe || editingRecipeId ? (
           <RecipeEditor
@@ -540,62 +541,48 @@ export default function NutritionPage() {
             open={recipeModalOpen}
             returnFocus={recipeReturnFocus}
             meal={editingRecipeId ? snapshot.savedMeals.find((meal) => meal.id === editingRecipeId) : undefined}
+            onArchive={editingRecipeId && !editingRecipeId.startsWith("group-copy-") ? (id, retry) => retry ? actions.retryLast() : actions.archiveMeal(id) : undefined}
+            onArchived={() => {
+              recipeReturnFocus.current = createRecipeButton.current;
+              setReturnToRecipeOverview(null); setViewingRecipeId(null); setRecipeRead(null);
+              setRecipeModalOpen(false); setEditingRecipeId(null); setShowNewRecipe(false);
+            }}
             onSave={(input) => actions.saveRecipe(input)}
             onSaved={(mealId) => { setRecipeModalOpen(false); setShowNewRecipe(false); setEditingRecipeId(null); if (returnToRecipeOverview) setViewingRecipeId(mealId); }}
             foods={foods}
             onCancel={() => { setRecipeModalOpen(false); if (returnToRecipeOverview) setViewingRecipeId(returnToRecipeOverview); }}
           />
         ) : null}
-        {recipeReadCurrent && (recipeReadCurrent.status === "loading" || recipeReadFailed) ? <div className="mt-3 grid min-w-0 gap-2" role={recipeReadFailed ? "alert" : "status"}>
-          <p className="text-sm text-ink-soft">{recipeReadFailed ? "Original recipe measurements could not be loaded. Your drafts are retained. Retry to view the latest recipe." : "Loading original recipe measurements…"}</p>
+        {recipeReadCurrent && (recipeReadCurrent.status === "loading" || recipeReadFailed) ? <div className={`mt-3 grid min-w-0 gap-2 ${recipeReadFailed ? "text-danger-900" : ""}`} role={recipeReadFailed ? "alert" : "status"}>
+          <p className={`text-sm ${recipeReadFailed ? "text-danger-900" : "text-ink-soft"}`}>{recipeReadFailed ? "Original recipe measurements could not be loaded. Your drafts are retained. Retry to view the latest recipe." : "Loading original recipe measurements…"}</p>
           <div className="flex flex-wrap gap-2">{recipeReadFailed ? <Button variant="soft" className="!px-3 text-xs" onClick={() => { const meal = snapshot.savedMeals.find(meal => meal.id === recipeReadCurrent.id); if (meal && recipeReturnFocus.current) void openRecipe(meal, recipeReturnFocus.current); }}>Retry recipe</Button> : null}
             <Button variant="ghost" className="!px-3 text-xs" onClick={() => { recipeReadRequest.current += 1; setRecipeRead(null); setViewingRecipeId(null); recipeReturnFocus.current?.focus(); }}>Cancel</Button></div>
         </div> : null}
         {viewingRecipe && !recipeReadFailed ? <RecipeOverview
-          key={`recipe-overview:${viewingRecipeId}`} meal={viewingRecipe} foods={foods} returnFocus={recipeReturnFocus}
+          sharedBy={viewingRecipe.id.startsWith("group-copy-") ? undefined : snapshot.profile?.name} key={`recipe-overview:${viewingRecipeId}`} meal={viewingRecipe} foods={foods} returnFocus={recipeReturnFocus}
           onClose={() => { setRecipeRead(null); setViewingRecipeId(null); }}
           editLabel={viewingRecipe.id.startsWith("group-copy-") ? "Save personal copy" : "Edit"}
           onEdit={() => { if (viewingRecipe.id.startsWith("group-copy-")) { void saveEditableGroupRecipe(viewingRecipe.id); return; } setRecipeRead(null); setReturnToRecipeOverview(viewingRecipeId); setEditingRecipeId(snapshot.savedMeals.find(meal => meal.id === viewingRecipeId)?.catalogReplacementId ?? viewingRecipeId); setShowNewRecipe(false); setViewingRecipeId(null); setRecipeModalOpen(true); }}
         /> : null}
         {recipeMetadata.loading ? <p className="mt-3 text-xs text-ink-soft" role="status">Loading favorites and Popular…</p> : null}
-        {recipeMetadata.error ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-peach-50 p-3 text-xs text-ink-soft" role="status"><span>{recipeMetadata.error}</span><Button variant="ghost" className="!px-2 text-xs underline" disabled={recipeMetadata.loading || recipeMetadata.pendingMeal !== null} onClick={recipeMetadata.refresh}>Refresh cards</Button></div> : null}
-        {savedMealToPlan ? <SavedRecipePlanReview key={`${selected}:${savedMealToPlan.id}`}
-          recipe={snapshot.savedMeals.find(meal => meal.id === savedMealToPlan.id)} name={savedMealToPlan.name}
-          foods={foods} date={selected} canPlan={canAddPlan} carbLimited={carbLimit !== null} pending={week.loading || Boolean(week.error) || Boolean(pendingMutation)}
-          createPlan={(slot, servings) => {
-            const nextOrder = Math.max(0, ...todaysPlan.filter(entry => entry.slot === slot).map(entry => entry.sortOrder ?? 0)) + 1;
-            return { id: clientId("planned-meal"), date: selected, slot,
-              slotKey: `date:${selected}:slot:${slot}:order:${nextOrder}`, sortOrder: nextOrder,
-              mealId: savedMealToPlan.id, label: snapshot.savedMeals.find(meal => meal.id === savedMealToPlan.id)?.name ?? savedMealToPlan.name, servings };
-          }}
-          onPlan={(meal, plan, fixedKey) => addToPlan(plan.slot, { meal, servings: plan.servings, plannedMeal: plan, fixedKey })}
-          onSavingChange={setSavingSavedMeal}
-          onClose={() => { savedPlanReturnFocus.current = savedMealToPlan.id; setSavedMealToPlan(null); }}
-          onRefresh={() => void actions.refreshSnapshot()} /> : null}
-        <ul className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
-          {snapshot.savedMeals.filter(meal => !meal.archivedAt).map((meal) => (
+        {recipeMetadata.error ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-danger-100 p-3 text-xs text-danger-900" role="status"><span>{recipeMetadata.error}</span><Button variant="ghost" className="!px-2 text-xs underline" disabled={recipeMetadata.loading || recipeMetadata.pendingMeal !== null} onClick={recipeMetadata.refresh}>Refresh cards</Button></div> : null}
+        {recipeFiltersOpen ? <RecipeFilterDialog applied={recipeFilters} favoritesAvailable={recipeMetadata.available} returnFocus={recipeFilterTrigger}
+          onApply={filters => { setRecipeFilters(filters); setRecipeFiltersOpen(false); }} onClose={() => setRecipeFiltersOpen(false)} /> : null}
+          <CombinedRecipeLibrary owned={snapshot.savedMeals} filters={recipeFilters} favoritesAvailable={recipeMetadata.available}
+            favoriteIds={new Set([...recipeMetadata.recipes.values()].filter(recipe => recipe.favorite).map(recipe => recipe.mealId))}
+            onClearFilters={() => setRecipeFilters(emptyRecipeFilters())} renderOwned={(meal, displayName) => (
             <li key={meal.id} className="min-w-0">
-              <RecipeCard name={meal.name} image={meal.image} calories={recipeCardCalories(meal, foods)}
+              <RecipeCard mobileCompactResources name={displayName} image={meal.image} calories={recipeCardCalories(meal, foods)}
                 recipeServings={meal.servings} totalTimeMinutes={meal.totalTimeMinutes} complexity={meal.complexity}
                 onOpen={event => openRecipe(meal, event.currentTarget)} metadata={recipeMetadata.recipes.get(meal.id)}
                 favoriteAvailable={recipeMetadata.available} favoritePending={recipeMetadata.pendingMeal !== null}
                 onFavorite={() => void recipeMetadata.favorite(meal.id)}
-                actions={<div className="flex flex-wrap items-center gap-2">
-                  <Button id={`plan-saved-${meal.id}`} className="min-w-[96px] flex-[1_1_96px] !px-3 text-xs"
-                    aria-expanded={savedMealToPlan?.id === meal.id} aria-controls={savedMealToPlan?.id === meal.id ? "saved-recipe-plan-review" : undefined}
-                    disabled={!week.data || week.loading || Boolean(week.error) || savingSavedMeal || Boolean(pendingMutation)} onClick={() => {
-                      if (savedMealToPlan?.id === meal.id) { savedPlanReturnFocus.current = meal.id; setSavedMealToPlan(null); }
-                      else setSavedMealToPlan({ id: meal.id, name: meal.name });
-                    }}>Add to plan<Plus className="h-4 w-4 shrink-0" aria-hidden /></Button>
-                  <div className="flex shrink-0 gap-2">
-                    <IconButton label={`${meal.id.startsWith("group-copy-") ? "Save personal copy of" : "Edit"} ${meal.name}`} tooltip={meal.id.startsWith("group-copy-") ? "Save personal copy" : "Edit"} disabled={savingSavedMeal || Boolean(pendingMutation)} onClick={event => { if (meal.id.startsWith("group-copy-")) { void saveEditableGroupRecipe(meal.id); return; } recipeReadRequest.current += 1; setRecipeRead(null); recipeReturnFocus.current = event.currentTarget; setReturnToRecipeOverview(null); setViewingRecipeId(null); setEditingRecipeId(meal.catalogReplacementId ?? meal.id); setShowNewRecipe(false); setRecipeModalOpen(true); }}><Pencil className="h-4 w-4" aria-hidden /></IconButton>
-                    <IconButton label={`Archive ${meal.name}`} tooltip={meal.id.startsWith("group-copy-") ? "Retained in saved plans" : "Archive"} disabled={meal.id.startsWith("group-copy-") || savingSavedMeal || Boolean(pendingMutation)} onClick={() => void actions.archiveMeal(meal.id)}><Archive className="h-4 w-4" aria-hidden /></IconButton>
-                  </div>
-                </div>}>
+                imageActions={<>
+                    <IconButton variant="image" size="compact" label={`${meal.id.startsWith("group-copy-") ? "Save personal copy of" : "Edit"} ${displayName}`} tooltip={meal.id.startsWith("group-copy-") ? "Save personal copy" : "Edit"} disabled={Boolean(pendingMutation)} onClick={event => { if (meal.id.startsWith("group-copy-")) { void saveEditableGroupRecipe(meal.id); return; } recipeReadRequest.current += 1; setRecipeRead(null); recipeReturnFocus.current = event.currentTarget; setReturnToRecipeOverview(null); setViewingRecipeId(null); setEditingRecipeId(meal.catalogReplacementId ?? meal.id); setShowNewRecipe(false); setRecipeModalOpen(true); }}><Pencil className="h-4 w-4" aria-hidden /></IconButton>
+                </>}>
               </RecipeCard>
             </li>
-          ))}
-        </ul>
+          )} />
       </Card>
     </div></CookingGroupSurface>
   );
@@ -651,7 +638,7 @@ export default function NutritionPage() {
           </Button>
           <span className="text-[11px] font-semibold text-muted">Provider results are imported only after you review and confirm them.</span>
         </div>
-        {providerError ? <p className="mt-2 text-[11px] font-bold text-coral-300" role="alert">{providerError}</p> : null}
+        {providerError ? <p className="mt-2 text-[11px] font-bold text-danger-900" role="alert">{providerError}</p> : null}
         <ul className="mt-2 grid gap-1">
           {results.map(({ food, kind }) => (
             <li key={food.id}>
@@ -942,7 +929,7 @@ export default function NutritionPage() {
           Save to My Foods & log
         </Button>
         {!validNumbers ? (
-          <p className="text-[11px] font-bold text-coral-300">
+          <p className="text-[11px] font-bold text-danger-900">
             Nutrition values must be finite, non-negative numbers.
           </p>
         ) : null}
@@ -1060,7 +1047,7 @@ export default function NutritionPage() {
         <Button variant="soft" onClick={() => void review()} disabled={!text.trim() || providerLoading}>
           <Sparkles className="h-4 w-4" aria-hidden /> {providerLoading ? "Reviewing…" : "Review estimate"}
         </Button>
-        {providerError ? <p className="text-[11px] font-bold text-coral-300" role="status">{providerError}</p> : null}
+        {providerError ? <p className="text-[11px] font-bold text-danger-900" role="status">{providerError}</p> : null}
         {candidates.length > 0 ? (
           <ul className="grid gap-1.5">
             {candidates.map((candidate) => (
@@ -1099,7 +1086,7 @@ export default function NutritionPage() {
                     <Check className="h-4 w-4" aria-hidden /> Confirm & save
                   </Button>
                 ) : (
-                  <p className="mt-1 text-[11px] font-bold text-coral-300">
+                  <p className="mt-1 text-[11px] font-bold text-danger-900">
                     {candidate.matched
                       ? "Correct the serving unit or add a custom entry — this gets no false precision."
                       : "Correct or add a custom entry — this gets no false precision."}
@@ -2018,7 +2005,7 @@ function GuidedSearchPicker({
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={busy} onClick={() => onMode("custom")}>Enter nutrition manually</Button>
       </div>
       {shouldSuggestAnalysis ? <div className="rounded-xl bg-lav-50 px-3 py-2 text-xs font-semibold"><div className="flex items-center justify-between gap-2"><p>Analyze sends your description to DeepSeek.</p><HelpPopover title="Meal analysis"><p>DeepSeek suggests ingredients and questions for you to review. It does not save meals. Catalog values are authoritative; optional AI estimates remain low-confidence ranges and require confirmation.</p></HelpPopover></div><Button className="mt-2 !min-h-11 !px-3 text-xs" disabled={busy || analysisLoading} onClick={() => void analyzeMeal()}><Sparkles className="h-4 w-4" aria-hidden /> {analysisLoading ? "Analyzing…" : "Analyze this meal"}</Button></div> : null}
-      {providerError || analysisError ? <div className="grid gap-1 text-[11px] font-bold text-coral-300" role="alert"><p>{providerError || analysisError}</p>{authenticationExpired ? <a className="w-fit underline underline-offset-2" href="/auth/sign-in?next=%2Fnutrition">Sign in again</a> : null}</div> : null}
+      {providerError || analysisError ? <div className="grid gap-1 text-[11px] font-bold text-danger-900" role="alert"><p>{providerError || analysisError}</p>{authenticationExpired ? <a className="w-fit underline underline-offset-2" href="/auth/sign-in?next=%2Fnutrition">Sign in again</a> : null}</div> : null}
       {recipeResults.length > 0 ? <section className="grid gap-1" aria-label="Saved recipes matches"><h3 className="text-xs font-extrabold">Saved recipes</h3><ul className="grid gap-1">{recipeResults.map(({ recipe, kind }) => {
       const calories = recipeCardCalories(recipe, foods);
       return <li key={recipe.id}><button type="button" disabled={busy} className="flex min-h-11 w-full min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => selectRecipe(recipe)}><span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{recipe.name}{kind === "close" ? <span className="ml-2 text-xs text-ink-soft">Close match</span> : null}</span>{calories !== undefined ? <NutritionPills label={`${recipe.name} nutrition per serving`} values={{ calories }} approximate precision={0} /> : <span className="text-xs text-muted">Calories unavailable</span>}</button></li>;
@@ -2030,7 +2017,7 @@ function GuidedSearchPicker({
       onReview={() => { if (currentRecipe && !currentRecipe.archivedAt) setRecipeSelection(current => current ? { ...current, revision: currentRecipe.revision, token: recipeReviewToken(currentRecipe, foods), logKey: clientId("recipe-log"), planKey: clientId("recipe-plan"), plannedMeal: undefined } : null); setRecipeError(""); }}
       onRefresh={() => void actions.refreshSnapshot()} /> : null}
     {!reviewing && localResults.length > 0 ? <section aria-label="Food matches"><h3 className="mb-1 text-xs font-extrabold">Foods</h3><ul className="grid gap-1">{localResults.map(({ food, kind }) => <li key={food.id}><button type="button" disabled={busy} className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setRecipeSelection(null); setQuantityFood(food); setQuantity("1"); setQuantityUnit(food.unit === "piece" ? "piece" : "serving"); }}><span>{food.name}{kind === "close" ? <span className="ml-2 text-xs font-semibold text-ink-soft">Close match</span> : null}<span className="mt-1 block text-[11px] font-semibold text-ink-soft">{food.servingLabel} · {food.valueSource === "trusted_catalog" ? "trusted catalog" : "development catalog"}</span><NutritionPills className="mt-1" values={{ calories: food.calories }} /></span><Plus className="h-4 w-4 text-muted" aria-hidden /></button></li>)}</ul></section> : null}
-      {quantityFood ? <div className="grid min-w-0 gap-2 rounded-xl bg-white p-3 [overflow-wrap:anywhere]" role="group" aria-label="Review food quantity" aria-busy={busy}><p className="text-sm font-extrabold">Review {quantityFood.name}</p><p className="text-xs font-semibold text-ink-soft">{selected} · {slotLabels[slot]}</p><div className="grid min-w-0 gap-2 sm:grid-cols-2"><input ref={quantityInput} disabled={busy} className="input min-w-0" type="number" min="0.01" step="0.25" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-label="Quantity" /><select disabled={busy} className="input min-w-0 max-w-full" value={quantityUnit} onChange={(event) => setQuantityUnit(event.target.value)} aria-label="Serving unit"><option value="serving">serving</option><option value="g">grams</option><option value="piece">piece</option>{quantityFood.servingOptions?.map((option) => <option key={`${option.label}-${option.grams}`} value={option.unit}>{option.label}</option>)}</select></div><p className="text-[11px] font-semibold text-muted">{quantityFood.preparationBasis ?? "Preparation basis not specified"} · {quantityFood.valueSource === "trusted_catalog" ? "Trusted catalog nutrition" : "Development catalog estimate"} · {quantityFood.confidence} confidence</p>{quantityMacros ? <NutritionPills label="Nutrition preview" values={quantityMacros} /> : null}{analysisError ? <p role="alert" className="text-xs font-semibold text-coral-300">{analysisError}</p> : null}<div className="flex flex-wrap gap-2"><Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={!quantityServing || !canAddPlan || (carbLimit !== null && quantityFood.valueSource !== "trusted_catalog") || quantityFood.valueSource === "ai_estimate" || busy} onClick={() => void confirmQuantity("plan")}>Add to plan</Button><Button className="!min-h-11 !px-3 text-xs" disabled={!quantityServing || busy} onClick={() => void confirmQuantity("log")}>Log meal</Button><Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={busy} onClick={cancelReview}>Cancel</Button></div></div> : null}
+      {quantityFood ? <div className="grid min-w-0 gap-2 rounded-xl bg-white p-3 [overflow-wrap:anywhere]" role="group" aria-label="Review food quantity" aria-busy={busy}><p className="text-sm font-extrabold">Review {quantityFood.name}</p><p className="text-xs font-semibold text-ink-soft">{selected} · {slotLabels[slot]}</p><div className="grid min-w-0 gap-2 sm:grid-cols-2"><input ref={quantityInput} disabled={busy} className="input min-w-0" type="number" min="0.01" step="0.25" value={quantity} onChange={(event) => setQuantity(event.target.value)} aria-label="Quantity" /><select disabled={busy} className="input min-w-0 max-w-full" value={quantityUnit} onChange={(event) => setQuantityUnit(event.target.value)} aria-label="Serving unit"><option value="serving">serving</option><option value="g">grams</option><option value="piece">piece</option>{quantityFood.servingOptions?.map((option) => <option key={`${option.label}-${option.grams}`} value={option.unit}>{option.label}</option>)}</select></div><p className="text-[11px] font-semibold text-muted">{quantityFood.preparationBasis ?? "Preparation basis not specified"} · {quantityFood.valueSource === "trusted_catalog" ? "Trusted catalog nutrition" : "Development catalog estimate"} · {quantityFood.confidence} confidence</p>{quantityMacros ? <NutritionPills label="Nutrition preview" values={quantityMacros} /> : null}{analysisError ? <p role="alert" className="text-xs font-semibold text-danger-900">{analysisError}</p> : null}<div className="flex flex-wrap gap-2"><Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={!quantityServing || !canAddPlan || (carbLimit !== null && quantityFood.valueSource !== "trusted_catalog") || quantityFood.valueSource === "ai_estimate" || busy} onClick={() => void confirmQuantity("plan")}>Add to plan</Button><Button className="!min-h-11 !px-3 text-xs" disabled={!quantityServing || busy} onClick={() => void confirmQuantity("log")}>Log meal</Button><Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={busy} onClick={cancelReview}>Cancel</Button></div></div> : null}
       {!reviewing && providerResults.candidates.length > 0 ? <div className="rounded-xl bg-mint-100 p-2"><p className="text-[11px] font-extrabold uppercase tracking-wide">USDA FoodData Central</p><ul className="mt-1 grid gap-1">{providerResults.candidates.map((candidate) => { const food = providerFood(candidate); return <li key={candidate.fdcId}><button type="button" disabled={busy} className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => { setRecipeSelection(null); setQuantityFood(food); setQuantity("1"); setQuantityUnit("serving"); }}><span>{candidate.name}<span className="block text-[11px] font-semibold text-muted">{candidate.servingLabel} · {candidate.preparationBasis} · USDA {candidate.sourceVersion}</span></span><Check className="h-4 w-4" aria-hidden /></button></li>; })}</ul></div> : null}
       {ingredients.length > 0 && !reviewing ? (
         <div className="grid gap-2 rounded-2xl bg-lav-50 p-3" role="region" aria-label="Guided meal review">
@@ -2074,7 +2061,7 @@ function GuidedSearchPicker({
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-bold text-coral-300">Needs a catalog value, custom value, or explicit AI estimate.</p>
+                  <p className="text-[11px] font-bold text-danger-900">Needs a catalog value, custom value, or explicit AI estimate.</p>
                   <button type="button" className="min-h-11 rounded-full bg-cream px-3 text-[11px] font-bold underline" onClick={() => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, custom: { calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" } } : item))}>Enter custom values</button>
                 </div>
               )}

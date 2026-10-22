@@ -40,14 +40,22 @@ describe("Nutrition day slots", () => {
     expect(html).toContain("0 mins</span>");
     expect(html).toContain("45 mins</span>");
     expect(html.match(/Total recipe time:/g)).toHaveLength(2);
-    expect(html.match(/id="plan-saved-/g)).toHaveLength(3);
+    expect(html).not.toContain('id="plan-saved-');
+    expect(html).toContain('aria-label="Filter recipes"');
+    expect(html).toContain('aria-label="Create"');
+    expect(html.indexOf('aria-label="Filter recipes"')).toBeLessThan(html.indexOf('aria-label="Create"'));
+    expect(html).not.toContain(" Create</button>");
+    expect(html).toContain('aria-label="Generate"');
+    expect(html).not.toContain(">Generate</button>");
+    expect(html).toContain('aria-label="Edit No preparation"');
     expect(html).not.toContain('id="log-it-');
-    expect(html).toContain("Add to plan");
+    expect(html).not.toContain(">Add to plan");
   });
   it("shows all four slots and keeps per-slot Add meal available without a plan", () => {
     const html = renderToStaticMarkup(<NutritionPage />);
     expect(html).toContain('aria-labelledby="planned-meals-heading"');
-    expect(html.split("> Add meal</button>")).toHaveLength(5);
+    expect(html.match(/aria-label="Add meal"/g)).toHaveLength(4);
+    expect(html).not.toContain("> Add meal</button>");
     expect(html).not.toContain("add-to-plan-action");
     for (const slot of ["Breakfast", "Lunch", "Dinner", "Snack"]) {
       expect(html).toContain(`aria-label="${slot}"`);
@@ -84,8 +92,8 @@ describe("Nutrition day slots", () => {
     expect(html).toContain('id="saved-meals-heading" class="font-extrabold">Recipes</h2>');
     expect(html).toContain('aria-label="About Recipes"');
     expect(html).not.toContain('aria-label="About Saved meals"');
-    expect(html).toMatch(/<button[^>]*bg-ink text-white[^>]*><svg[^>]*lucide-wand-sparkles[^>]*aria-hidden="true"[\s\S]*?<\/svg>Generate<\/button>/);
-    expect(html).toMatch(/<button[^>]*bg-white\/70 text-ink[^>]*><svg[^>]*lucide-plus[^>]*aria-hidden="true"[\s\S]*?<\/svg> Create<\/button>/);
+    expect(html).toMatch(/<button[^>]*bg-ink text-white[^>]*aria-label="Generate"[^>]*><svg[^>]*lucide-wand-sparkles/);
+    expect(html).toMatch(/<button[^>]*bg-ink text-white[^>]*aria-label="Create"[^>]*><svg[^>]*lucide-plus/);
   });
   it("shows ordinary empty slots for missing references and unresolved recipes without changing the plan", () => {
     snapshot.foods = [FOODS[0]];

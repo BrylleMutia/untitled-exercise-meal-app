@@ -1,20 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronDown, Plus, RefreshCw } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
-import { WeekNavigator } from "@/components/WeekNavigator";
 import { GroceryItemRow } from "@/components/GroceryItemRow";
 import { GroceryTotalAmount } from "@/components/GroceryTotalAmount";
 import { useNutritionWeek } from "@/components/nutrition/useNutritionWeek";
 import { startOfWeek, todayKey } from "@/utility/dates";
 import type { NutritionWeekReadModel } from "@/types/backend";
 import type { GroceryCategory } from "@/types/domain";
-import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
+import { clearDraft, createDraftEnvelope, draftTtlMs, listDrafts, readDraft, writeDraft } from "@/services/draftStore";
 
 const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", "Pantry", "Other"];
 
@@ -27,14 +26,53 @@ export default function GroceryPage() {
   const [itemSaving, setItemSaving] = useState(false);
   const weekOf = startOfWeek(selectedDate, snapshot.profile?.weekStartsOn ?? 0);
   const week = useNutritionWeek(weekOf);
-  const disabled = Boolean(pendingMutation) || amountSaving || itemSaving || week.loading || Boolean(week.error);
-  return <CookingGroupSurface weekOf={weekOf} onWeekChange={setSelectedDate} kind="grocery"><div className="grid min-w-0 gap-4 pb-4">
-    <Card tone="mint"><WeekNavigator weekOf={weekOf} onChange={setSelectedDate} weekStartsOn={snapshot.profile?.weekStartsOn ?? 0} disabled={Boolean(pendingMutation) || amountSaving || itemSaving} />{week.data ? <GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={setAmountSaving} /> : null}</Card>
+  const busy = amountSaving || itemSaving;
+  return <CookingGroupSurface weekOf={weekOf} onWeekChange={setSelectedDate} kind="grocery" busy={busy}>
+    {({ connected, connectionKnown, sharedSaving }) => <PrivateGroceries key={`${snapshot.userId}:${weekOf}`} week={week} privateSection={connected || !connectionKnown}
+      disabled={Boolean(pendingMutation) || busy || sharedSaving || week.loading || Boolean(week.error)} onAmountSaving={setAmountSaving} onItemSaving={setItemSaving} />}
+  </CookingGroupSurface>;
+}
+
+function PrivateGroceries({ week, privateSection, disabled, onAmountSaving, onItemSaving }: {
+  week: ReturnType<typeof useNutritionWeek>; privateSection: boolean; disabled: boolean;
+  onAmountSaving: (saving: boolean) => void; onItemSaving: (saving: boolean) => void;
+}) {
+  const { snapshot } = useApp();
+  const contentId = useId();
+  const [hasDraft, setHasDraft] = useState(false);
+  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const weekOf = week.data?.weekOf;
+  useEffect(() => {
+    if (!weekOf) return;
+    let active = true;
+    void listDrafts(snapshot.userId).then(drafts => {
+      if (!active) return;
+      setHasDraft(drafts.some(draft => draft.draftType === `grocery-custom:${weekOf}`
+        || draft.draftType === `grocery-total:${weekOf}` || draft.draftType.startsWith(`grocery-quantity:${weekOf}:`)
+        || draft.draftType === "grocery-custom" && weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0)));
+    });
+    return () => { active = false; };
+  }, [snapshot.userId, snapshot.profile?.weekStartsOn, weekOf]);
+  const hasContent = Boolean(week.data?.grocery?.items.some(item => !item.removed)) || week.data?.grocery?.totalAmountCentavos != null;
+  const content = <div data-grocery-section className="grid min-w-0 gap-4 pb-4">
     {week.loading ? <p role="status">Loading this week&apos;s groceries…</p> : null}
-    {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-peach-100 p-4"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
+    {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-danger-100 p-4 text-danger-900"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
+    {week.data ? <Card tone="mint">{privateSection ? <h3 className="font-extrabold">Private spending</h3> : null}<GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onAmountSaving} /></Card> : null}
     {week.data?.grocery?.calendarReviewRequired ? <p role="status" className="rounded-2xl bg-peach-100 p-4 text-sm font-semibold">This list was regrouped after your start of week changed. Review ingredients and carried grocery edits.</p> : null}
-    {week.data ? <GroceryWeek key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={setItemSaving} /> : null}
-  </div></CookingGroupSurface>;
+    {week.data ? <GroceryWeek key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onItemSaving} /> : null}
+  </div>;
+  if (!privateSection) return content;
+  const open = expanded ?? (hasContent || hasDraft || week.loading || Boolean(week.error));
+  return <section data-grocery-section aria-label="Private extras — only you" className="grid min-w-0 gap-3">
+    <h2><button type="button" disabled={week.loading} aria-expanded={open} aria-controls={contentId} className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 text-left font-extrabold shadow-chip disabled:opacity-50" onClick={() => setExpanded(!open)}>
+      <span className="min-w-0 break-words">{hasContent || hasDraft || week.loading || week.error ? "Private extras — only you" : "Add private extras"}</span>
+      <ChevronDown className={`h-4 w-4 shrink-0 ${open ? "rotate-180" : ""}`} aria-hidden />
+    </button></h2>
+    <div id={contentId} hidden={!open}>
+      <p className="mb-4 mt-2 text-xs text-ink-soft">Only you can see these additional groceries and spending. Shared cooking requirements are already covered in the shared list above.</p>
+      {content}
+    </div>
+  </section>;
 }
 
 function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void }) {
