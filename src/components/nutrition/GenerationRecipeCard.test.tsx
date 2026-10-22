@@ -10,6 +10,13 @@ function option(image?: RecipeImage): WeeklyRecipeOption {
 const render = (value = option(), selected = true, disabled = false) => renderToStaticMarkup(<GenerationRecipeCard option={value} selected={selected} disabled={disabled} onChange={() => {}} />);
 
 describe("generation recipe cards", () => {
+  it("uses a display annotation without changing the recipe identity or stored name", () => {
+    const value = option();
+    const html = renderToStaticMarkup(<GenerationRecipeCard option={value} displayName={`${value.recipe.name} (edited)`} selected disabled={false} onChange={() => {}} />);
+    expect(html).toContain("Chicken, vegetables and rice (edited)");
+    expect(value.recipe.name).toBe("Chicken, vegetables and rice");
+    expect(value.recipe.id).toBe("recipe");
+  });
   it("labels the checkbox with its recipe name and describes planning essentials", () => {
     const html = render();
     const nameId = html.match(/aria-labelledby="([^"]+)"/)![1];

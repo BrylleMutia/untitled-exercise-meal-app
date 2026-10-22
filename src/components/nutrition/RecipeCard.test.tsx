@@ -36,9 +36,26 @@ describe("recipe card", () => {
     expect(html.indexOf("≈560 kcal")).toBeLessThan(html.indexOf("Recipe yields"));
     expect(html.indexOf("Recipe yields")).toBeLessThan(html.indexOf("Recipe time not set"));
   });
+  it("retains wrapping by default and enables compact mobile resources explicitly", () => {
+    const regular = renderToStaticMarkup(<RecipeCard name="Cooking overview" calories={560} />);
+    const mobile = renderToStaticMarkup(<RecipeCard mobileCompactResources name="Library recipe" calories={560} />);
+    expect(regular).not.toContain("overflow-x-auto");
+    expect(mobile).toContain("overflow-x-auto"); expect(mobile).toContain("sm:overflow-visible");
+    for (const html of [regular, mobile]) expect(html).toContain("≈560 kcal");
+  });
   it("places expanded content above its action footer and keeps image and name triggers separate", () => {
     const html = renderToStaticMarkup(<RecipeCard name="Recipe" onOpen={() => {}} actions={<button>Log</button>}><label>Actual servings<input /></label></RecipeCard>);
     expect(html.indexOf("Actual servings")).toBeLessThan(html.indexOf(">Log<"));
     expect(html).toContain("View recipe image: Recipe"); expect(html).toContain("View recipe: Recipe");
+  });
+  it("omits absent footers and places image actions outside the image opener", () => {
+    const html = renderToStaticMarkup(<RecipeCard name="Supper (edited)" onOpen={() => {}} imageActions={<><button aria-label="Edit Supper (edited)">Edit</button><button aria-label="Archive Supper (edited)">Archive</button></>} />);
+    expect(html).not.toContain("border-t");
+    expect(html).not.toContain("Add to plan");
+    expect(html).toContain("View recipe image: Supper (edited)");
+    expect(html).toContain("View recipe: Supper (edited)");
+    const opener = html.slice(html.indexOf('aria-label="View recipe image:'), html.indexOf('aria-label="Edit Supper'));
+    expect(opener).toContain("</button>");
+    expect(html).toContain("absolute bottom-[12px] right-[12px]");
   });
 });

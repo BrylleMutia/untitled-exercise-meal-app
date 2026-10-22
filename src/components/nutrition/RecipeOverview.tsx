@@ -15,9 +15,9 @@ import { safeRecipeReference } from "@/utility/recipeEditor";
 import { formatCookingMeasurement } from "@/utility/cookingMeasurement";
 import type { Food, Meal } from "@/types/domain";
 
-export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, editLabel = "Edit" }: {
+export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, editLabel = "Edit", sharedBy, error, pending = false }: {
   meal: Meal; foods: Food[]; returnFocus: RefObject<HTMLElement | null>;
-  onClose: () => void; onEdit: () => void; editLabel?: string;
+  onClose: () => void; onEdit: () => void; editLabel?: string; sharedBy?: string; error?: string; pending?: boolean;
 }) {
   const [tab, setTab] = useState<RecipeTab>("details");
   const known = meal.ingredients.length > 0 && meal.ingredients.every(item => foods.some(food => food.id === item.foodId));
@@ -27,11 +27,12 @@ export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, edit
     {known ? <NutritionPills values={mealNutrition(meal, foods).perServing} precision={1} approximate label="Recipe nutrition per serving" />
       : <p className="text-sm text-ink-soft">Nutrition is unavailable because an ingredient is missing.</p>}
   </div>;
-  return <Modal open title="Recipe overview" returnFocus={returnFocus} onClose={onClose}
+  return <Modal open title="Recipe overview" dismissalDisabled={pending} returnFocus={returnFocus} onClose={onClose}
     help={<HelpPopover title="Saved recipe"><p>Ingredient quantities describe the whole recipe. Nutrition is estimated per serving. Editing this recipe does not rewrite logged meals.</p></HelpPopover>}
     footer={<div className="grid gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="soft" onClick={onClose}>Close</Button>
-        <Button onClick={onEdit}><Pencil className="h-4 w-4" aria-hidden />{editLabel}</Button>
+      {error ? <p role="alert" className="text-sm text-danger-900">{error}</p> : null}
+      <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="soft" disabled={pending} onClick={onClose}>Close</Button>
+        <Button disabled={pending} onClick={onEdit}><Pencil className="h-4 w-4" aria-hidden />{editLabel}</Button>
       </div>
     </div>}>
     <div className="grid min-w-0 gap-5">
@@ -52,6 +53,7 @@ export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, edit
           })}{meal.unmeasuredIngredients?.map((item, index) => <li key={`unmeasured-${index}`} className="flex min-w-0 flex-wrap justify-between gap-2 rounded-2xl bg-cream p-3"><span className="break-words text-sm font-bold">{item.name}{item.optional ? " (optional)" : ""}</span><span className="text-sm font-bold">{item.measurement}</span></li>)}</ul>{!meal.ingredients.length && !meal.unmeasuredIngredients?.length ? <p className="text-sm text-ink-soft">No ingredients added.</p> : null}
         </div>,
         details: <div className="grid min-w-0 gap-4">
+          {meal.isSystem ? <p className="text-sm text-ink-soft"><span className="font-bold">Source: </span>Default recipe</p> : sharedBy ? <p className="break-words text-sm text-ink-soft"><span className="font-bold">Shared by: </span>{sharedBy}</p> : null}
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-ink-soft" aria-label="Recipe metadata">
             <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4" aria-hidden />{meal.servings} {meal.servings === 1 ? "serving" : "servings"}</span>
             <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" aria-hidden />{meal.totalTimeMinutes !== undefined ? `${meal.totalTimeMinutes} mins` : "Not set"}</span>

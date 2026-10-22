@@ -10,8 +10,8 @@ function servingsLabel(value: number): string {
   return `${displayed.toLocaleString("en-US")} ${displayed === 1 ? "serving" : "servings"}`;
 }
 
-export function GenerationRecipeCard({ option, selected, disabled, onChange }: {
-  option: WeeklyRecipeOption; selected: boolean; disabled: boolean; onChange: (selected: boolean) => void;
+export function GenerationRecipeCard({ option, selected, disabled, onChange, displayName }: {
+  displayName?: string; option: WeeklyRecipeOption; selected: boolean; disabled: boolean; onChange: (selected: boolean) => void;
 }) {
   const id = useId();
   const { recipe, used, remaining } = option;
@@ -20,10 +20,10 @@ export function GenerationRecipeCard({ option, selected, disabled, onChange }: {
       aria-labelledby={`${id}-name`} aria-describedby={`${id}-details`} disabled={disabled} checked={selected}
       onChange={event => onChange(event.target.checked)} />
     <span className="grid aspect-square min-w-0 rounded-xl bg-lav-100 p-[15px]">
-      <RecipeCover image={recipe.image} name={recipe.name} selection />
+      <RecipeCover image={recipe.image} name={displayName ?? recipe.name} selection />
     </span>
     <span className="flex min-h-11 min-w-0 items-start">
-    <span id={`${id}-name`} className="min-w-0 break-words text-sm font-extrabold leading-snug [overflow-wrap:anywhere]">{recipe.name}</span>
+    <span id={`${id}-name`} className="min-w-0 break-words text-sm font-extrabold leading-snug [overflow-wrap:anywhere]">{displayName ?? recipe.name}</span>
     </span>
     <span id={`${id}-details`} className="grid min-w-0 gap-2 break-words text-xs leading-relaxed text-ink-soft [overflow-wrap:anywhere]">
       <span>{parseMealSlots(recipe.mealSlots).map(slot => mealSlotLabels[slot]).join(", ") || "No meals assigned"}</span>
