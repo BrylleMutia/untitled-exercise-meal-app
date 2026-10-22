@@ -34,19 +34,19 @@ export function RecipeImagePicker({ image, onChange, disabled, onBusy }: {
       <div className="flex flex-wrap justify-center gap-1">
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={disabled || busy} onClick={() => input.current?.click()}><Upload className="h-4 w-4" aria-hidden />Upload image</Button>
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={disabled || busy} onClick={() => { setUrlMode(value => !value); setUrl(image?.kind === "url" ? image.url : ""); setMessage(""); }}><Link className="h-4 w-4" aria-hidden />Use image URL</Button>
-        <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={disabled || busy || !image} onClick={() => { onChange(null); setUrlMode(false); setMessage("Default image selected. Save to apply this change."); }}><RotateCcw className="h-4 w-4" aria-hidden />Reset to default</Button>
+        <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={disabled || busy || !image} onClick={() => { onChange(null); setUrlMode(false); setUploadFailed(false); setMessage("Default image selected. Save to apply this change."); }}><RotateCcw className="h-4 w-4" aria-hidden />Reset to default</Button>
       </div>
       <input ref={input} className="sr-only" tabIndex={-1} type="file" aria-label="Upload recipe image" accept="image/jpeg,image/png,image/webp" disabled={disabled || busy} onChange={event => void upload(event.target.files?.[0])} />
       <p className="text-center text-xs text-ink-soft">JPEG, PNG, or WebP · up to 5 MB</p>
       {urlMode ? <div className="mt-3 grid min-w-0 gap-2 rounded-2xl bg-cream p-3">
-        <label className="grid min-w-0 gap-1 text-sm font-bold">Image URL<input className="input !bg-white" type="url" maxLength={2048} placeholder="https://example.com/recipe.jpg" value={url} disabled={disabled || busy} onChange={event => setUrl(event.target.value)} /></label>
+        <label className="grid min-w-0 gap-1 text-sm font-bold">Image URL<input className="input !bg-white" type="url" maxLength={2048} placeholder="https://example.com/recipe.jpg" value={url} aria-invalid={Boolean(url && !safeRecipeImageUrl(url))} disabled={disabled || busy} onChange={event => setUrl(event.target.value)} /></label>
         <p className="text-xs text-ink-soft">Use a direct HTTPS image link. The external host receives an image request; availability depends on that host.</p>
-        <Button variant="soft" className="w-fit !min-h-11 !px-3" disabled={disabled || busy || !safeRecipeImageUrl(url)} onClick={() => { onChange({ kind: "url", url: safeRecipeImageUrl(url)! }); setUrlMode(false); setMessage("Image URL selected. Save the recipe to apply it."); }}>Use this image</Button>
-        {url && !safeRecipeImageUrl(url) ? <p className="text-xs font-semibold" role="status">Enter a complete HTTPS URL without a username or password.</p> : null}
+        <Button variant="soft" className="w-fit !min-h-11 !px-3" disabled={disabled || busy || !safeRecipeImageUrl(url)} onClick={() => { onChange({ kind: "url", url: safeRecipeImageUrl(url)! }); setUrlMode(false); setUploadFailed(false); setMessage("Image URL selected. Save the recipe to apply it."); }}>Use this image</Button>
+        {url && !safeRecipeImageUrl(url) ? <p className="text-xs font-semibold text-danger-900" role="status">Enter a complete HTTPS URL without a username or password.</p> : null}
       </div> : null}
       {busy ? <p className="mt-2 text-center text-sm font-bold" role="status">Uploading image…</p> : null}
       {!busy && uploadFailed ? <Button variant="soft" className="mt-2 !min-h-11 !px-3" disabled={disabled} onClick={() => void upload(uploadIdentity.current?.file)}>Retry upload</Button> : null}
-      {message ? <p className="mt-2 break-words text-center text-xs text-ink-soft" role="status">{message}</p> : null}
+      {message ? <p className={`mt-2 break-words text-center text-xs ${uploadFailed ? "text-danger-900" : "text-ink-soft"}`} role="status">{message}</p> : null}
     </div>
   </div>;
 }

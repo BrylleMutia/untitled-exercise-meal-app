@@ -92,7 +92,7 @@ export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange, 
       setDraft(null); setRestored(false); onRefresh(); focusEdit();
     } finally { submitting.current = false; onSavingChange(false); if (active.current) setBusy(false); }
   }
-  return <section ref={root} aria-label="Weekly grocery spending" className="mt-4 grid min-w-0 gap-2 border-t border-ink/10 pt-4">
+  return <section ref={root} aria-label={groupId ? "Shared grocery spending" : "Weekly grocery spending"} className="mt-4 grid min-w-0 gap-2 border-t border-ink/10 pt-4">
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
       <div className="min-w-0"><h2 className="text-sm font-bold">Total Amount</h2><p className="break-words text-xl font-extrabold [overflow-wrap:anywhere]" aria-live="polite">{formatGroceryAmount(amount)}</p>{amount === null ? <p className="text-xs text-ink-soft">Not recorded</p> : null}</div>
       {!draft ? <Button variant="soft" aria-label="Edit total amount" className="!h-11 !min-h-11 !w-11 !p-0" disabled={locked} onClick={() => { setFailed(false); setDraft({ value: groceryAmountInput(amount), revision, calendarRevision, saveKey: saveKey() }); }}><Pencil className="h-4 w-4" aria-hidden /></Button> : null}
@@ -103,9 +103,9 @@ export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange, 
       <label className="grid min-w-0 gap-1 text-sm font-bold" htmlFor={fieldId}>Total amount (PHP)
         <span className="flex min-w-0 items-center rounded-2xl bg-cream"><span className="pl-4" aria-hidden>₱</span><input ref={input} id={fieldId} className="input min-w-0 !bg-transparent !pl-2" inputMode="decimal" maxLength={32} value={draft.value} placeholder="e.g. 1250.50" aria-invalid={!parsed?.valid} aria-describedby={!parsed?.valid ? `${fieldId}-error` : undefined} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); void cancel(); } }} onChange={event => { setFailed(current => current && error?.code === "stale_version"); setDraft({ ...draft, value: event.target.value, saveKey: saveKey() }); }} /></span>
       </label>
-      {!parsed?.valid ? <p id={`${fieldId}-error`} className="text-xs font-semibold" role="alert">Enter a non-negative amount with up to two decimal places, within the supported range.</p> : null}
+      {!parsed?.valid ? <p id={`${fieldId}-error`} className="text-xs font-semibold text-danger-900" role="alert">Enter a non-negative amount with up to two decimal places, within the supported range.</p> : null}
       {stale ? <div className="grid gap-2 text-xs" role="status"><p>This week changed. Latest recorded amount: {formatGroceryAmount(amount)}. Your input is retained.</p><Button variant="soft" className="w-fit" onClick={() => { actions.clearError(); setFailed(false); setDraft({ ...draft, revision, calendarRevision, saveKey: saveKey() }); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>("[data-save-grocery-amount]")?.focus()); }}>Review latest amount</Button></div> : null}
-      {failed && !stale ? <p className="text-xs font-semibold" role="alert">{error?.message ?? "The amount was not confirmed. Your input is retained; retry."}</p> : null}
+      {failed && !stale ? <p className="text-xs font-semibold text-danger-900" role="alert">{error?.message ?? "The amount was not confirmed. Your input is retained; retry."}</p> : null}
       <div className="flex flex-wrap justify-end gap-2"><Button variant="soft" onClick={() => void cancel()}>Cancel</Button><Button data-save-grocery-amount disabled={stale || !parsed?.valid} onClick={() => void save()}>{failed && !stale ? "Retry save" : "Save amount"}</Button></div>
     </fieldset> : null}
     {busy ? <p role="status" className="text-xs font-semibold">Saving changes…</p> : null}

@@ -72,9 +72,9 @@ export default function SignUpPage() {
               setEmail(event.target.value);
               markEdited("email");
             }}
-            className={`input ${fieldError("email") ? "border-2 border-coral-300 bg-coral-100" : ""}`}
+            className={`input ${fieldError("email") ? "border-2 border-danger-600 bg-danger-50" : ""}`}
           />
-          {fieldError("email") ? <span id="email-error" className="text-xs font-bold text-ink">{fieldError("email")}</span> : null}
+          {fieldError("email") ? <span id="email-error" className="text-xs font-bold text-danger-900">{fieldError("email")}</span> : null}
         </label>
         <PasswordInput
           name="password"

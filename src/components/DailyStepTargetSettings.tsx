@@ -87,8 +87,8 @@ export function DailyStepTargetSettings() {
         onChange={(event) => { setDraft({ value: event.target.value, revision: saved ? snapshot.profile?.revision ?? draft.revision : draft.revision }); setDirty(true); setSaved(false); setMessage(null); }} />
       {message ? <p role="status" className="text-sm font-semibold text-ink-soft">{message}</p> : null}
       {draftUnavailable ? <p role="status" className="text-sm font-semibold text-ink-soft">This browser could not store your draft. Keep this page open until your target is saved.</p> : null}
-      {attempted && error && !stale ? <p role="alert" className="text-sm font-semibold text-ink-soft">{error.message} Your step target draft is retained.</p> : null}
-      {stale ? <div role="alert" className="rounded-2xl bg-peach-100 p-3 text-sm font-semibold">
+      {attempted && error && !stale ? <p role="alert" className="text-sm font-semibold text-danger-900">{error.message} Your step target draft is retained.</p> : null}
+      {stale ? <div role="alert" className="rounded-2xl bg-danger-100 p-3 text-sm font-semibold text-danger-900">
         <p>Your profile changed elsewhere. Saved step target: {snapshot.profile?.dailyStepTarget?.toLocaleString() ?? "Not set"}. Your draft is retained.</p>
         {awaitingRefresh || error?.details?.refreshedSnapshotAvailable === false ? <Button variant="soft" className="mt-2 mr-2" disabled={disabled} onClick={async () => {
           setAwaitingRefresh(true);

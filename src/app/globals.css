@@ -40,6 +40,13 @@
   --color-coral-200: #ffabb3;
   --color-coral-300: #ff8d98;
 
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
+  --color-danger-300: #fca5a5;
+  --color-danger-600: #dc2626;
+  --color-danger-900: #7f1d1d;
+
   --color-nutrition-calories: var(--color-coral-200);
   --color-nutrition-calories-soft: var(--color-coral-100);
   --color-nutrition-calories-strong: var(--color-coral-300);
@@ -116,7 +123,7 @@ body {
   box-shadow: 0 0 0 3px rgb(153 135 207 / 15%);
 }
 .input[aria-invalid="true"] {
-  border-color: var(--color-coral-300);
+  border-color: var(--color-danger-600);
 }
 .input::placeholder {
   color: var(--color-muted);

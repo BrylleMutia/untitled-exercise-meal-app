@@ -270,7 +270,7 @@ export default function SettingsPage() {
             <Button variant="secondary" onClick={() => void exportCsvBundle()} disabled={exporting}>
               <Download className="h-4 w-4" aria-hidden /> Export CSV bundle
             </Button>
-            <Button variant="secondary" onClick={actions.resetPlan}>
+            <Button variant="danger" onClick={actions.resetPlan}>
               <RefreshCw className="h-4 w-4" aria-hidden />
               Regenerate plan
             </Button>

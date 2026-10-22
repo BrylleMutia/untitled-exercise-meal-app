@@ -284,7 +284,7 @@ export function AppProvider({
         if (!active) return;
         const nextError = errorFromUnknown(reason);
         setError(nextError);
-        notify("Your saved data could not be loaded. Retry from this screen.", "warn");
+        notify("Your saved data could not be loaded. Retry from this screen.", "error");
       })
       .finally(() => {
         if (active) setHydrated(true);
@@ -318,7 +318,7 @@ export function AppProvider({
           retryable: false,
         };
         setError(nextError);
-        notify(nextError.message, "warn");
+        notify(nextError.message, "error");
         return null;
       }
 
@@ -416,7 +416,7 @@ export function AppProvider({
           reuseKey: nextError.code !== "stale_version",
         };
         setError(nextError);
-        notify(nextError.message, nextError.retryable ? "warn" : "info");
+        notify(nextError.message, "error");
         return null;
       } finally {
         pendingRef.current = false;
@@ -494,7 +494,7 @@ export function AppProvider({
           if (snapshotRef.current.userId !== expectedUserId) return false;
           const nextError = errorFromUnknown(reason);
           setError(nextError);
-          if (!options?.silent) notify("The latest account data could not be loaded yet.", "warn");
+          if (!options?.silent) notify("The latest account data could not be loaded yet.", "error");
           return false;
         }
       },
@@ -505,7 +505,7 @@ export function AppProvider({
         } catch (reason: unknown) {
           const nextError = errorFromUnknown(reason);
           setError(nextError);
-          notify("History could not be loaded yet. Showing the latest cached view.", "warn");
+          notify("History could not be loaded yet. Showing the latest cached view.", "error");
           return null;
         }
       },
@@ -641,7 +641,7 @@ export function AppProvider({
           ...(input.fiberG === undefined ? [] : [input.fiberG]),
         ];
         if (!Number.isFinite(input.servings) || input.servings <= 0 || (input.servingQuantity !== undefined && input.servingQuantity <= 0) || numericValues.slice(1).some((value) => !Number.isFinite(value) || value < 0)) {
-          notify("Servings must be positive; nutrition values may be zero or higher.", "warn");
+          notify("Servings must be positive; nutrition values may be zero or higher.", "error");
           return false;
         }
         const outcome = await execute("save_nutrition_log", (current, idempotencyKey) => repository!.saveNutrition({
@@ -654,12 +654,12 @@ export function AppProvider({
 
       async saveReviewedMeal(input, fixedKey, week) {
         if (!input.name.trim() || input.ingredients.length === 0 || input.ingredients.length > 10) {
-          notify("Add at least one reviewed ingredient before saving the meal.", "warn");
+          notify("Add at least one reviewed ingredient before saving the meal.", "error");
           return false;
         }
         const invalid = input.ingredients.some((entry) => !Number.isFinite(entry.servings) || entry.servings <= 0 || [entry.calories, entry.proteinG, entry.carbsG, entry.fatG, ...(entry.fiberG === undefined ? [] : [entry.fiberG])].some((value) => !Number.isFinite(value) || value < 0));
         if (invalid) {
-          notify("Review quantities and nutrition values before saving.", "warn");
+          notify("Review quantities and nutrition values before saving.", "error");
           return false;
         }
         const outcome = await execute("save_reviewed_meal", (current, idempotencyKey) => repository!.saveReviewedMeal({
@@ -687,7 +687,7 @@ export function AppProvider({
           ...(entry.fiberG === undefined ? [] : [entry.fiberG]),
         ];
         if (!entry.id || !Number.isFinite(entry.servings) || entry.servings <= 0 || (entry.servingQuantity !== undefined && entry.servingQuantity <= 0) || numericValues.slice(1).some((value) => !Number.isFinite(value) || value < 0)) {
-          notify("Nutrition values are invalid. Check servings and macro values.", "warn");
+          notify("Nutrition values are invalid. Check servings and macro values.", "error");
           return false;
         }
         const outcome = await execute("update_nutrition_log", (current, idempotencyKey) => repository!.updateNutrition({
@@ -701,12 +701,12 @@ export function AppProvider({
 
       async saveFood(food) {
         if (!food.name.trim() || !food.servingLabel.trim() || !Number.isFinite(food.servingGrams) || food.servingGrams <= 0) {
-          notify("Add a food name, serving label, and positive serving size.", "warn");
+          notify("Add a food name, serving label, and positive serving size.", "error");
           return false;
         }
         const values = [food.calories, food.proteinG, food.carbsG, food.fatG, ...(food.fiberG === undefined ? [] : [food.fiberG])];
         if (values.some((value) => !Number.isFinite(value) || value < 0)) {
-          notify("Nutrition values must be finite and non-negative.", "warn");
+          notify("Nutrition values must be finite and non-negative.", "error");
           return false;
         }
         const outcome = await execute("save_food", (current, idempotencyKey) => repository!.saveFood({ food, idempotencyKey }));
@@ -719,7 +719,7 @@ export function AppProvider({
           return false;
         }
         if (entries.some((entry) => !Number.isFinite(entry.servings) || entry.servings <= 0 || [entry.calories, entry.proteinG, entry.carbsG, entry.fatG, ...(entry.fiberG === undefined ? [] : [entry.fiberG])].some((value) => !Number.isFinite(value) || value < 0))) {
-          notify("This saved meal has invalid nutrition values.", "warn");
+          notify("This saved meal has invalid nutrition values.", "error");
           return false;
         }
         const outcome = await execute("log_saved_meal", (_current, idempotencyKey) => repository!.saveSavedMealLog({ date, slot, entries, meal, recipeServings, idempotencyKey }), fixedKey);
@@ -766,7 +766,7 @@ export function AppProvider({
 
       async logWeight(weightKg, date) {
         if (!Number.isFinite(weightKg) || weightKg < 35 || weightKg > 300) {
-          notify("Weight must be between 35 and 300 kg.", "warn");
+          notify("Weight must be between 35 and 300 kg.", "error");
           return;
         }
         await execute("save_weight_entry", (_current, idempotencyKey) =>
@@ -782,7 +782,7 @@ export function AppProvider({
 
       async setGroceryQuantity(id, quantity, week, options) {
         if (!Number.isFinite(quantity) || quantity < 0 || quantity > 1_000_000) {
-          notify("Quantity must be between 0 and 1,000,000.", "warn");
+          notify("Quantity must be between 0 and 1,000,000.", "error");
           return false;
         }
         const outcome = await execute("set_grocery_quantity", (current, idempotencyKey) =>
@@ -814,7 +814,7 @@ export function AppProvider({
 
       async setGroceryTotalAmount(input, week) {
         if (!validGroceryCentavos(input.totalAmountCentavos) || input.weekOf !== week.weekOf) {
-          notify("Enter a valid non-negative grocery amount.", "warn");
+          notify("Enter a valid non-negative grocery amount.", "error");
           return false;
         }
         const outcome = await execute("set_grocery_total_amount", (current, key) => repository!.setGroceryTotalAmount({ ...input, idempotencyKey: key, currentSnapshot: nutritionWeekSnapshot(current, week) }), input.idempotencyKey);
@@ -881,7 +881,7 @@ export function AppProvider({
       },
 
       async saveRecipe(input) {
-        if (!input.meal.notes?.trim()) { notify("Add instructions before saving this recipe.", "warn"); return false; }
+        if (!input.meal.notes?.trim()) { notify("Add instructions before saving this recipe.", "error"); return false; }
         const outcome = await execute("save_recipe", (current, key) => repository!.saveRecipe({ ...input, currentSnapshot: current, idempotencyKey: key }), input.idempotencyKey);
         return Boolean(outcome);
       },
@@ -920,7 +920,7 @@ export function AppProvider({
           return null;
         }
         if (!repository) {
-          notify("Supabase is not configured for durable data.", "warn");
+          notify("Supabase is not configured for durable data.", "error");
           return null;
         }
         setPendingMutation("export_account_data");
@@ -942,7 +942,7 @@ export function AppProvider({
             mutationKey: idempotencyKey,
           };
           setError(nextError);
-          notify(nextError.message, "warn");
+          notify(nextError.message, "error");
           return null;
         } finally {
           pendingRef.current = false;
@@ -990,7 +990,7 @@ export function AppProvider({
         } catch (reason: unknown) {
           const nextError = errorFromUnknown(reason);
           setError(nextError);
-          notify(nextError.message, "warn");
+          notify(nextError.message, "error");
           return false;
         } finally {
           pendingRef.current = false;

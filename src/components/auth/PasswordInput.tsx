@@ -38,7 +38,7 @@ export function PasswordInput({
           minLength={8}
           value={value}
           onChange={onChange}
-          className={`input pr-12 ${error ? "border-2 border-coral-300 bg-coral-100" : ""}`}
+          className={`input pr-12 ${error ? "border-2 border-danger-600 bg-danger-50" : ""}`}
         />
         <button
           type="button"
@@ -49,7 +49,7 @@ export function PasswordInput({
           {visible ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
         </button>
       </span>
-      {error ? <span id={errorId} className="text-xs font-bold text-ink">{error}</span> : null}
+      {error ? <span id={errorId} className="text-xs font-bold text-danger-900">{error}</span> : null}
     </label>
   );
 }

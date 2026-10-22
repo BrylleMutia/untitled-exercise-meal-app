@@ -4,7 +4,7 @@ import { useId, useRef, type ReactNode, type RefObject } from "react";
 import { X } from "lucide-react";
 import {
   FloatingFocusManager, FloatingNode, FloatingOverlay, FloatingPortal, FloatingTree,
-  useDismiss, useFloating, useFloatingNodeId, useInteractions, useRole,
+  useDismiss, useFloating, useFloatingNodeId, useFloatingTree, useInteractions, useRole,
 } from "@floating-ui/react";
 
 export interface ModalProps {
@@ -32,6 +32,7 @@ function ModalContent({ open, title, children, footer, help, initialFocus, retur
     enabled: !dismissalDisabled,
     outsidePressEvent: "click",
     outsidePress: event => event.target === overlay.current,
+    bubbles: { escapeKey: false, outsidePress: false },
   });
   const role = useRole(context, { role: "dialog" });
   const { getFloatingProps } = useInteractions([dismiss, role]);
@@ -50,7 +51,7 @@ function ModalContent({ open, title, children, footer, help, initialFocus, retur
                 <X className="h-5 w-5" aria-hidden />
               </button>
             </header>
-            <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 [&_input]:min-w-0 [&_select]:min-w-0 [&_textarea]:min-w-0 [&_input]:placeholder:!text-ink-soft [&_textarea]:placeholder:!text-ink-soft" data-modal-body>{children}</div>
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:flex-initial sm:px-6 sm:py-6 [&_input]:min-w-0 [&_select]:min-w-0 [&_textarea]:min-w-0 [&_input]:placeholder:!text-ink-soft [&_textarea]:placeholder:!text-ink-soft" data-modal-body>{children}</div>
             <footer className="max-h-[40dvh] shrink-0 overflow-y-auto bg-lav-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6" data-modal-footer>{footer}</footer>
           </div>
         </FloatingFocusManager>
@@ -62,5 +63,6 @@ function ModalContent({ open, title, children, footer, help, initialFocus, retur
 // A local floating tree keeps portaled contextual help inside the modal's focus
 // boundary and makes Escape dismiss the innermost open surface first.
 export function Modal(props: ModalProps) {
-  return <FloatingTree><ModalContent {...props} /></FloatingTree>;
+  const tree = useFloatingTree();
+  return tree ? <ModalContent {...props} /> : <FloatingTree><ModalContent {...props} /></FloatingTree>;
 }

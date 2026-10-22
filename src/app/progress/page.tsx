@@ -193,7 +193,7 @@ export default function ProgressPage() {
 
       <Card>
         <h2 className="font-extrabold">Recent history</h2>
-        {error && history === null ? <p className="mt-2 rounded-xl bg-peach-100 p-3 text-xs font-bold" role="alert">History could not be loaded. Your current snapshot remains available; retry below.</p> : null}
+        {error && history === null ? <p className="mt-2 rounded-xl bg-danger-100 p-3 text-xs font-bold text-danger-900" role="alert">History could not be loaded. Your current snapshot remains available; retry below.</p> : null}
         <HistoryList history={history} />
         {history?.nextCursors.sessions || history?.nextCursors.nutrition || history?.nextCursors.weights ? (
           <Button variant="soft" className="mt-3 !min-h-11 !px-3 text-xs" disabled={historyLoading} onClick={() => void loadMore()}>

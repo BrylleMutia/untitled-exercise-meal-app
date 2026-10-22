@@ -117,7 +117,7 @@ function RoutineEditor({ routine, onClose }: { routine?: CustomWorkout; onClose:
       </fieldset>)}
       <p className="text-sm font-semibold text-ink-soft">About {customWorkoutMinutes(draft.definition)} min · profile limit {profile?.sessionMinutes} min</p>
       {message ? <p role="status" className="text-sm font-bold">{message}</p> : null}
-      {error?.code === "stale_version" ? <div role="alert"><p className="text-sm font-semibold">This routine changed elsewhere. Your draft is retained.</p><Button variant="soft" disabled={Boolean(pendingMutation)} onClick={() => void save(true)}>Save my draft as the next version</Button></div> : null}
+      {error?.code === "stale_version" ? <div role="alert" className="text-danger-900"><p className="text-sm font-semibold">This routine changed elsewhere. Your draft is retained.</p><Button variant="soft" disabled={Boolean(pendingMutation)} onClick={() => void save(true)}>Save my draft as the next version</Button></div> : null}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={!ready || Boolean(pendingMutation)} aria-busy={Boolean(pendingMutation)}>{pendingMutation ? "Saving…" : "Save routine"}</Button><Button variant="ghost" disabled={Boolean(pendingMutation)} onClick={onClose}>Close editor</Button></div>
     </form>
   </Card>;
@@ -184,7 +184,7 @@ function CustomSession({ session }: { session: CustomWorkoutSession }) {
     })}</div>
     <p className="mt-4 text-sm font-semibold">Cooldown: {session.planned.cooldown?.join(" · ")}</p><p className="mt-2 text-xs font-semibold">{session.planned.safety}</p>
     {message ? <p role="status" className="mt-3 text-sm font-bold">{message}</p> : null}
-    {error?.code === "stale_version" ? <div role="alert" className="mt-3"><p className="text-sm">Saved progress changed elsewhere. Your draft is retained.</p><Button variant="soft" disabled={Boolean(pendingMutation)} onClick={() => void commit(session.status, true)}>Reapply my session draft</Button></div> : null}
+    {error?.code === "stale_version" ? <div role="alert" className="mt-3 text-danger-900"><p className="text-sm">Saved progress changed elsewhere. Your draft is retained.</p><Button variant="soft" disabled={Boolean(pendingMutation)} onClick={() => void commit(session.status, true)}>Reapply my session draft</Button></div> : null}
     <div className="mt-4 flex flex-wrap gap-2"><Button disabled={!ready || Boolean(pendingMutation)} onClick={() => void commit(session.status === "paused" ? "in_progress" : "paused")}>{session.status === "paused" ? "Resume" : "Save progress & pause"}</Button><Button disabled={!ready || Boolean(pendingMutation) || actual.length === 0} onClick={() => void commit(session.status)}>Save progress</Button><Button disabled={!ready || Boolean(pendingMutation) || actual.length === 0} onClick={() => void commit(finishStatus)}>Finish {finishStatus === "partial" ? "partial session" : "workout"}</Button><Button variant="ghost" disabled={!ready || Boolean(pendingMutation)} onClick={() => void commit("abandoned")}>End without completing</Button></div>
   </Card>;
 }

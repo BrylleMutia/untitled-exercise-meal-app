@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 type Variant = "primary" | "secondary" | "soft" | "ghost" | "danger";
 
@@ -7,10 +7,11 @@ const variants: Record<Variant, string> = {
   secondary: "bg-ink-soft text-white hover:bg-ink",
   soft: "bg-white/70 text-ink hover:bg-white",
   ghost: "bg-transparent text-ink-soft hover:bg-black/5",
-  danger: "bg-coral-200 text-ink hover:bg-coral-300",
+  danger: "bg-danger-200 text-danger-900 hover:bg-danger-300",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>;
   variant?: Variant;
   children: ReactNode;
 }

@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!app.snapshot.userId) {
     return (
       <main className="mx-auto grid min-h-dvh w-full max-w-xl place-items-center px-4 py-6">
-        <div className="rounded-3xl bg-white p-6 shadow-card" role="alert">
+        <div className="rounded-3xl bg-danger-50 p-6 shadow-card text-danger-900" role="alert">
           <h1 className="text-lg font-extrabold">Your account could not be loaded</h1>
           <p className="mt-2 text-sm text-ink-soft">Your saved data is still in your account. Check your connection and retry.</p>
           <button type="button" className="mt-4 min-h-11 rounded-full bg-lav-200 px-5 font-bold" onClick={() => window.location.reload()}>
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         ) : null}
         {app.error ? (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-coral-100 px-3 py-2 text-xs font-bold text-ink" role="alert">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-danger-100 px-3 py-2 text-xs font-bold text-danger-900" role="alert">
             <span>
               {app.error.message}
               {app.error.code === "stale_version"

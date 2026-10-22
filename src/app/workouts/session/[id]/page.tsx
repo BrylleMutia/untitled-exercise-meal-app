@@ -217,7 +217,7 @@ export default function SessionPage() {
   return (
     <div className="grid gap-4 pb-4">
       <div className="flex items-center justify-between">
-        <Button variant="soft" onClick={discard} aria-label="Discard session">
+        <Button variant="danger" onClick={discard} aria-label="Discard session">
           <Trash2 className="h-4 w-4" aria-hidden /> Discard
         </Button>
         <div className="text-center">

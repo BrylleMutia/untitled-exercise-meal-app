@@ -10,7 +10,8 @@ import type { NutritionWeekReadModel } from "@/types/backend";
 
 type QuantityDraft = { value: string; revision: number; calendarRevision: number; listId: string; saveKey: string };
 const newKey = () => crypto.randomUUID();
-const iconClass = "grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full bg-white text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lav-500";
+const controlClass = "grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lav-500";
+const iconClass = `${controlClass} bg-white text-ink`;
 
 export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange, groupId }: { item: GroceryItem; week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void; groupId?: string }) {
   const { snapshot, actions, error } = useApp();
@@ -101,6 +102,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
       await queue.current;
       const focusTarget = row.current?.nextElementSibling?.querySelector<HTMLButtonElement>('button[aria-label^="Edit quantity for"]')
         ?? row.current?.previousElementSibling?.querySelector<HTMLButtonElement>('button[aria-label^="Edit quantity for"]')
+        ?? row.current?.closest("[data-grocery-section]")?.querySelector<HTMLElement>("[data-grocery-heading]")
         ?? document.querySelector<HTMLElement>("[data-grocery-heading]");
       const removed = groupId ? await actions.cookingGroupCommand({ action: "grocery", groupId, weekOf: week.weekOf, revision, operation: "remove", itemId: item.id, idempotencyKey: newKey() }).then(() => true).catch(() => false) : await actions.removeGroceryItem(item.id, week);
       if (removed) { await clearDraft(userId, draftType); onRefresh(); requestAnimationFrame(() => focusTarget?.focus()); }
@@ -108,7 +110,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
     } finally { submitting.current = false; onSavingChange(false); if (active.current) setBusy(false); }
   }
 
-  const deleteButton = <button type="button" disabled={locked} onClick={() => void remove()} aria-label={`Remove ${item.name}`} className={`${iconClass} ${draft ? "col-start-5 row-start-1 @[18rem]:col-start-6" : ""}`}><Trash2 className="h-4 w-4" aria-hidden /></button>;
+  const deleteButton = <button type="button" disabled={locked} onClick={() => void remove()} aria-label={`Remove ${item.name}`} className={`${controlClass} bg-danger-200 text-danger-900 hover:bg-danger-300 ${draft ? "col-start-5 row-start-1 @[18rem]:col-start-6" : ""}`}><Trash2 className="h-4 w-4" aria-hidden /></button>;
   return <li ref={row} aria-label={item.name} className={`grid min-w-0 grid-cols-[44px_minmax(0,1fr)] items-center gap-x-2 gap-y-1 rounded-xl px-2 py-1.5 md:grid-cols-[44px_minmax(0,1fr)_minmax(0,22rem)] ${item.checked ? "bg-mint-50" : "bg-cream"}`}>
     <label className="col-start-1 row-start-1 grid h-[44px] w-[44px] place-items-center"><input type="checkbox" checked={item.checked} disabled={locked} onChange={() => { if (groupId) void actions.cookingGroupCommand({ action: "grocery", groupId, weekOf: week.weekOf, revision, operation: "toggle", itemId: item.id, idempotencyKey: newKey() }).then(onRefresh).catch(onRefresh); else void actions.toggleGrocery(item.id, week); }} aria-label={`Mark ${item.name} as done`} className="h-5 w-5 accent-lav-500" /></label>
     <div className="col-start-2 row-start-1 min-w-0">
@@ -119,7 +121,7 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
       {draft ? <form aria-label={`Edit quantity for ${item.name}`} onSubmit={event => { event.preventDefault(); void save(); }} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); void cancel(); } }}>
         <fieldset disabled={locked} className="grid min-w-0 grid-cols-[44px_minmax(0,1fr)_44px_44px_44px] items-center gap-[4px] @[18rem]:grid-cols-[44px_minmax(0,1fr)_44px_44px_44px_44px]">
           <button type="button" disabled={quantity === null || quantity >= MAX_GROCERY_QUANTITY} onClick={() => change(String(Math.min(MAX_GROCERY_QUANTITY, Number((quantity! + 1).toFixed(12)))))} aria-label={`Increase ${item.name}`} className={`${iconClass} col-start-1 row-start-1`}><Plus className="h-4 w-4" aria-hidden /></button>
-          <label className="col-start-2 row-start-1 grid min-h-[44px] min-w-0 items-center rounded-xl bg-white px-[4px] @[22rem]:flex" htmlFor={fieldId}><span className="sr-only">Quantity for {item.name}</span><input ref={input} id={fieldId} inputMode="decimal" aria-label={`Quantity for ${item.name}`} className="min-h-[44px] w-full min-w-0 bg-transparent text-center text-sm font-extrabold tabular-nums outline-offset-2 focus-visible:outline-2 focus-visible:outline-lav-500" value={draft.value} onChange={event => change(event.target.value)} aria-invalid={quantity === null} aria-describedby={quantity === null ? `${fieldId}-error` : undefined} /><span className="min-w-0 text-center text-xs font-bold text-muted [overflow-wrap:anywhere] @[22rem]:shrink-0">{item.unit}</span></label>
+          <label className="col-start-2 row-start-1 grid min-h-[44px] min-w-0 items-center rounded-xl bg-white px-[4px] @[22rem]:flex" htmlFor={fieldId}><span className="sr-only">Quantity for {item.name}</span><input ref={input} id={fieldId} inputMode="decimal" aria-label={`Quantity for ${item.name}`} className={`min-h-[44px] w-full min-w-0 bg-transparent text-center text-sm font-extrabold tabular-nums outline-offset-2 focus-visible:outline-2 focus-visible:outline-lav-500 ${quantity === null ? "rounded-lg border border-danger-600 text-danger-900" : ""}`} value={draft.value} onChange={event => change(event.target.value)} aria-invalid={quantity === null} aria-describedby={quantity === null ? `${fieldId}-error` : undefined} /><span className="min-w-0 text-center text-xs font-bold text-muted [overflow-wrap:anywhere] @[22rem]:shrink-0">{item.unit}</span></label>
           <button type="button" disabled={quantity === null || quantity <= 0} onClick={() => change(String(Math.max(0, Number((quantity! - 1).toFixed(12)))))} aria-label={`Decrease ${item.name}`} className={`${iconClass} col-start-3 row-start-1`}><Minus className="h-4 w-4" aria-hidden /></button>
           <button ref={saveButton} type="submit" disabled={quantity === null || stale} aria-label={`${failed && !stale ? "Retry saving" : "Save quantity for"} ${item.name}`} className={`${iconClass} col-start-4 row-start-1 !bg-ink !text-white`}><Check className="h-4 w-4" aria-hidden /></button>
           <button type="button" onClick={() => void cancel()} aria-label={`Cancel quantity edit for ${item.name}`} className={`${iconClass} col-start-5 row-start-2 @[18rem]:row-start-1`}><X className="h-4 w-4" aria-hidden /></button>
@@ -132,10 +134,10 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
       </div>}
     </div>
     <div className="col-span-full grid min-w-0 gap-1 text-xs">
-      {draft && quantity === null ? <p id={`${fieldId}-error`} role="alert">Enter a quantity from 0 to 1,000,000, using numbers and an optional decimal point.</p> : null}
+      {draft && quantity === null ? <p id={`${fieldId}-error`} role="alert" className="text-danger-900">Enter a quantity from 0 to 1,000,000, using numbers and an optional decimal point.</p> : null}
       {draft && restored ? <p role="status">Quantity draft restored. Review before saving.</p> : null}
       {draft && stale ? <div role="status" className="grid gap-1"><p>{calendarChanged ? "Your calendar grouping changed. Cancel this edit and reopen the item in the newly grouped list." : `This list changed. Latest saved quantity: ${item.quantity} ${item.unit}. Your input is retained.`}</p>{!calendarChanged ? <button type="button" disabled={locked} className="min-h-[44px] w-fit font-bold underline underline-offset-2" onClick={() => { actions.clearError(); setFailed(false); setDraft({ ...draft, revision, calendarRevision, listId, saveKey: newKey() }); requestAnimationFrame(() => saveButton.current?.focus()); }}>Review latest quantity</button> : null}</div> : null}
-      {failed && !stale ? <p role="alert">{error?.message ?? "The change was not confirmed. Your input is retained; retry."}</p> : null}
+      {failed && !stale ? <p role="alert" className="text-danger-900">{error?.message ?? "The change was not confirmed. Your input is retained; retry."}</p> : null}
       {busy ? <p role="status">Saving changes…</p> : null}
       {storageUnavailable ? <p role="status">Draft recovery is unavailable on this device. Keep this edit open until saved.</p> : null}
     </div>

@@ -22,10 +22,10 @@ export function RecipeConversionConfirmation({ item, food, onChange }: {
     <label className="grid min-w-0 grid-cols-1 gap-1 text-xs font-bold">Grams per 1 {factorUnit}
       <input key={factorUnit} autoFocus className="input min-w-0" aria-label={`${item.name} conversion grams per ${factorUnit}`} type="number" min="0.000001" max="1000000" step="any" value={pending.gramsPerUnit} onChange={event => onChange({ pendingConversion: { ...pending, gramsPerUnit: event.target.value } })} />
     </label>
-    {pending.gramsPerUnit.trim() && !factorValid ? <p role="alert" className="text-xs font-semibold">Enter a positive finite weight up to 1,000,000 g.</p> : null}
+    {pending.gramsPerUnit.trim() && !factorValid ? <p role="alert" className="text-xs font-semibold text-danger-900">Enter a positive finite weight up to 1,000,000 g.</p> : null}
     {preview?.status === "converted" && hasAmount ? <p role="status" className="break-words text-xs font-semibold">Converted quantity: ≈{formatted(preview.patch.quantity)}{item.measurementKind === "range" ? `–${formatted(preview.patch.upperQuantity!)}` : ""} {preview.patch.unit}. Nutrition keeps the same ingredient weight.</p> : null}
     {preview?.status === "confirmation" ? <p className="text-xs text-ink-soft">This confirms {factorUnit}. The next step needs the weight of one {preview.factorUnit}.</p> : null}
-    {preview?.status === "invalid" ? <p role="alert" className="text-xs font-semibold">Check the original quantity, range and converted amount.</p> : null}
+    {preview?.status === "invalid" ? <p role="alert" className="text-xs font-semibold text-danger-900">Check the original quantity, range and converted amount.</p> : null}
     <div className="flex min-w-0 flex-wrap gap-2">
       <Button className="!px-3 text-xs" disabled={!factorValid || !hasAmount || !preview || preview.status === "invalid"} onClick={() => {
         if (preview?.status === "converted") onChange(preview.patch);

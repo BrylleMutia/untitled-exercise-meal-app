@@ -533,5 +533,5 @@ export type SemanticEvent =
 export interface Toast {
   id: number;
   message: string;
-  tone: "ok" | "info" | "warn";
+  tone: "ok" | "info" | "warn" | "error";
 }

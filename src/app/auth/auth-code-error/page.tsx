@@ -3,9 +3,9 @@ import Link from "next/link";
 export default function AuthCodeErrorPage() {
   return (
     <main className="mx-auto grid min-h-dvh max-w-md place-items-center px-6">
-      <section className="rounded-3xl bg-coral-100 p-7 text-center shadow-card">
+      <section className="rounded-3xl bg-danger-100 text-danger-900 p-7 text-center shadow-card">
         <h1 className="text-xl font-extrabold">That link is no longer valid</h1>
-        <p className="mt-2 text-sm font-semibold text-ink-soft">
+        <p className="mt-2 text-sm font-semibold">
           It may have expired, already been used, or been opened by an email
           security scanner. Request a new confirmation or password-reset email
           and open the newest link once.

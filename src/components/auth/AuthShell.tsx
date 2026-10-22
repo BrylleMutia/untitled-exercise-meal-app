@@ -44,7 +44,7 @@ export function AuthShell({
 
 export function AuthError({ children }: { children: ReactNode }) {
   return (
-    <div role="alert" className="rounded-2xl bg-coral-100 px-4 py-3 text-sm font-bold text-ink">
+    <div role="alert" className="rounded-2xl bg-danger-100 px-4 py-3 text-sm font-bold text-danger-900">
       {children}
     </div>
   );

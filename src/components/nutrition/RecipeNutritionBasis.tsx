@@ -33,7 +33,7 @@ export function RecipeNutritionBasis({ ingredients, review = [], foods, notes, h
         {needsConversion ? <label className="grid min-w-0 grid-cols-1 gap-1 text-xs font-bold">Confirmed grams per {item.unit}
           <input className="input min-w-0 !px-2" type="number" min="0.000001" max="1000000" step="any" aria-label={`${item.name} grams per ${item.unit}`} aria-invalid={invalidFactor} aria-describedby={invalidFactor ? `${item.id}-factor-error` : undefined} value={item.gramsPerUnit ?? (known === null ? "" : String(known))} onChange={event => group.onChange?.(item.id, { gramsPerUnit: event.target.value })} />
           <span className="font-normal text-ink-soft">Use a measured weight or a reliable ingredient-specific conversion.</span>
-          {invalidFactor ? <span id={`${item.id}-factor-error`} role="alert">Enter a positive finite weight up to 1,000,000 g.</span> : null}
+          {invalidFactor ? <span id={`${item.id}-factor-error`} role="alert" className="text-danger-900">Enter a positive finite weight up to 1,000,000 g.</span> : null}
         </label> : null}
         {item.measurementKind === "unmeasured" && food ? <label className="grid min-w-0 grid-cols-1 gap-1 text-xs font-bold">Assumed nutrition amount (g)
           <input className="input min-w-0 !px-2" type="number" min="0.0001" step="any" aria-label={`${item.name} assumed nutrition grams`} value={item.nutritionServings === undefined ? "" : String(Number((item.nutritionServings * food.servingGrams).toPrecision(12)))} onChange={event => group.onChange?.(item.id, { nutritionServings: event.target.value.trim() ? Number(event.target.value) / food.servingGrams : undefined })} />

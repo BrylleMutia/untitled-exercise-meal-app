@@ -389,7 +389,7 @@ export default function OnboardingPage() {
       ) : null}
 
       {app?.error?.code === "stale_version" ? (
-        <Card tone="peach" role="alert">
+        <Card tone="white" role="alert" className="!bg-danger-100 text-danger-900">
           <p className="font-extrabold">Your saved data changed elsewhere.</p>
           <p className="mt-1 text-xs font-semibold text-muted">
             Your form is still here. Review it against the refreshed account data,
@@ -418,7 +418,7 @@ export default function OnboardingPage() {
       ) : null}
 
       {app?.error && app.error.code !== "stale_version" ? (
-        <Card tone="peach" role="alert">
+        <Card tone="white" role="alert" className="!bg-danger-100 text-danger-900">
           <h2 className="font-extrabold">Your save was not confirmed</h2>
           <p className="mt-1 text-sm font-semibold text-ink-soft">{app.error.message}</p>
           <p className="mt-2 text-xs font-semibold text-muted">Your answers are still here. Check your connection, then try saving again.</p>
@@ -426,7 +426,7 @@ export default function OnboardingPage() {
       ) : null}
 
       {errors.length > 0 ? (
-        <div role="alert" className="rounded-3xl bg-coral-100 p-4">
+        <div role="alert" className="rounded-3xl bg-danger-100 p-4 text-danger-900">
           <p className="flex items-center gap-2 text-sm font-extrabold">
             <TriangleAlert className="h-4 w-4" aria-hidden /> Please check:
           </p>

@@ -110,7 +110,7 @@ function StepEditor({ date }: { date: string }) {
         <label className="grid gap-2 text-sm font-bold">Steps<input className="input" inputMode="numeric" value={draft.steps} onChange={(event) => change("steps", event.target.value)} disabled={!ready || saving} placeholder="e.g. 6500" /></label>
         <div className="grid gap-2"><div className="flex items-center justify-between gap-2"><label htmlFor="walking-minutes" className="text-sm font-bold">Walking minutes (optional)</label><HelpPopover title="Walking minutes"><p>Use time spent walking, excluding workouts. Steps alone cannot tell us walking speed or energy use. Leave blank if unknown; zero records no walking time.</p></HelpPopover></div><input id="walking-minutes" className="input" inputMode="numeric" value={draft.minutes} onChange={(event) => change("minutes", event.target.value)} disabled={!ready || saving} placeholder="Leave blank if unknown" /></div>
         {message ? <p role="status" className="text-sm font-semibold text-ink-soft">{message}</p> : null}
-        {error?.code === "stale_version" ? <div role="alert" className="rounded-2xl bg-peach-100 p-3 text-sm font-semibold">
+        {error?.code === "stale_version" ? <div role="alert" className="rounded-2xl bg-danger-100 p-3 text-sm font-semibold text-danger-900">
           <p>This date was changed elsewhere. Saved total: {entry ? `${entry.steps.toLocaleString()} steps` : "unlogged"}. Your draft is retained.</p>
           <Button variant="soft" className="mt-2" disabled={saving} onClick={() => void save(true)}>Reapply my draft</Button>
         </div> : null}

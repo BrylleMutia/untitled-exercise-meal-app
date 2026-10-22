@@ -31,7 +31,7 @@ export function WeekStartSettings() {
       if (await actions.setWeekStart(value, (draft && draft.revision > 0 ? draft.revision : profile!.revision) ?? 1)) { setDraft(null); setSaved(true); }
     }}>{pendingMutation === "set_week_start" ? "Regrouping weeks…" : "Save start of week"}</Button>
     {saved ? <p role="status" className="mt-3 text-sm font-semibold">Weeks regrouped. Review your grocery lists; custom items and edits were carried over once.</p> : null}
-    {attempted && error && draft ? <div role="alert" className="mt-3 text-sm font-semibold"><p>{error.message} Your selection is retained.</p>{error.code === "stale_version" ? <Button variant="soft" className="mt-2" disabled={refreshing || Boolean(pendingMutation)} onClick={async () => {
+    {attempted && error && draft ? <div role="alert" className="mt-3 text-sm font-semibold text-danger-900"><p>{error.message} Your selection is retained.</p>{error.code === "stale_version" ? <Button variant="soft" className="mt-2" disabled={refreshing || Boolean(pendingMutation)} onClick={async () => {
       setRefreshing(true);
       try { if (await actions.refreshSnapshot()) { setDraft(current => current ? { ...current, revision: -1 } : current); setAttempted(false); actions.clearError(); } }
       finally { setRefreshing(false); }
