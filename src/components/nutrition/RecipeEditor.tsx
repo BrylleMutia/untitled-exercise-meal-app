@@ -2,9 +2,10 @@
 import { recipeMealSlots, mealSlotLabels, parseMealSlots, validRecipeYield } from "@/utility/recipeMealSlots";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
-import { Clock, Minus, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { Archive, Clock, Minus, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { NutritionFieldLabel, NutritionPills } from "@/components/ui/NutritionPills";
 import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Modal } from "@/components/ui/Modal";
@@ -42,9 +43,11 @@ interface RecipeEditorProps {
   onSave: (input: Omit<SaveRecipeInput, "currentSnapshot">) => Promise<boolean>;
   onSaved: (mealId: string) => void;
   onCancel: () => void;
+  onArchive?: (mealId: string, retry: boolean) => Promise<boolean>;
+  onArchived?: () => void;
 }
 
-export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, onCancel }: RecipeEditorProps) {
+export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, onCancel, onArchive, onArchived }: RecipeEditorProps) {
   const { snapshot, error, pendingMutation } = useApp();
   const source = meal;
   const freshDraft = (): RecipeDraft => ({ mealSlots: parseMealSlots(source?.mealSlots), mealId: meal?.isSystem ? uid("meal") : meal?.id ?? uid("meal"), name: meal?.name ?? "", servings: source ? String(source.servings) : "", totalTimeMinutes: source?.totalTimeMinutes === undefined ? "" : String(source.totalTimeMinutes), complexity: defaultRecipeComplexity(source?.complexity), instructions: source?.notes ?? "", reference: source?.reference ?? "", image: source?.image ?? null, ...(source?.providedNutrition ? { providedMacros: Object.fromEntries(Object.entries(source.providedNutrition).map(([key, value]) => [key, String(value)])) as RecipeDraft["providedMacros"] } : {}), ingredients: source?.ingredients.map(item => prepareRecipeIngredient(recipeIngredientDraft(item, foods.find(f => f.id === item.foodId) ?? null, uid("ingredient")))) ?? [], unmeasuredIngredients: source?.unmeasuredIngredients?.map(item => ({ ...item, id: uid("unmeasured") })) ?? [], nutritionNotes: source?.nutritionNotes ?? "", query: "", description: "", review: [], questions: [], custom: blankCustom(), saveKey: uid("recipe-save"), baseVersions: { recordRevision: meal?.isSystem ? undefined : meal?.revision, groceryRevision: snapshot.grocery?.revision }, ...(meal?.isSystem ? { catalog: { mealId: meal.id, recordRevision: meal.revision ?? 1, preferenceRevision: meal.catalogPreferenceRevision ?? 0 } } : {}) });
@@ -65,8 +68,15 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   const timeInvalid = timeBadInput || !recipeTime.valid;
   const [results, setResults] = useState<Food[]>([]);
   const [searchTarget, setSearchTarget] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"search" | "analyze" | "save" | null>(null);
-  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<"search" | "analyze" | "save" | "archive" | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveError, setArchiveError] = useState("");
+  const archiveButton = useRef<HTMLButtonElement>(null);
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Pick<Meal, "id" | "name"> | null>(null);
+  const [message, setMessageValue] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
+  function setMessage(value: string, isError = false) { setMessageValue(value); setMessageIsError(isError); }
   const [saveFailed, setSaveFailed] = useState(false);
   const draftType = `recipe:${meal?.id ?? "new"}`;
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -171,7 +181,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     busyRef.current = true; setBusy("search"); setMessage("");
     const token = ++request.current;
     try { const matches = await searchNutritionProvider(createClient(), draft.query.trim()); if (active.current && token === request.current) { setResults(matches.candidates.map(providerCandidateFood)); if (!matches.candidates.length) setMessage("No trusted matches found. Try another name or add a custom ingredient."); } }
-    catch { if (active.current) setMessage("Trusted search is unavailable. Your input is retained; retry or add a custom ingredient."); }
+    catch { if (active.current) setMessage("Trusted search is unavailable. Your input is retained; retry or add a custom ingredient.", true); }
     finally { busyRef.current = false; if (active.current) setBusy(null); }
   }
   async function analyze() {
@@ -186,7 +196,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       if (!active.current || token !== request.current) return;
       update({ review: extracted.candidates.map((item, index) => prepareRecipeIngredient({ id: uid("review"), name: item.name, quantity: String(item.quantity), unit: item.unit, included: item.presence === "stated", assumptions: [...item.assumptions, ...(item.presence === "possible_hidden" ? ["Possible hidden ingredient — include only if present."] : [])], food: suggested.find(match => match.ingredientIndex === index)?.candidates[0] ? providerCandidateFood(suggested.find(match => match.ingredientIndex === index)!.candidates[0]) : foods.find(food => food.name.toLowerCase() === item.name.toLowerCase()) ?? null })), questions: extracted.questions }, false);
       if (matchFailed) setMessage("Ingredient suggestions are ready, but trusted matching is unavailable. Match each ingredient, enter custom values, or retry analysis.");
-    } catch { if (active.current) setMessage("Analysis is unavailable. Your description and review are retained; retry, search, or enter custom ingredients."); }
+    } catch { if (active.current) setMessage("Analysis is unavailable. Your description and review are retained; retry, search, or enter custom ingredients.", true); }
     finally { busyRef.current = false; if (active.current) setBusy(null); }
   }
   const recipeSettingsInvalid = !validRecipeYield(Number(draft.servings)) || servingsBadInput || !draft.mealSlots.length;
@@ -265,13 +275,29 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       await queue.current;
       const saved = await onSave({ meal: { mealSlots: draft.mealSlots, id: draft.mealId, name: draft.name.trim(), servings: Number(draft.servings), totalTimeMinutes: recipeTime.minutes, complexity: draft.complexity, notes: draft.instructions.trim(), reference: draft.reference.trim(), image: draft.image, providedNutrition, ingredients: preview.ingredients, unmeasuredIngredients: draft.unmeasuredIngredients.map(({ name, measurement, optional }) => ({ name: name.trim(), measurement: measurement.trim(), ...(optional ? { optional: true } : {}) })), nutritionNotes: draft.nutritionNotes, ...(!meal?.isSystem && meal?.revision ? { revision: meal.revision } : {}) }, newFoods, catalog: draft.catalog, expectedVersions: draft.baseVersions, idempotencyKey: draft.saveKey });
       if (saved) { completed.current = true; await queue.current; await clearDraft(userId, draftType); onSaved(draft.mealId); }
-      else if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; review the message above and retry."); }
-    } catch { if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; retry when the connection is available."); } }
+      else if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; review the message above and retry.", true); }
+    } catch { if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; retry when the connection is available.", true); } }
     finally { busyRef.current = false; if (active.current) setBusy(null); }
   }
   const disabled = !ready || Boolean(busy) || Boolean(pendingMutation) || imageBusy;
+  const canArchive = Boolean(meal && !meal.archivedAt && !meal.id.startsWith("group-copy-") && onArchive && onArchived);
+  async function archive() {
+    const target = archiveTarget;
+    if ((!canArchive && !archiveError) || !target || !onArchive || !onArchived || disabled || busyRef.current) return;
+    const retry = Boolean(archiveError);
+    busyRef.current = true; setBusy("archive"); setArchiveError("");
+    try {
+      if (await onArchive(target.id, retry)) {
+        completed.current = true;
+        await queue.current.catch(() => undefined);
+        await clearDraft(userId, draftType).catch(() => undefined);
+        onArchived();
+      } else if (active.current) setArchiveError("Recipe was not archived. Your edits are still here. Retry or keep editing.");
+    } catch { if (active.current) setArchiveError("Recipe was not archived. Your edits are still here. Retry when connected or keep editing."); }
+    finally { busyRef.current = false; if (active.current) setBusy(null); }
+  }
   function close() {
-    if (busy === "save" || imageBusy) return;
+    if (busy === "save" || busy === "archive" || imageBusy || archiveOpen) return;
     if (draft.mealSlots.length || draft.name || draft.servings || draft.totalTimeMinutes || draft.complexity !== "medium" || draft.ingredients.length || draft.description || draft.query || draft.instructions || draft.reference || draft.nutritionNotes || draft.unmeasuredIngredients.length || draft.image || draft.custom.name) setRestored(true);
     setTab("details"); onCancel();
   }
@@ -354,19 +380,19 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
         </div>
         <p id={`${complexityId}-help`} className="text-xs text-ink-soft">Choose how involved preparation is: Easy, Medium, or Hard.</p>
         <p id={`${timeId}-help`} className="text-xs text-ink-soft">Time is optional and includes preparation, cooking, and serving for the whole recipe.</p>
-        {timeInvalid ? <p id={`${timeId}-error`} className="text-xs font-semibold" role="alert">Enter whole minutes between 0 and {maximumRecipeTimeMinutes.toLocaleString("en-US")}, or leave time blank.</p> : null}
+        {timeInvalid ? <p id={`${timeId}-error`} className="text-xs font-semibold text-danger-900" role="alert">Enter whole minutes between 0 and {maximumRecipeTimeMinutes.toLocaleString("en-US")}, or leave time blank.</p> : null}
         {draft.providedMacros ? <div className="grid min-w-0 gap-2 rounded-2xl bg-cream p-3" role="group" aria-label="Provided recipe nutrition">
           <h3 className="text-sm font-bold">Provided macros per serving</h3>
           <p className="text-xs text-ink-soft">These values come from the recipe source and stay as entered. Update them yourself if the recipe changes.</p>
           <div className="grid min-w-0 grid-cols-2 gap-2">{providedNutritionKeys.map(key => <label key={key} className="grid min-w-0 gap-1 text-xs font-bold">{key === "calories" ? "Provided calories (kcal)" : `Provided ${key === "proteinG" ? "protein" : key === "carbsG" ? "carbs" : "fat"} (g)`}<input className="input" type="number" min="0" max="10000" step="any" value={draft.providedMacros![key]} onChange={event => update({ providedMacros: { ...draft.providedMacros!, [key]: event.target.value } })} /></label>)}</div>
-          {providedInvalid ? <p role="alert" className="text-xs font-semibold">Enter all four provided values between 0 and 10,000.</p> : null}
+          {providedInvalid ? <p role="alert" className="text-xs font-semibold text-danger-900">Enter all four provided values between 0 and 10,000.</p> : null}
           <Button variant="ghost" className="w-fit text-xs" onClick={() => update({ providedMacros: null })}>Use ingredient calculations instead</Button>
         </div> : null}
       </section>);
-  return <Modal open={open} title={title} initialFocus={nameInput} returnFocus={returnFocus} onClose={close} dismissalDisabled={busy === "save" || imageBusy}
+  return <Modal open={open} title={title} initialFocus={nameInput} returnFocus={returnFocus} onClose={close} dismissalDisabled={busy === "save" || busy === "archive" || imageBusy || archiveOpen}
     help={<HelpPopover title="Recipe authoring" label={`About ${title.toLowerCase()}`}><p>Search trusted foods or review an ingredient description. Provided recipe macros stay as entered per serving; otherwise nutrition follows ingredients and serving count. Recipe edits do not rewrite eaten entries.</p></HelpPopover>}
     footer={<div className="grid min-w-0 gap-3">
-      {saveFailed && error ? <div className="grid gap-2 break-words text-sm text-ink-soft" role="alert">
+      {saveFailed && error ? <div className="grid gap-2 break-words text-sm text-danger-900" role="alert">
         <p>{error.code === "stale_version" ? "Your saved recipe or groceries changed. Review your draft before applying it to the latest version." : error.message}</p>
         {error.code === "stale_version" && draft.catalog && snapshot.savedMeals.find(item => item.id === draft.catalog!.mealId)?.catalogReplacementId
           ? <p>There is now a personal version. Cancel this draft and open Edit on that saved version.</p>
@@ -376,12 +402,13 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
               ...(catalog ? { catalog: { mealId: catalog.id, recordRevision: catalog.revision ?? 1, preferenceRevision: catalog.catalogPreferenceRevision ?? 0 } } : {}) });
           }}>Use latest version</Button> : null}
       </div> : null}
-      {busy ? <p className="text-sm font-bold" role="status">{busy === "search" ? "Searching trusted foods…" : busy === "analyze" ? "Analyzing ingredients…" : "Saving recipe…"}</p> : null}
-      {message ? <p className="break-words text-sm font-semibold" role="status">{message}</p> : null}
+      {busy ? <p className="text-sm font-bold" role="status">{busy === "search" ? "Searching trusted foods…" : busy === "analyze" ? "Analyzing ingredients…" : busy === "archive" ? "Archiving recipe…" : "Saving recipe…"}</p> : null}
+      {message ? <p className={`break-words text-sm font-semibold ${messageIsError ? "text-danger-900" : ""}`} role="status">{message}</p> : null}
       {!disabled && missingMessage ? <div className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink-soft"><span>{missingMessage}</span>{!isRecipeComplexity(draft.complexity) ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => complexityInput.current?.focus()}>Choose complexity</Button> : null}{missingTab && tab !== missingTab ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => { setTab(missingTab); requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden]) input, [role="tabpanel"]:not([hidden]) textarea')?.focus()); }}>Go to {missingTab}</Button> : null}</div> : null}
-      <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:justify-between">
-        <Button variant="soft" className="min-w-0 !px-2 sm:!px-5" disabled={busy === "save" || imageBusy} onClick={close}>Cancel</Button>
-        <Button className="min-w-0 !px-2 sm:!px-5" disabled={disabled || recipeSettingsInvalid || pendingConversions || reviewNeedsAddition || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || draft.ingredients.length + draft.unmeasuredIngredients.length > 100} onClick={() => void save()}>{meal ? "Save changes" : "Save"}</Button>
+      <div className={`grid min-w-0 items-center gap-2 sm:flex ${canArchive ? "grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-2"}`}>
+        {canArchive ? <IconButton buttonRef={archiveButton} size="compact" variant="danger" portalTooltip label="Archive recipe" tooltip="Archive recipe" disabled={disabled || archiveOpen} onClick={() => { setArchiveTarget(meal ? { id: meal.id, name: meal.name } : null); setArchiveError(""); setArchiveOpen(true); }}><Archive className="h-4 w-4 shrink-0" aria-hidden /></IconButton> : null}
+        <Button variant="soft" className="min-w-0 whitespace-normal break-words !px-2 sm:!px-5" disabled={busy === "save" || busy === "archive" || imageBusy || archiveOpen} onClick={close}>Cancel</Button>
+        <Button className="min-w-0 whitespace-normal break-words !px-2 sm:ml-auto sm:!px-5" disabled={disabled || archiveOpen || recipeSettingsInvalid || pendingConversions || reviewNeedsAddition || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || draft.ingredients.length + draft.unmeasuredIngredients.length > 100} onClick={() => void save()}>{meal ? "Save changes" : "Save"}</Button>
       </div>
     </div>}>
     <div ref={root} className="grid min-w-0 gap-4">
@@ -391,8 +418,8 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       <RecipeCover image={draft.image} name={draft.name} />
       <RecipeImagePicker image={draft.image} onChange={image => update({ image })} disabled={!ready || Boolean(busy) || Boolean(pendingMutation)} onBusy={setImageBusy} />
     </div>
-    <fieldset disabled={disabled} className="grid min-w-0 gap-6 disabled:opacity-70">
-      <RecipeTabs active={tab} onChange={setTab} disabled={disabled} panels={{
+    <fieldset disabled={disabled || archiveOpen} className="grid min-w-0 gap-6 disabled:opacity-70">
+      <RecipeTabs active={tab} onChange={setTab} disabled={disabled || archiveOpen} panels={{
         ingredients: <section className="grid min-w-0 gap-3 " aria-label="Recipe ingredients">
         <h3 className="text-lg font-extrabold">Ingredients</h3>
         <div className="flex flex-wrap gap-2">{([['search','Search ingredients'],['describe','Describe ingredients'],['custom','Add custom ingredient']] as const).map(([key,label]) => <Button key={key} variant={method === key ? "primary" : "soft"} aria-pressed={method === key} className="!px-3 text-xs" onClick={() => switchMethod(key)}>{key === "search" ? <Search className="h-4 w-4" aria-hidden /> : key === "describe" ? <Sparkles className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}{label}</Button>)}</div>
@@ -441,5 +468,18 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       }} />
     </fieldset>
     </div>
+    {archiveOpen ? <Modal open title="Archive recipe?" initialFocus={keepEditing} returnFocus={archiveButton} dismissalDisabled={disabled}
+      onClose={() => { if (!disabled) setArchiveOpen(false); }}
+      footer={<div className="flex min-w-0 flex-wrap gap-2">
+        <Button ref={keepEditing} variant="soft" disabled={disabled} onClick={() => setArchiveOpen(false)}>Keep editing</Button>
+        <Button variant="danger" disabled={disabled} onClick={() => void archive()}>Archive recipe</Button>
+      </div>}>
+      <div className="grid min-w-0 gap-3">
+        <p className="break-words font-bold">Archive {archiveTarget?.name}?</p>
+        <p>Archiving hides this saved recipe from Recipes. Existing planned meals and logged history stay available. Unsaved edits will not be saved.</p>
+        {busy === "archive" ? <p role="status">Archiving recipe…</p> : null}
+        {archiveError ? <div role="alert" className="rounded-xl bg-danger-50 p-3 text-sm font-semibold text-danger-900"><p>{archiveError}</p>{error ? <p>{error.message}</p> : null}</div> : null}
+      </div>
+    </Modal> : null}
   </Modal>;
 }
