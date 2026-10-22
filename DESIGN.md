@@ -255,10 +255,15 @@ names directly (for example `bg-cream`, `text-ink`, `bg-lav-100`).
 - **Confidence chips** in nutrition use tone by confidence: high `mint-100`,
   medium `peach-100`, low `coral-100`.
 - **`lav-500`** is the accent for focus outlines and generic progress rings.
-- **`coral`** identifies calories as a neutral metric category, and also retains
-  existing warning, error, and destructive-action uses. Explicit labels and
-  context distinguish these meanings; calorie color never judges intake or
-  marks an over-target value as failure.
+- **`coral`** identifies calories as a neutral metric category and retains existing
+  confidence/caution uses. It does not identify operational errors or destructive
+  actions. Calorie color never judges intake or marks an over-target value as failure.
+- **Semantic danger colors** use `danger-50` #FEF2F2, `danger-100` #FEE2E2,
+  `danger-200` #FECACA, `danger-300` #FCA5A5, `danger-600` #DC2626, and
+  `danger-900` #7F1D1D. Error panels and explicit error toasts use the 50/100
+  backgrounds with 900 text. Danger buttons use 200, hover 300 and 900 text;
+  invalid fields use 600 borders. Text contrast exceeds 4.5:1 on both button
+  states. Ordinary warning/info/success tones and nutrition pills remain unchanged.
 - **`mint`** implies calm, complete, or success; it is never the sole signal
   for status (always paired with text/aria).
 
@@ -615,14 +620,11 @@ actual-serving confirmation. A successful linked log hides its Planned row to
 avoid repetition while keeping the plan snapshot intact. Linked Eaten rows
 offer Edit and Delete without Log again; deleting the last linked Eaten row
 reveals Planned again. Eaten rows retain expand, edit, and delete.
-Saved meals use Add to plan with a required slot and portion review. Actions have
-44px or larger touch targets and wrap on narrow screens. Meal entry focuses its
-search field after draft recovery, or the portion field for a restored selection.
-Saved-card planning retains its separate required slot selector. The shared
-review appears above the Saved card grid, shows the selected date and portion
-nutrition, and defaults to one serving. It focuses the slot selector on opening
-and returns to the originating card action after cancellation or confirmed success.
-Planning is primary in this review; direct Log meal remains in meal-entry reviews.
+Meal-entry reviews retain separate Log meal and Add to plan actions with a positive
+portion and the selected meal slot. Actions have 44px or larger touch targets.
+Meal entry focuses its search field after draft recovery, or the portion field
+for a restored selection. Recipes cards have no planning footer; Add meal and
+Generate remain the planning entry points.
 
 ### Saved-recipe authoring
 
@@ -646,9 +648,56 @@ planned rows are hidden; a slot with no visible planned or eaten rows uses
 states remain distinct. This presentation does not remove stored records or
 alter planned totals, actual intake or generation occupancy.
 
-Saved footers place flexible Add to plan with a trailing plus beside 48px Pencil/Edit
-and Archive icon buttons with contextual accessible labels and dismissible
-hover/focus tooltips. They wrap with Add to plan first and secondary controls together.
+Recipes cards omit the action footer and divider. Edit sits at the image's
+lower-right in a separate 44px white circular button with a subtle shadow,
+visible focus and a dismissible hover/focus tooltip. Image opening and editing
+use sibling buttons; tooltip and focus layers stay outside image clipping.
+Archive lives in the Edit recipe footer as a 44px square danger icon, before
+Cancel and Save changes in one horizontal row at every supported width. Text
+may wrap inside the text buttons at enlarged text sizes; the controls stay in
+one row and Save changes remains right-aligned on desktop. Creation has no
+Archive action. Its accessible name and portaled tooltip are “Archive recipe”;
+the tooltip stays outside footer clipping and dismisses before the editor.
+The footer omits the archive explanation. Archive opens one final
+Archive recipe? modal with Keep editing initially focused and a danger action.
+That confirmation names the saved recipe and explains that archive hides it
+from Recipes, retains existing plans/history, and discards unsaved edits.
+Cancel, Escape and backdrop dismissal return to the same draft/tab/scroll;
+only the inner modal dismisses. Pending archive locks competing actions and
+both dialogs' dismissal. Failure preserves edits with retry using the original
+operation identity; success clears the draft, closes both dialogs and focuses
+Create. Archiving from an overview never reopens that archived overview.
+Shared recipes offer Save personal copy in the overview, with no unauthorized
+archive/edit controls. Other RecipeCard usages retain contextual footers.
+The Recipes header places a secondary Filter recipes icon with an active-category
+badge before a primary Plus icon named Create. Planned uses a secondary CalendarDays
+icon named Overview when connected, followed by a primary WandSparkles icon named
+Generate. These actions use 44px targets and hover/focus tooltips, with the same
+DOM and keyboard order as their visual order.
+Regular and compact recipe resource pills show approximate calories such as
+“≈609 kcal”, without a calorie icon. Their accessible label retains calories
+per serving; zero is distinct from unknown, which remains explicitly unavailable.
+Owned/shared cards in Recipes opt into tighter resource pills below 640px:
+12px base text/icons, 8px horizontal and 4px vertical pill padding, 4px gaps and
+8px vertical group padding. All four values stay in one non-wrapping row, with
+native horizontal scrolling when necessary. Intrinsic-width pills never shrink
+or truncate their labels. Only an overflowing mobile row becomes a keyboard
+tab stop, with visible focus and a scrolling description; the scrollbar is
+visually hidden while touch, trackpad and keyboard scrolling remain available. Desktop restores regular wrapping. Generate's compact wrapping
+and cooking-overview cards retain their layouts. Meal-entry and daily nutrition
+summaries retain their existing units.
+Breakfast, Lunch, Dinner and Snack headers use 44px secondary Plus icons named
+Add meal, with slot-specific tooltips. Existing IDs, expanded state, pending
+restrictions, toggling, drafts and focus return are preserved at all widths.
+
+Filter recipes uses the shared modal with Recipe name, Favorites only, Source,
+Meal time, Total cooking time and Difficulty. Apply filters commits edits;
+Reset clears only the draft; Cancel, close and Escape discard unapplied edits.
+Focus returns to the filter icon. Filter groups use OR within and AND between;
+blank groups are unrestricted. Applied filters show a result count and Clear
+filters. No matches, empty collection, shared loading/error and unavailable
+favorite metadata have distinct feedback. Filters remain page-session state.
+
 Meal duplication is removed; ordinary Create and Edit draft recovery remains.
 Planned rows retain Edit, Skip/Plan again, and Log beside the summary. Expanded
 editors and confirmations follow the summary. Opening Planned Edit focuses its
@@ -702,7 +751,7 @@ assumptions. No alternate image picker or new authoring control is introduced.
 The Nutrition recipe section is labeled “Recipes”, including its region and
 contextual help. Generate in the Planned header uses the shared navy primary
 button with a leading WandSparkles icon; Create in the Recipes header uses the
-soft/light button with a leading plus icon. Generate opens “Generate plan” with
+navy primary button with a leading plus icon, beside the secondary Filter recipes icon. Generate opens “Generate plan” with
 Choose days first and no standalone week range. Each date retains its full date
 and year for assistive technology. The one-batch explanation lives in the shared
 header help popover. Selectable compact cards reuse recipe covers and the pastel
@@ -729,8 +778,8 @@ The container-based grid uses two columns at normal mobile text size and up to
 four in the desktop dialog; enlarged text reduces columns to keep content readable.
 Cards omit calories, time, complexity, favorites and extra actions. Select all and Clear change an
 immediate preview; Shuffle rearranges valid entries. The dated preview lists one
-serving per meal. Unused portions require an explicit acknowledgment before Save
-plan. Closing retains the preview and returns focus to Generate. Stale data
+serving per meal. One final acknowledgment covers assignments, warnings and unused
+portions before Save plan. Closing retains the preview and returns focus to Generate. Stale data
 requires Review updated preview; failed saves retain the same retry intent.
 During submission, dismissal, date navigation and surrounding mutations are
 disabled. Content wraps at 320px and enlarged text without horizontal page overflow.
@@ -750,15 +799,16 @@ its separate 44px close target retains room without overlapping the title.
 Clicking a saved-meal name or thumbnail opens a read-only “Recipe overview”
 using the same cover and tabs. Its footer offers Close and Edit for owned and
 predefined recipes. The predefined editor explains that saving creates a
-personal version and retains existing planned/logged references. Saved cards
-offer Edit and Archive for predefined recipes as well as personal recipes.
+personal version and retains existing planned/logged references. Saved cards offer Edit for predefined and personal recipes; eligible editors
+provide Archive. Retained plan copies and other members' recipes do not expose it.
 Ingredients show whole-recipe cooking names, original quantities and units,
 including ranges, optional ingredients and unmeasured seasonings. Nutrition,
 yield, time and complexity appear only in Details. Nutrition basis in Details
 shows sources, preparation and confirmed conversions. Missing instructions
 stay visibly unspecified. Edit returns to the overview after successful saving
 or cancellation. Nutrition, references, and instructions remain in the overview
-and editor. Meal logging actions remain available in the card footer.
+and editor. Meal-entry reviews retain planning and logging actions; Recipes
+library cards have no action footer.
 
 The recipe-name placeholder is “What should we call this recipe?”. Servings
 buttons change the count by one, clamp at zero/10000, and cannot decrement blank
@@ -897,7 +947,7 @@ components in `src/components/`.
 |-----------|------|-------------|
 | `Card` | `ui/Card.tsx` | `CardTone` union → tint background; `rounded-3xl p-5 shadow-card`; no default padding override unless `className` adds `p-4` (as `StatTile` does). |
 | `Modal` | `ui/Modal.tsx` | Named modal dialog; centered `max-w-3xl` desktop/full-screen phone; fixed header/footer and scrolling body; focus trap/return, background isolation, contextual help tree, dismissal protection, and safe-area padding. |
-| `Button` | `ui/Button.tsx` | Variants `primary` (`bg-ink text-white`), `soft` (`bg-white/70`), `ghost`, `danger` (`bg-coral-200`). `min-h-12` (3rem = 44px+) target, `rounded-2xl px-5 text-sm font-bold`, disabled = `opacity-50` + `cursor-not-allowed`. |
+| `Button` | `ui/Button.tsx` | Variants `primary` (`bg-ink text-white`), `soft` (`bg-white/70`), `ghost`, `danger` (`bg-danger-200 text-danger-900`, hover `bg-danger-300`). `min-h-12` (3rem = 44px+) target, `rounded-2xl px-5 text-sm font-bold`, disabled = `opacity-50` + `cursor-not-allowed`. |
 | `Chip` | `ui/Chip.tsx` | Round frosted icon chip, `h-11 w-11` (44px target), `bg-white/70 shadow-chip`, required `label` → `aria-label` + `title`. |
 | `HelpPopover` / `HelpHeading` | `ui/HelpPopover.tsx` | Grouped circled-question-mark help; 44px trigger; hover/focus preview and click/tap pinning; named non-modal dialog, source links, viewport-aware portal, and deliberate focus return. |
 | `ProgressRing` | `ui/ProgressRing.tsx` | Accessible circular progress; `role="img"` + `aria-label` percentage; `tabular-nums` center value. |
@@ -1207,8 +1257,33 @@ helper sentence; validation errors and carried-amount review guidance remain.
 
 ## Cooking group interactions
 
+Connected Generate plan uses equal-height recipe selection cards with stretching bodies and a `min-h-11` title minimum; names wrap fully and may grow at large text sizes. Covers, names and compact resource pills form the keyboard-focusable selection label. The pills reuse the main Recipes card component in coral approximate calories per serving, mint yield per batch, lavender total minutes and peach complexity order, using text-xs, smaller padding and icons, and natural wrapping. Source and weekly maximum-serving information remain in accessible descriptions rather than visible paragraphs. Selection focus draws one outline around the entire outer card, including its batch footer; the label has no separate outline. Batch inputs and buttons retain their own focus indicators when operated. A separate footer inside each card contains 44px minus, numeric Batches and plus controls, always visible and disabled for unchecked recipes. The grid uses up to two columns through tablet widths and four on wide screens; a 10rem card minimum reduces the column count on narrow screens and at large text sizes, retaining room for the stepper. Selected cards describe the maximum servings for the week to assistive technology; both selected and unchecked cards show the four compact pills. Controls accept whole batches from 1–100; invalid or temporarily blank text stays local, shows recovery guidance, clears acknowledgment and blocks preview requests and saving. Valid allowances retain the existing draft and debounce behavior. The nearby explanation states that selected recipes remain available with preference warnings while structural planning limits apply, and that retained meals consume the weekly batch allowance. There is no separate Cooking limits list. Confirmed customizations of default recipes display “(edited)” after their names in Recipes and both Generate dialogs. This is a display annotation derived from catalog replacement links or the authorized shared isEditedDefault flag; names, images and revision numbers alone are not evidence. Stored names, IDs and planning references remain unchanged.
+
+Current preview gaps show Some meal slots are still unfilled once, followed by a collapsed Review unfilled meals disclosure with an affected-meal-time count. Details group meal slots chronologically by date and explain that at least one selected person could not be assigned that meal time, without inferring which members or private health limits caused a gap. Opening or closing this disclosure preserves input and acknowledgment. The preview heading counts new per-person meal assignments and excludes retained meals. Recipes to cook explains whole batches and leftover servings. Unknown server warnings and the zero-assignment explanation remain visible under Planning notes. Pending, outdated and failed previews do not show warning summaries as current results. Recipe cooking totals, replacement review and confirmation before saving remain visible in the preview flow.
+
+The 2026-10-21 compact-pill/edited-default refinement passed 519 local tests, 1,302 database assertions across 40 files, and desktop/mobile cooking-group flows with local fixture cleanup. Dialog checks cover 320, 390, 469, 570, 594, 760 and 1440px, 200% text, reduced motion, keyboard focus, current-preview acknowledgment, draft recovery and loading/error/empty feedback. TypeScript, ESLint and the webpack production build passed. Browser verification uses an isolated webpack test server.
+
 Settings uses the existing lavender card, member initials and display names, a privately shared one-use PIN, explicit consent and a connected-success modal. Shared access is explained before confirmation; emails and health measurements are omitted. Shared week proposals sit beside member controls, and the ordinary week preference points to this agreement flow.
 
-Personal/Group segmented controls scope Nutrition and Grocery. The Group view shows the cooking schedule and participants; actual logs remain personal. Generate group plan reuses existing modal, day tiles and recipe-card patterns, adding People, Fill/Replace radios, batch limits, editable estimated portions, replacement review, whole-batch cooking and leftovers. Hidden native recipe checkboxes retain keyboard behavior. Bulk controls show icons below 768px and text with icons above that breakpoint.
+Nutrition and Grocery have no Personal/Group segmented control. Nutrition retains the daily calendar, targets, Planned/Eaten rows and owned recipes, with one combined Recipes section. A soft Overview button sits immediately left of Generate and opens Cooking overview for the displayed week. Recipe cards lead with saved-version cooking totals; expandable Meal distribution lists contain chronological member assignments and editing controls. Cooking overview marks the signed-in member as “(you)” in recipe participant lists and assignment labels using account IDs, so matching display names do not merge different members. Shared assignment Edit opens the modal, expands the relevant recipe and focuses its matching editor. Modal close restores focus to its entry point. There is no inline cooking schedule or separate Shared recipes gallery. Canonical defaults appear once, customized variants remain distinct, and Recipe overview shows Shared by: display name or Source: Default recipe. One Generate entry opens Generate plan, with People defaulting to all members; the dialog explains that selecting only yourself still contributes to shared groceries and unchecking others preserves their meals. No alternate personal-generation action appears while connected. The planner reuses existing modal, day tiles and recipe-card patterns, with People, Fill/Replace radios, batch limits, editable estimated portions, replacement review, whole-batch cooking and leftovers. Hidden native recipe checkboxes retain keyboard behavior. Bulk controls show icons below 768px and text with icons above that breakpoint.
 
-Shared groceries reuse explicit quantity and PHP amount editors with account/group/week/item drafts, captured revisions and review-before-retry. Shared recipe overview reuses ingredient/instruction tabs and offers Save personal copy. Generation success shows recipe covers and participant names, with one acknowledgment shared by Nutrition and Grocery. Full dates remain accessible, controls retain 44px targets and layouts wrap at enlarged text sizes.
+Grocery shares one week navigator across Shared grocery list and Private extras — only you. Shared spending and Private spending remain separately labeled. The private section opens for existing items, recorded spending (including zero), recovered drafts and loading/error feedback; otherwise Add private extras offers disclosure. Each list retains its own Refresh, add-item controls and feedback. Navigation and conflicting controls lock during either scope's submission. Shared groceries reuse explicit quantity and PHP amount editors with account/group/week/item drafts, captured revisions and review-before-retry. Shared recipe overview reuses ingredient/instruction tabs and offers Save personal copy. Generation attribution uses “Recent: <display name>, <MM/DD/YY>” across Nutrition, Cooking overview and Grocery. Generation success uses the modal title “You're all set!”, followed by generation details, an Overview h3 and the recipe-cover grid with participant names and saved cooking totals. The former general saved-summary explanation is omitted; superseded generations retain their separate notice. Done spans the footer content width below 640px with the standard horizontal padding, and keeps its content-sized appearance and alignment at larger widths. One acknowledgment remains shared by Nutrition and Grocery, with existing dismissal and focus restoration. Full dates remain accessible, controls retain 44px targets and layouts wrap at enlarged text sizes.
+
+### Advisory preference review in Generate
+
+Place Recipe warnings after recipe selection in both dialogs, grouped by recipe
+with 44px Remove recipe actions. Avoided-food/allergy matches use semantic danger
+surfaces and readable dark text; other warnings use pastel warning treatment.
+Name matched ingredients and terms without claiming safety. Warned recipes remain
+selectable. State once that cost checks are temporarily paused.
+
+Daily carbohydrate review follows assignments, grouped chronologically with
+estimated totals, saved thresholds and contributing recipes. Unknown totals are
+explicitly incomplete. Keep operational/unfilled warnings distinct. One final
+checkbox covers the current preview and warnings; input changes clear it.
+Connected Generate shows only the viewer's detailed matches and a general
+reminder to consider others. The summary shows Selected people with actual
+per-account assignment counts (including zero), ID-based “(you)” labels, and the
+private Your review at generation snapshot. Existing cross-route notices reopen
+this historical review. Text wraps within scrolling modals at enlarged sizes;
+44px controls, keyboard focus and reduced-motion behavior remain intact.

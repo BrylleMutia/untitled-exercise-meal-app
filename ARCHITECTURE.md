@@ -283,7 +283,8 @@ Rules:
   corrects authoritative planning normalization: stored supplied macros override
   ingredient sums for new/edited prescriptions, with recipe-revision provenance
   and unknown fiber omitted. The private constraint trigger rejects unverified
-  supplied macros in active carb-limited plans. Existing ownership, grants,
+  supplied macros in historical enforced carb-limited plans. New advisory_v1
+  generation permits usable supplied values with review warnings. Existing ownership, grants,
   plan-version checks and retries remain in force; no tables/public RPCs change.
   It does not rewrite prior prescriptions or eaten history. The authorized linked
   rollout has 70 matching migrations and 12 matching schema groups; evidence is
@@ -987,6 +988,11 @@ silently treated as zero intake.
 
 ## UI Events and Navigation
 
+Transient notification presentation uses explicit ok, info, warn and error tones.
+Failed operations and validation failures select error at the call site; warning
+notices retain warn. Rendering never infers severity from message text. These
+presentation tones do not change repository outcomes or durable events.
+
 Use one application-level coordinator for transient semantic events such as:
 
 - Plan generated or edited
@@ -1001,13 +1007,19 @@ Use one application-level coordinator for transient semantic events such as:
 
 The coordinator owns ordering and dismissal. Presentation components emit
 semantic callbacks and do not import unrelated navigation or mutation logic.
-Avoid nested modal dialogs and preserve browser focus when dialogs open or
-close. Before executing a follow-up action, re-evaluate it against the latest
+Preserve browser focus when dialogs open or close. Recipe archive confirmation
+is an explicit nested-dialog exception: both dialogs share one FloatingTree,
+only the confirmation receives input, and its dismissal returns to the editor. Before executing a follow-up action, re-evaluate it against the latest
 snapshot when another mutation may have changed its validity.
 
 Saved-recipe authoring uses the shared presentation-only Floating UI `Modal`.
 The route owns the selected recipe, visibility, and originating focus target;
-`RecipeEditor` owns its draft, ingredient interactions, and existing save intent.
+`RecipeEditor` owns its draft, ingredient interactions, save intent and archive
+confirmation. Optional archive callbacks delegate to the route's existing
+archive action and retry coordinator; the editor never substitutes its unsaved
+replacement ID for the saved source. Successful archive drains queued draft
+writes before clearing the draft and closing both dialogs. Failure preserves
+inputs, tab and scroll, and retry preserves the original operation identity.
 Closing the modal leaves the editor mounted to preserve in-memory drafts in
 addition to the existing recoverable browser draft. Successful saves clear that
 draft before closing and releasing the editor. No modal state enters domain
@@ -1385,8 +1397,134 @@ Group locks precede sorted member calendar locks and existing profile/week/recei
 
 Group assignments reference canonical personal planned-meal identities across versions. Immutable per-owner recipe and food snapshots retain authored measurements and source nutrition; immutable cover objects use reference-aware cleanup and authorized private access after departure or source deletion. Recipe revisions remain separate cooking requirements. Group groceries reconcile whole batches once, and personal groceries exclude those projections. Departure revokes live access and invalidates proposals without copying shared spending. Account deletion removes owned references before catalog cascades.
 
+Unified route composition does not merge persistence scopes. Connected Nutrition always renders owner-only daily data with the shared cooking Overview modal and combined recipe library; connected generation uses only the group preview/commit contract, even with one selected member. A failed membership read blocks generation instead of falling back to personal writes. Grocery composes group and owner-only read models under one selected week, preserving separate spending, mutation intents, drafts and retry keys. Both scopes coordinate submission/navigation locks, and independent read failures never masquerade as empty lists. Connection changes refetch authorized state; existing departure/cache cleanup rules remain authoritative. No migration or transfer occurs when displaying the unified pages.
+
 Group drafts are keyed by account, group, week and operation and retain input through failures. Stale quantities and amounts require explicit review. Export includes membership, shared weeks and generations, owned assignments and notices, and calendar audits, without other members' health facts or actual logs. Forward migrations, generated contracts, database reset/lint/security tests, repository and Edge verification, and isolated multi-account browser flows gate deployment.
 
 Retained ingredient snapshots include system catalog foods and their trusted serving-option rows. Frozen foods retain original provider IDs in `snapshot_fdc_id`, separate from the live-import uniqueness key; read models expose the original FDC provenance. Changes to a live food basis advance dependent live recipe revisions, so subsequent previews and cooking batches use a new basis while saved ingredient copies remain unchanged. Connection command retries retain their request identity after a lost response; invitation receipts contain no readable PIN, so an unrecoverable invitation requires generating a replacement.
 
-Hosted acceptance uses `SUPABASE_RPC_REMOTE_CONFIRM=ifunkhvbvkdxolhpxjvk` with `node scripts/test-cooking-groups-remote.mjs`. Provide a fresh confirmed disposable pair through the ignored remote-test environment fields. The runner refuses accounts with existing profiles, exercises the production client and authenticated preview/commit paths in separate browser contexts, saves sanitized screenshot evidence, and deletes only that verified disposable pair through the authorized account RPC. It never stores browser sessions or prints credentials.
+Hosted acceptance uses `SUPABASE_RPC_REMOTE_CONFIRM=ifunkhvbvkdxolhpxjvk` with `node scripts/test-cooking-groups-remote.mjs`. Provide a fresh confirmed disposable pair through the ignored remote-test environment fields. The runner refuses accounts with existing profiles, exercises the production client and authenticated preview/commit paths in separate browser contexts, saves sanitized screenshot evidence, and deletes only that verified disposable pair through the authorized account RPC. It never stores browser sessions or prints credentials. Before client deployment, `COOKING_TEST_BASE_URL=http://127.0.0.1:3000` tests the reviewed local client against the linked backend; this is backend acceptance, not evidence that the hosted client has been released. Only the configured production URL and that explicit local origin are accepted.
+
+
+### Recipe library identity and live cooking reads
+
+The authorized cooking-week read model includes recipeOrigins for the caller's immutable copies, canonical default IDs, source-owner display names and resolved per-serving card calories. Identity-based presentation merges owned and shared recipes without changing stored records or conflating equal names. Personal archive preferences remain owner-only. The combined library retains owned actions and uses the existing private recipe read/copy path for other members.
+
+Current cooking summaries are computed server-side from live canonical assignments and their immutable recipe snapshots, grouped by source recipe and saved revision. Whole-batch rounding matches shared grocery reconciliation. Skipped portions contribute zero cooking capacity while remaining visible in distribution; planned assignments linked to actual logs remain planned facts. Source changes, archival and departure never replace saved recipe yields with live catalog values. Opening Overview is read-only and does not acknowledge generation notices, regenerate groceries or update attribution. Historical generation summaries remain separately labeled.
+
+The forward read-model migration adds no tables or direct write permissions. The private baseline and recipe helpers remain non-executable by clients, with public membership authorization and explicit grants preserved. Manual TypeScript JSON contracts expand alongside the read model; public RPC signatures remain unchanged. Local reset, pgTAP/privacy tests, repository and multi-account browser verification, generated-contract verification and linked schema/history preflight gate rollout.
+
+On 2026-10-20, migrations `20261020024839` and `20261020074601` were deployed after an exact schema comparison with the 95-version linked baseline and a clean replay of all 97 versions. Post-deployment history is aligned, the linked dry run is up to date, and the deployed public/private schema matches the tested local schema. Linked public generated contracts remain unchanged. Database verification passed 1,288 assertions across 39 files; lint retains only the pre-existing unused-parameter warning in `claim_deleted_recipe_images`.
+
+Client verification passed 504 local tests, 25 repository tests, both multi-account browser flows and eight individual Nutrition regressions, plus their fixture setup/cleanup. Overview was checked at 320, 390, 760 and 1440 pixels, 200% text and reduced motion. Production build verification used the supported webpack build option.
+
+On 2026-10-21, the complete guarded smoke runner passed against the linked backend using the local client at `http://127.0.0.1:3000` and a fresh confirmed disposable pair. It verified onboarding, connection consent, default-recipe deduplication, empty and populated Cooking overview, shared weekly generation, cross-route recipient notice acknowledgment, and saving PHP 1,250.50 with visibility from both members after navigation. The runner exited successfully after account cleanup; an independent read-only check confirmed no accounts from either continuation test pair remained. TypeScript, ESLint and all 504 local tests were also reverified. This supersedes the earlier five-second shared-spending timeout and completes this local-client/linked-backend smoke acceptance; it does not establish a hosted client release.
+
+The standalone runner records milestone output, screenshots of each member's shared-spending result, and best-effort Nutrition/Grocery screenshots on failure before fixture cleanup. Sanitized evidence is under ignored `output/grocery-amount/`, including `continuation-remote-browser.log`, `group-hosted-spending-editor.png` and `group-hosted-spending-member.png`; disposable credentials are removed after verification. The successful continuation used webpack with normal Windows filesystem permissions. An earlier sandboxed Turbopack attempt failed before onboarding due to a `sharp` junction error and cleaned up its fixtures; the sandboxed local test transform failures also cleared when rerun with normal filesystem permissions.
+
+
+### Recipe card presentation provenance
+
+Recipe resource pills share a regular/compact presentation component. Calories remain per-serving estimates and yield remains whole-recipe servings; card density changes never alter calculations. Edited-default display names derive from existing catalog replacement links for owned recipes. The membership-authorized shared library adds only a boolean `isEditedDefault`, resolved by its private helper from the indexed replacement relationship with matching recipe ownership. It exposes no catalog preference rows or health data. The helper preserves its VOLATILE declaration, empty search path, and revoked client execution. Display annotations never modify saved names, recipe identities, revisions, drafts, or historical plan/log references.
+
+## Advisory generation policy and private review snapshots
+
+New individual and connected generation use advisory_v1. Pure TypeScript and
+private SQL helpers separate structural validity from preference review. Cooking
+time, eating style, allergies/avoided foods, nutrition provenance and carbohydrate
+preferences do not exclude recipes or reduce portions. Cost scores resolve to
+zero for all identities; saved preferences remain intact. Authorization, recipe
+revisions, numeric nutrition/yields, eligible goals/dates, occupied/protected slots,
+portion/batch capacity, concurrency and calorie checks remain server validated.
+Missing nutrients are never fabricated or treated as known zero.
+
+meal_plans.preference_policy defaults existing versions to enforced. Authorized
+generation sets advisory_v1 on a new version; later edit/calendar copies inherit
+their parent's policy through the server trigger. Ordinary client payloads cannot
+change it. Constraint snapshots and target calculations remain intact. Historical
+enforced versions retain preference validation.
+
+Individual generation requires acknowledgment and a review-policy version.
+Both dialog freshness bases include the policy; legacy drafts retain selections
+but regenerate and clear acknowledgment. Connected service-only previews use the
+advisory allocator; commit checks the current full basis. Existing operational
+warnings: string[] remain alongside typed recipe/daily warnings with stable
+codes, recipe IDs/revisions and optional dates.
+
+The service-only preview store computes recipient reviews from private saved
+facts, returning only the actor's detailed review. Its private map never enters
+the shared generation summary, broadcasts or logs. Commit stores each recipient's
+snapshot in cooking_generation_notices.preference_review. Owner-only RLS,
+server-derived identity, membership authorization, controlled search_path and
+revoked private-helper execution remain authoritative. Summary reads expose only
+the caller's review; per-account counts derive from saved assignments. Later
+settings/plan edits never rewrite snapshots. Forward migration 20261022020800
+adds no cost column and changes no historical plans/logs. Clean local replay,
+pgTAP/RLS, generated types, client tests and isolated authenticated browser checks
+gate verified linked rollout.
+
+
+### October 22 advisory rollout verification
+
+Migration 20261022020800 was deployed after exact comparison with the unchanged
+98-version linked baseline, a clean replay of all 99 migrations, 1,342 database
+assertions across 41 files, and database lint with only the existing unused
+claim_deleted_recipe_images parameter warning. Post-deployment history has 99
+matching versions, the dry run is up to date, and all 12 public/private schema
+fingerprint groups match the tested local schema. Linked-generated public types
+include the server-owned policy and owner-private review columns.
+
+Client verification passed TypeScript, ESLint, 549 tests across 81 local files,
+24 repository integration tests, and 10 isolated production browser checks.
+Desktop/mobile coverage includes both advisory Generate flows, removal and renewed
+acknowledgment, matched/unmeasured ingredients, above-threshold carbohydrates,
+same-name members, private recipient notices, existing cooking regressions,
+320–1440px layouts, 200% text, keyboard access and reduced motion. The updated
+cooking-group-preview Edge Function preserves its deployed gateway setting and
+unchanged auth.getUser bearer validation; deployed anonymous access returns 401.
+The production frontend uses the verified webpack build on the existing Cali
+Vercel project. Verification did not generate or edit real members' plans or logs.
+
+
+The final provenance follow-up, migration 20261022050100, corrects source and
+confidence labels for future ingredient-based prescriptions: AI inputs retain
+low confidence and manual inputs retain their recorded uncertainty. Macro and
+fiber calculations, supplied-nutrition handling and historical records are not
+changed. The tested local migration chain and linked history now contain 100
+versions, the linked dry run is up to date, and all 12 final schema groups match.
+The final dedicated advisory desktop/mobile flows were rerun successfully after
+this correction. Both forward migrations were deployed under the repository's
+standing authorization; no real member plan was generated for verification.
+
+### Future generation policy changes
+
+The deferred product decisions for cost, cooking time, eating style, allergies /
+foods to avoid and carbohydrate preferences are tracked in
+[FEATURES.md](FEATURES.md#deferred-weekly-generation-validation-work). This is
+follow-up work, not authorization to restore preference exclusions in the current
+release. `advisory_v1` remains the implemented policy for new Generate plans.
+
+Any later enforcement change must use an explicit versioned policy and review
+contract rather than changing the meaning of an existing saved policy. Keep the
+TypeScript assessment/allocation helpers, preview contracts, Edge allocator,
+generation RPCs, constraint triggers and edit/calendar-copy paths consistent.
+Clients must not choose or upgrade a server-owned plan policy through an ordinary
+edit payload. Do not bypass validation by clearing stored preferences, allergy
+terms, constraint snapshots or target inputs.
+
+Policy changes invalidate preview/draft freshness and acknowledgment while
+retaining recoverable selections. Existing `enforced` and `advisory_v1` plan
+versions, completed history, nutrition provenance and owner-private warning
+snapshots retain their recorded meaning. Continue exposing only the viewer's
+detailed review in connected previews and only each recipient's immutable review
+through owner-private notices; group-readable summaries, broadcasts and logs
+must not gain another member's personal checks or thresholds.
+
+Verification must distinguish preference outcomes from structural failures and
+exercise preview, commit and later-edit parity. Include unknown metadata,
+unmeasured/estimated ingredients, retained and logged meals, portion and batch
+capacity, revisions/concurrency, policy-forgery denial, anonymous/nonmember
+denial and cross-member review isolation. Use forward migrations, generated
+contracts, local database verification and the repository's linked migration
+preflight for any eventual rollout. This documentation follow-up changes no
+runtime behavior, schema, saved settings or plan data.

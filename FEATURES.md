@@ -265,18 +265,14 @@ pattern, food preferences, allergies and exclusions, cooking time, meal budget,
 and available saved meals or recipes. AI is not required to choose meals or
 calculate nutrition for the plan.
 
-MVP-3 adds Low-carb (maximum 130 g **total** carbohydrate/day) and Keto-style
-(maximum 50 g/day), also combined with vegetarian or vegan restrictions.
-These are conservative product planning assumptions, not guarantees of ketosis
-or dietary care. Future targets use a separate calculation version. Six
-reviewed USDA SR Legacy food records and four measured-portion meals use new
-identities to preserve historical starter values. A carb-limited plan uses only
-trusted serving data and enforces allergies, existing dietary restrictions,
-portions, and daily carbohydrate totals in generation and server mutations.
-Meals use cooked/labeled quantities and count all listed oil. If a safe slot
-cannot be filled, Nutrition shows an empty slot; a partially planned day is
-never described as fully compliant. Editing the future plan never rewrites
-logged food.
+Low-carb (130 g **total** carbohydrate/day) and Keto-style (50 g/day),
+including vegetarian/vegan combinations, remain saved preferences and target inputs.
+Generate plan now treats these as advisory thresholds. Cooking time, eating style,
+allergies/avoided foods and nutrition uncertainty produce review warnings instead
+of excluding recipes or shrinking portions. Numeric nutrition must remain usable.
+Historical enforced plans retain their original validation; new acknowledged
+Generate versions use advisory_v1. Estimates do not establish dietary suitability,
+allergy safety or ketosis. Editing future plans never rewrites logged food.
 
 Each planned meal should contain:
 
@@ -335,11 +331,10 @@ same-date, same-slot food or meal reference yields one clear pair; ambiguous
 history remains unlinked. Unresolved plans explain why logging is disabled
 until edited. Eaten entries retain expand, edit, and delete controls, including
 grouped meals and entries without a plan.
-Closing or changing days leaves recoverable per-date, per-slot drafts. Saved
-meals' Add to plan shortcut requires a slot choice and a positive serving
+Closing or changing days leaves recoverable per-date, per-slot drafts. Meal-entry planning requires a selected meal slot and a positive serving
 quantity, defaulting to one serving. It reviews the selected day's portion before
 adding a prescription without recording intake. A failed save retains that
-choice and the same retry identity; cancellation returns focus to the card action.
+choice and the same retry identity; cancellation returns focus to the meal-entry action.
 Direct logging remains available in meal-entry reviews and planned rows.
 
 For each food or meal, store:
@@ -518,7 +513,8 @@ explicit plan edits. The server scales all four stored per-serving values by the
 planned portion, records source-provided provenance and recipe revision, and
 leaves fiber unknown when no fiber was supplied. These values do not become
 trusted catalog nutrition merely because ingredient records are trusted;
-carb-limited plans still require verified catalog values. Recipes without supplied
+historical enforced carb-limited versions still require verified catalog values.
+New advisory Generate versions permit usable supplied nutrition with uncertainty warnings. Recipes without supplied
 macros and food-only plans retain their existing calculation paths. The forward
 correction does not backfill existing prescriptions or recalculate eaten history;
 explicitly saving an edited plan creates a corrected new version while retaining
@@ -764,10 +760,46 @@ Complexity is an editable default, never inferred from time, ingredients, or AI.
 Cancellation and failed saving preserve Create/Edit input. Old duplicate drafts
 are not reused and remain subject to their existing seven-day expiry.
 
-Saved cards provide Add to plan with a trailing plus, followed by edit and archive icon
-buttons; these use descriptive accessible names and hover/focus tooltips. The
-current implementation provides create, edit, archive, and planning controls for
-saved meals, plus replacement, serving, add, and skip/reapply
+Recipes cards open from the image or title and place Edit in a white circular
+control at the image's lower-right. Archive appears before Cancel in eligible
+Edit recipe footers as a 44px square pastel-red icon named Archive recipe.
+Archive, Cancel and Save changes stay on one row, with text wrapping inside
+buttons at enlarged sizes. The editor footer omits the consequence explanation.
+One final confirmation modal names the saved recipe, explains the consequences,
+and offers Keep editing and Archive recipe. Cancellation
+preserves editor inputs, selected tab and scroll. Archiving targets the saved
+record, never an unsaved personal-version ID; invalid edits do not block it.
+Failures retain the draft and retry identity, including lost responses. Success
+clears the draft, closes editor/confirmation and focuses Create without reopening
+the archived overview. Existing plans and logged history remain available.
+Create recipe, shared-member recipes and retained copies expose no archive action.
+Operational/validation errors, invalid fields and explicit error toasts share
+semantic danger tokens; calorie, confidence and ordinary warning colors retain
+their existing meanings. Recipes cards have no planning footer; meal-entry reviews and
+Generate retain planning. Recipes places Filter recipes before the primary
+Plus icon named Create. Planned uses icon-only Overview (CalendarDays, when
+connected) and Generate (WandSparkles) actions. Icons retain accessible names,
+tooltips, 44px targets, pending restrictions and focus restoration.
+Regular and compact recipe resource calorie pills show an approximate number
+with “kcal” and no calorie icon; accessible descriptions retain the per-serving
+unit and unknown values remain unavailable. Recipes cards use tighter pills
+below 640px in a single non-wrapping, horizontally scrollable row with a visually hidden scrollbar. Touch, trackpad and keyboard scrolling remain available. All values
+and labels remain available, with keyboard scrolling/focus only when overflow
+exists. Desktop, Generate and cooking-overview layouts retain their behavior.
+The four meal-slot headers use icon-only Add meal controls with slot-specific
+tooltips, the same pending restrictions, recoverable drafts and focus return.
+Other nutrition pills and calorie summaries retain their existing units and behavior.
+The filter dialog supports name search, favorites, default/my/shared source,
+meal time, inclusive 15/30/60-minute limits, and difficulty. Apply commits, Reset
+clears the draft, and Cancel/close/Escape discard draft changes. Empty selections
+are unrestricted; choices within a group are OR, groups combine with AND. Edited
+labels are searchable; source uses identity and ownership. Missing meal times
+and cooking times are not guessed, zero-minute time remains valid, and missing
+difficulty follows Medium. Applied filters preserve library order and show a
+count and Clear filters. Favorites filtering waits for available metadata and
+uses explicit retry feedback rather than false empty results. Filters are local
+to the current page session. The current implementation provides create, edit,
+archive and meal-entry planning, plus replacement, serving, add and skip/reapply
 controls for the selected week's planned meal. Plan edits create a new snapshot for that week;
 recipe archive is a soft-delete so historical planned meals and nutrition logs
 remain resolvable. Recipe saves and active-plan grocery reconciliation use one
@@ -789,10 +821,10 @@ and remaining servings. Visually hidden native checkboxes keep whole-card
 selection accessible by keyboard; selected cards use a dark border and lavender
 background without a visible checkbox.
 Every displayed active recipe can be selected, and Select all checks all cards.
-Selecting an exhausted or restricted recipe does not make it eligible or create
-another batch. Cards end at Remaining, without restriction messages in their
+Selecting an exhausted or structurally invalid recipe does not create another
+batch or bypass nutrition validation. Cards end at Remaining, without restriction messages in their
 content or checkbox descriptions. The preview's Unused servings section retains
-reasons and partial-result acknowledgment. Select all (primary) and Clear (soft)
+structural reasons and the single final acknowledgment. Select all (primary) and Clear (soft)
 sit at the right of Choose recipes and Choose days with ListChecks/ListX icons.
 Below 768px these are icon-only controls with accessible labels and 44px minimum
 touch targets; from 768px they also show text. Nutrition's Saved meals section is displayed and announced as Recipes;
@@ -809,10 +841,10 @@ unchanged. Fractional remaining portions are reported but never generated.
 
 Seeded allocation maximizes valid assignments before randomizing among feasible
 arrangements, allowing constrained recipes to use their available slots. The
-planner respects assignments, dietary/allergy settings, cooking time, budget,
-eligible target dates and daily carbohydrate limits. It does not create extra
-batches. Unused quantities and reasons appear per selected recipe and require
-acknowledgment before a partial preview can be saved. Opening, selecting and
+planner enforces structural assignments, occupied/protected meals, valid nutrition,
+eligible target dates, calorie checks and batch capacity. Preferences are advisory. It does not create extra
+batches. Unused quantities and reasons appear per selected recipe. Every current
+preview requires the single final acknowledgment before saving. Opening, selecting and
 shuffling do not write durable data.
 
 The account/week-scoped preview survives closing, failed reads and saves. Changes
@@ -1272,8 +1304,8 @@ past weeks select none. Any displayed date can be selected explicitly. Generatio
 fills selected empty slots only, retains the shared weekly recipe yield and all
 eligibility rules, and never replaces planned, skipped or eaten records. No dates
 means no assignments and a disabled save. Changing dates or shuffling creates a
-fresh preview while preserving the other choices. Partial results still require
-unused-serving acknowledgment. Recoverable drafts retain selected dates; old or
+fresh preview while preserving the other choices. The single final acknowledgment
+covers the whole preview, warnings and unused servings. Recoverable drafts retain selected dates; old or
 stale previews require a fresh review before save.
 
 ### Approved shared recipe additions (October 17, 2026)
@@ -1293,12 +1325,100 @@ Cooking groups are the limited exception to the MVP no-social-features boundary:
 
 Members must have matching Start of week preferences. Later changes require unanimous approval of the same proposal; membership changes invalidate pending proposals. Regrouping preserves dates, personal history, shared grocery edits and spending, with an audit record. Leaving revokes live collection access while preserving recipe, food and cover snapshots already used in saved plans. Connection does not import existing personal plans, lists or spending.
 
-Nutrition and Grocery expose Personal and Group views. Generate group plan selects people, days, recipes, maximum batches, and Fill empty meals or Replace planned meals on selected days. Replacement affects only selected members and dates and preserves actual entries and linked planned meals. Partially occupied slots fill only empty eligible members, using the same recipe for each shared slot. Group allocations appear in each person's normal daily Nutrition plan; only the owner may log intake.
+Nutrition and Grocery use one page each, without a Personal/Group mode switch. Nutrition keeps the owner's daily targets, planned meals, actual logging and recipes visible, with an Overview action beside Generate and one combined Recipes collection. The Cooking overview modal uses current saved assignments, grouping recipe versions into cooking cards with portions, whole batches, leftovers and expandable date/slot/member distributions. Skipped portions are excluded from totals; already-logged planned meals remain part of the weekly cooking plan. Each default appears once by catalog identity; customized variants stay separate. Owned archive preferences remain effective, including retained default snapshots. Member recipes show Shared by: display name in Recipe overview; defaults show Source: Default recipe. Other members' recipes offer View and Save personal copy, while owned recipes retain their existing actions. Connected Generate plan selects people, days, recipes, maximum batches, and Fill empty meals or Replace planned meals on selected days. People defaults to everyone; selecting only yourself still uses shared planning and groceries. Unselected members retain existing assignments and cooking requirements. Accounts without a group keep individual generation. An unverified membership blocks generation with Retry rather than switching persistence paths. Replacement affects only selected members and dates and preserves actual entries and linked planned meals. Partially occupied slots fill only empty eligible members, using the same recipe for each shared slot. Group allocations appear in each person's normal daily Nutrition plan; only the owner may log intake.
 
-Personal portions reuse the 25/30/30/15 percent calorie shares, rounded to editable quarter servings between 0.25 and 4. The server enforces date-effective eligibility, remaining calories and carbohydrate limits, allergies and existing planning constraints. Portions are estimates. Maximum whole-batch counts initially equal the number of selected members. Retained assignments consume capacity; groceries buy the whole batches actually needed and the preview shows leftover servings. Recipe revisions remain distinct cooking batches. Replacements, portions, leftovers and incomplete results require review before saving. Single-account generation retains its existing rules.
+Personal portions reuse the 25/30/30/15 percent calorie shares, rounded to editable quarter servings between 0.25 and 4. The server enforces date-effective eligibility, remaining calories and structural planning constraints. Preferences are advisory. Portions are estimates. Maximum whole-batch counts initially equal the number of selected members. Retained assignments consume capacity; groceries buy the whole batches actually needed and the preview shows leftover servings. Recipe revisions remain distinct cooking batches. Replacements, portions, leftovers and incomplete results require review before saving. Individual Generate uses the same advisory review with its existing one-serving and weekly-yield rules.
 
-Group groceries preserve custom items, quantity overrides, checked state, removals and independently recorded PHP spending. Personal groceries exclude group projections already bought in the shared list. Every member may edit group portions, recipes and skipped state through revision-checked saves; recorded intake remains intact.
+In connected Generate plan, equal-height recipe cards contain inline minus, Batches and plus controls outside their selection labels. Titles retain a minimum height and wrap fully. Controls remain visible but disabled on unchecked recipes, accept 1–100 whole batches, and describe the selected recipe's maximum weekly servings accessibly. Both selected and unchecked cards show compact approximate-calorie, recipe-yield, total-time and complexity pills matching the main Recipes cards; visible source and batch-helper paragraphs are omitted. Temporarily blank or invalid edits stay local, invalidate acknowledgment and block preview requests and saving until corrected; valid values retain the existing defaults, debounce and recoverable drafts. Selected recipes are candidates with preference warnings and enforced structural planning limits, and retained shared meals count toward their batch allowance. The preview counts new per-person date/meal-time assignments, excluding meals already kept in the plan. Recipes to cook describes whole batches needed and leftover servings. A current incomplete preview shows one unfilled-meal message and an initially collapsed Review unfilled meals section grouped by date and meal slot. Its count represents affected meal times where at least one selected person was unfilled, not missing member assignments or skipped intake. Toggling that disclosure preserves input and acknowledgment. Unknown planning warnings and the no-meals-fit explanation stay visible outside the disclosure. Stale, loading and failed preview warning summaries are hidden; zero assignments still cannot be saved. Existing draft recovery and authoritative preview/commit behavior are unchanged. Recipes and both Generate dialogs append “(edited)” to confirmed customized defaults as display-only names. Owned customization links and the shared read model’s derived isEditedDefault flag identify these versions; same-name personal recipes and retained copies without provenance are not guessed to be edited defaults. Missing calories and time stay explicit, and missing complexity follows the existing Medium default.
+
+Grocery uses one week navigator, showing the shared list and separately labeled shared PHP spending first. Private extras — only you follows on the same page, with personal requirements, custom items and separately recorded personal spending. Existing items, recorded zero spending and recoverable drafts reveal this section; otherwise Add private extras expands it. Shared and private Refresh and editors remain independent; no automatic import, amount merge or privacy change occurs. Group groceries preserve custom items, quantity overrides, checked state, removals and independently recorded PHP spending. Personal groceries exclude group projections already bought in the shared list. Every member may edit group portions, recipes and skipped state through revision-checked saves; recorded intake remains intact.
 
 Replace mode protects linked planned-meal history even if the owner later corrects the actual entry's date or meal slot. A corrected actual entry never makes its original planned basis replaceable.
 
-Successful generation records Last generated by: <display name>, <MM/DD/YY>, recipe-card summaries and included members. Creator and recipients receive one persistent notice per saved generation on Nutrition or Grocery, acknowledged across routes, devices and future logins. The latest summary can be reopened; summaries distinguish supersession and later edits. Preview, Shuffle and failed saves do not update attribution.
+Cooking overview identifies the signed-in member with “(you)” in participant and assignment labels, comparing account IDs rather than display names.
+
+Successful generation records Recent: <display name>, <MM/DD/YY>, recipe-card summaries and included members. Creator and recipients receive one persistent notice per saved generation on Nutrition or Grocery, acknowledged across routes, devices and future logins. The latest summary can be reopened. Its modal is titled “You're all set!” and places an Overview subheading after generation details and before the saved recipe grid. Superseded summaries retain a separate notice that a newer generation supersedes them. Done fills the available footer width below 640px and remains content-sized at larger widths; dismissal and focus return are unchanged. Preview, Shuffle and failed saves do not update attribution.
+
+### Advisory Generate review
+
+Both Generate dialogs show “Cost checks are temporarily paused.” once. All seeded,
+personal and shared recipe cost scores resolve to zero; stored cost preferences
+remain unchanged. Recipe warnings follow selection, grouped by selected recipe
+(including unused recipes), with cooking-time facts, source/estimated nutrition
+uncertainty, dietary conflicts, and prominent matched ingredients/avoided terms.
+Missing time is explicit. Remove recipe unchecks the existing selection; in
+connected generation this removes it for everyone. No per-recipe confirmation.
+Daily carbohydrate warnings follow the preview, grouped by date with estimated
+totals, saved thresholds and contributing recipes. Incomplete totals cannot be
+assessed reliably. Operational and unfilled-slot messages remain visible.
+
+One final acknowledgment covers assignments, recipe/allergy/diet warnings,
+portions, replacements, leftovers, unused servings and unfilled meals. Selection,
+portion, input, relevant settings and preview changes invalidate review. Legacy
+drafts recover selections but require a fresh advisory preview. Loading, failed,
+stale, invalid and zero-assignment previews remain unsavable.
+
+Connected previews expose only the viewer's detailed personal matches and a
+general reminder to consider other members' needs. Each selected recipient gets
+their own private post-save warning snapshot through the generation notice,
+labeled “Your review at generation” and reopenable in the summary. This is not
+unanimous pre-save approval. Later edits/settings do not rewrite reviews.
+“Selected people” shows actual new assignment counts for each selected account,
+including zero, with ID-based “(you)” labels when names match.
+
+Ingredient-based recipes admitted by advisory Generate retain their nutrition
+provenance in saved planned records: AI-estimated ingredients stay low confidence,
+and manual ingredient nutrition is not labeled trusted catalog. This changes
+future source/confidence metadata, not nutrition numbers or historical records.
+
+### Deferred weekly-generation validation work
+
+Tracking date: October 22, 2026. Status: deferred for a later development
+iteration; no release date is assigned. This follow-up applies to both individual
+and connected-account Generate. The implemented `advisory_v1` behavior remains
+the current contract until a separate product decision and verified release
+replace it. These checks must not be silently re-enabled as a bug fix.
+
+The change separates preference assessment from structural validation. Recipes
+with preference conflicts remain available for allocation, with recipe warnings,
+daily carbohydrate review where applicable, optional Remove recipe actions and
+one final acknowledgment. A warning is not a claim that a recipe is suitable or
+safe. Saved preferences are retained so their meaning can be revisited without
+requiring users to enter them again.
+
+| Check | Current Generate behavior | Work to address in a later iteration |
+|------|---------------------------|--------------------------------------|
+| Cost category / meal budget | Classification is paused. Seeded, personal and shared recipe scores resolve to `0`; saved budget preferences remain unchanged. Generate states that cost checks are temporarily paused. Zero is a temporary classification value, not a price or a claim that cooking is free. | Define an explainable cost model and its data source. Decide whether costs describe a serving, a whole batch or weekly shopping; how ingredient quantities, currency/region and missing prices are handled; and how existing Budget-friendly/Balanced/Flexible preferences map to it. Distinguish unknown cost from a real zero before using cost to rank or exclude recipes. |
+| Cooking time | Compare the saved whole-recipe time with the viewer's saved preference and warn when it exceeds it. Missing time is explicit; a valid zero-minute recipe is distinct from missing time. A time warning does not exclude the recipe. | Define whether the preference concerns total elapsed time, active preparation, each batch or the week's cooking workload. Review missing/estimated times and shared cooking across several members. Decide whether the eventual behavior remains advisory, affects ranking, or offers an explicitly chosen limit. |
+| Eating style / dietary preferences | Ingredient conflicts produce warnings rather than exclusion. Source-provided, manually entered and AI-estimated nutrition remain usable when structurally valid, with uncertainty visible. | Improve structured ingredient/diet metadata and matching beyond the current catalog and term rules. Cover custom and renamed ingredients, substitutions and unmeasured ingredients. Define treatment of unknown or unverified data and any user-selected enforcement mode before introducing exclusions. |
+| Allergies / foods to avoid | Show prominent matched ingredient names and saved terms for the affected viewer, including matches in unmeasured ingredients. Users may remove the recipe or keep it in the acknowledged selection. Matching does not establish allergy safety. | Review matching coverage, synonyms, compound ingredients, false positives/negatives and missing ingredient information. Establish the intended allergy-specific interaction and any blocking behavior through an explicit product/safety review. Preserve private per-member settings and never infer that an unmatched recipe is safe. |
+| Low-carb / Keto-style carbohydrate preferences | Assess estimated **total** daily carbohydrate against the existing 130 g / 50 g preferences. Warn without reducing portions or leaving slots empty solely to satisfy those thresholds. Include retained meals and recorded intake without double-counting linked planned meals; explain when incomplete nutrition prevents reliable assessment. | Revisit threshold assumptions, daily accounting, nutrition completeness and uncertainty. Decide whether to retain warnings, influence recipe ranking or offer an opt-in limit. Test retained/replaced/logged meals, partial days, edited servings and mixed nutrition sources before changing allocation or save validation. |
+
+Authorization, membership, recipe revisions, usable numeric nutrition, valid
+yields and supported meal slots, eligible targets/dates, occupied and protected
+meals, portion bounds, batch capacity, existing calorie checks, concurrency and
+idempotency remain enforced. These structural checks are not deferred with the
+preference work. Loading, failed, stale, invalid and zero-assignment previews
+remain unsavable, and the current valid preview requires acknowledgment.
+
+Before closing this follow-up:
+
+1. Approve and document the intended behavior for each check, including unknown
+   values, warnings versus ranking versus exclusion, and user control. Do not
+   equate a saved preference with permission to introduce an automatic exclusion.
+2. Apply the agreed behavior consistently to both Generate dialogs, the pure
+   allocators, SQL validation, commit paths and later plan edits. Preserve usable
+   nutrition provenance and never manufacture missing nutrient values.
+3. Version any policy change and require a fresh preview/review while recovering
+   valid selections. Preserve existing plan policies, historical nutrition,
+   generation-time warning snapshots and saved preferences.
+4. Keep connected previews viewer-private. Other members receive only their own
+   private post-save reviews; no new unanimous approval flow is implied.
+5. Verify seeded/custom/shared recipes, known/missing/zero time and cost data,
+   ingredient and allergy matching, carbohydrate totals and incomplete data,
+   preview freshness, acknowledgment, allocation, save/edit behavior and privacy.
+   Complete the relevant utility, database/RLS and isolated browser tests plus
+   responsive/accessibility checks before a verified rollout.
+
+Engineering compatibility and rollout requirements are owned by
+[ARCHITECTURE.md](ARCHITECTURE.md#future-generation-policy-changes).
