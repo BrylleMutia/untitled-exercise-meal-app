@@ -138,16 +138,19 @@ export type Database = {
         Row: {
           acknowledged_at: string | null
           generation_id: string
+          preference_review: Json
           user_id: string
         }
         Insert: {
           acknowledged_at?: string | null
           generation_id: string
+          preference_review?: Json
           user_id: string
         }
         Update: {
           acknowledged_at?: string | null
           generation_id?: string
+          preference_review?: Json
           user_id?: string
         }
         Relationships: [
@@ -1107,6 +1110,7 @@ export type Database = {
           calendar_transition_row_id: number | null
           created_at: string
           dietary_pattern: string
+          preference_policy: string
           row_id: number
           supersedes_plan_row_id: number | null
           target_row_id: number
@@ -1122,6 +1126,7 @@ export type Database = {
           calendar_transition_row_id?: number | null
           created_at?: string
           dietary_pattern?: string
+          preference_policy?: string
           row_id?: never
           supersedes_plan_row_id?: number | null
           target_row_id: number
@@ -1137,6 +1142,7 @@ export type Database = {
           calendar_transition_row_id?: number | null
           created_at?: string
           dietary_pattern?: string
+          preference_policy?: string
           row_id?: never
           supersedes_plan_row_id?: number | null
           target_row_id?: number

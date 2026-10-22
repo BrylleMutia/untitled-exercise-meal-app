@@ -70,7 +70,7 @@ describe("meal plan generation", () => {
     expect(plan.meals.filter(meal => !meal.mealId && !meal.foodId).every(meal => meal.preparationBasis === "unknown")).toBe(true);
   });
 
-  it("keeps slots unresolved instead of violating time or budget constraints", () => {
+  it("pauses cost filtering while retaining the initial-plan time checks", () => {
     const plan = generateMealPlan("target-1", "2026-09-14", {
       dietaryPattern: "No restrictions",
       allergies: [],
@@ -78,8 +78,8 @@ describe("meal plan generation", () => {
       mealBudget: 4,
     });
 
-    expect(plan.meals.filter((meal) => meal.slot !== "snack").every((meal) => meal.mealId === undefined)).toBe(true);
-    expect(plan.meals.filter((meal) => meal.slot !== "snack").every((meal) => meal.confidence === "low")).toBe(true);
+    expect(plan.meals.some(meal => meal.mealId === "meal-korean-beef-bowl")).toBe(true);
+    expect(plan.meals.some(meal => meal.mealId === "meal-creamy-lemon-chicken")).toBe(false);
   });
 
   it("can use an available owned recipe during deterministic generation", () => {

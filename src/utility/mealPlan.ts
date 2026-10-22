@@ -1,10 +1,11 @@
 import type { Food, Meal, MealPlan, PlannedMeal, UserProfile } from "@/types/domain";
+import { recipeCostScore } from "./recipeCost";
 import { SAVED_MEALS } from "@/constants/meals";
 import { FOODS } from "@/constants/foods";
 import { weekDates } from "./dates";
 import { mealNutrition } from "./nutrition";
 import { totalCarbLimit } from "./health";
-import { MVP3_MEAL_COST, MVP3_MEAL_PREP } from "@/constants/mvp3Catalog";
+import { MVP3_MEAL_PREP } from "@/constants/mvp3Catalog";
 
 type MealPlanCatalog = { savedMeals?: Meal[]; foods?: Food[]; dailyCalories?: number };
 
@@ -13,15 +14,16 @@ export function plannedMealMetadata(mealId: string | undefined, foodId: string |
     const meal = savedMeals.find((candidate) => candidate.id === mealId);
     if (meal) {
       const nutrition = mealNutrition(meal, foods);
+      const aiEstimated = !meal.providedNutrition && meal.ingredients.some(i => foods.find(f => f.id === i.foodId)?.valueSource === "ai_estimate");
       return {
         expectedCalories: Math.round(nutrition.perServing.calories * servings),
         expectedProteinG: Math.round(nutrition.perServing.proteinG * servings * 10) / 10,
         expectedCarbsG: Math.ceil(nutrition.perServing.carbsG * servings * 100) / 100,
         expectedFatG: Math.round(nutrition.perServing.fatG * servings * 10) / 10,
-        source: meal.providedNutrition ? "source-provided" : meal.ingredients.every((ingredient) => foods.find((food) => food.id === ingredient.foodId)?.valueSource === "trusted_catalog") ? "trusted-catalog" : "starter-catalog",
+        source: meal.providedNutrition ? "source-provided" : meal.ingredients.every((ingredient) => foods.find((food) => food.id === ingredient.foodId)?.valueSource === "trusted_catalog") ? "trusted-catalog" : aiEstimated ? "AI-estimated recipe" : "user-provided recipe",
         sourceVersion: meal.providedNutrition ? `recipe:${meal.id}:revision:${meal.revision ?? 1}` : meal.id.startsWith("meal-mvp3-") ? "USDA-SR-Legacy:2019-04-01" : "starter-v1",
         assumptions: meal.providedNutrition ? "Source-provided nutrition per serving; not independently verified or recalculated from ingredients." : "Calculated from listed ingredients and labeled serving sizes. Portions and cooking can vary; all listed oil is included.",
-        confidence: "medium" as const,
+        confidence: aiEstimated ? "low" as const : "medium" as const,
         preparationBasis: "as_labeled" as const,
       };
     }
@@ -225,21 +227,8 @@ function chooseFood(
   );
 }
 
-/** The starter catalog has no currency metadata, so budget is a transparent
- * relative score rather than a currency claim. A low budget keeps the plan
- * on lower-cost catalog staples; users can still edit every slot. */
-const MEAL_COST_UNITS: Record<string, number> = {
-  "meal-creamy-lemon-chicken": 7,
-  "meal-korean-beef-bowl": 7,
-  "meal-sticky-teriyaki-chicken": 7,
-  "meal-chicken-burrito-protein-boxes": 7,
-  ...MVP3_MEAL_COST,
-  "meal-yogurt-bowl": 6,
-  "meal-pb-toast": 4,
-  "meal-chicken-rice": 7,
-  "meal-salmon-potato": 12,
-};
-
+/** Cooking-time defaults for the historical starter-plan path.
+ * Cost classification is paused; all recipe identities resolve to zero. */
 const MEAL_PREP_MINUTES: Record<string, number> = {
   "meal-creamy-lemon-chicken": 30,
   "meal-sticky-teriyaki-chicken": 30,
@@ -282,11 +271,11 @@ export function mealFitsTimeAndBudget(
   const time = constraints?.cookingTimeMinutes;
   const budget = constraints?.mealBudget;
   if (time !== undefined && time >= 0 && (MEAL_PREP_MINUTES[mealId] ?? 0) > time) return false;
-  if (budget !== undefined && budget >= 0 && (MEAL_COST_UNITS[mealId] ?? 0) > budget) return false;
+  if (budget !== undefined && budget >= 0 && recipeCostScore(mealId) > budget) return false;
   return true;
 }
 
-function foodMatchesAllergy(food: Pick<Food, "name" | "category">, allergy: string): boolean {
+export function foodMatchesAllergy(food: Pick<Food, "name" | "category">, allergy: string): boolean {
   const name = food.name.toLowerCase();
   if (allergy.includes("dairy") || allergy.includes("milk")) return food.category === "Dairy";
   if (allergy.includes("nut")) return /peanut|almond|nut/.test(name);

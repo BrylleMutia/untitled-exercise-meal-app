@@ -45,7 +45,7 @@ describe("reviewed chicken meal-prep catalog", () => {
       expect(mealAllowed(recipe.id, { dietaryPattern: "Vegetarian", allergies: [] })).toBe(false);
       expect(mealAllowed(recipe.id, { dietaryPattern: "Vegan", allergies: [] })).toBe(false);
       expect(mealFitsTimeAndBudget(recipe.id, { cookingTimeMinutes: recipe.totalTimeMinutes! - 1 })).toBe(false);
-      expect(mealFitsTimeAndBudget(recipe.id, { mealBudget: 6 })).toBe(false);
+      expect(mealFitsTimeAndBudget(recipe.id, { mealBudget: 6 })).toBe(true);
     }
     for (const allergy of ["soy", "wheat", "sesame"]) expect(mealAllowed(STICKY_TERIYAKI_CHICKEN.id, { dietaryPattern: "No restrictions", allergies: [allergy] })).toBe(false);
     expect(mealAllowed(CHICKEN_BURRITO_PROTEIN_BOXES.id, { dietaryPattern: "No restrictions", allergies: [] })).toBe(true);

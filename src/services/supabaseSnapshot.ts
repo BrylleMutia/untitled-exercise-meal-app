@@ -265,6 +265,7 @@ function mapMealPlan(
     id: row.app_id,
     version: row.version,
     weekOf: row.week_of,
+    preferencePolicy: row.preference_policy === "advisory_v1" ? "advisory_v1" : "enforced",
     dietaryPattern: row.dietary_pattern,
     allergies: row.allergies,
     totalCarbLimit: row.total_carb_limit === null ? null : Number(row.total_carb_limit),

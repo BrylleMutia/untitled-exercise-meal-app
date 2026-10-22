@@ -386,6 +386,7 @@ export interface PlannedMeal {
 }
 
 export interface MealPlan {
+  preferencePolicy?: "enforced" | "advisory_v1";
   id: string;
   version: number;
   weekOf: string; // YYYY-MM-DD, using the account's start-of-week preference

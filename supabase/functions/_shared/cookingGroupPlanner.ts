@@ -3,7 +3,7 @@ export type Slot = "breakfast" | "lunch" | "dinner" | "snack";
 export type PlannerRecipe = { id: string; name: string; revision: number; yield: number; calories: number; carbs: number; slots: Slot[]; image?: unknown };
 export type PlannerAssignment = { id: string; memberId: string; recipeId: string; recipeRevision?: number; date: string; slot: Slot; servings: number; skipped?: boolean; protected?: boolean };
 export type PlannerMember = { id: string; allowed: string[]; days: Array<{ date: string; calories: number; remainingCalories: number; remainingCarbs: number | null; eligible: boolean }>; occupied: Array<{ id: string; date: string; slot: Slot; name: string; protected: boolean; calories: number; carbs: number }> };
-export type PlanningContext = { basis: string; recipes: PlannerRecipe[]; members: PlannerMember[]; retained: PlannerAssignment[] };
+export type PlanningContext = { basis: string; preferencePolicy?: "advisory_v1"; recipes: PlannerRecipe[]; members: PlannerMember[]; retained: PlannerAssignment[] };
 export type PlanningRequest = { weekOf: string; memberIds: string[]; selectedDates: string[]; mode: "fill" | "replace"; recipes: Array<{ id: string; revision: number; maxBatches: number }>; seed: string; overrides: Record<string, number> };
 const slots: Slot[] = ["breakfast", "lunch", "dinner", "snack"];
 const shares = { breakfast: .25, lunch: .30, dinner: .30, snack: .15 };
@@ -48,13 +48,13 @@ export function planCookingGroup(context: PlanningContext, input: PlanningReques
       let available = candidate.capacity - (used.get(recipeKey(candidate.id, candidate.revision)) ?? 0);
       const portions = people.flatMap(member => {
         const day = member.days.find(d => d.date === date); const budget = budgets.get(`${member.id}:${date}`)!;
-        if (!day?.eligible || !member.allowed.includes(candidate.id)) return [];
+        if (!day?.eligible || context.preferencePolicy !== "advisory_v1" && !member.allowed.includes(candidate.id)) return [];
         const key = `${member.id}:${date}:${slot}`; const explicit = input.overrides[key];
         if (explicit !== undefined && (!Number.isFinite(explicit) || explicit < .25 || explicit > 4 || explicit * 4 !== Math.round(explicit * 4))) throw new Error("Portions must be quarter servings between 0.25 and 4.");
         const suggested = Math.min(4, Math.max(.25, Math.round(day.calories * shares[slot] / candidate.calories * 4) / 4));
         let servings = explicit ?? suggested;
-        if (explicit === undefined) servings = Math.floor(Math.min(servings, budget.calories / candidate.calories, budget.carbs === null || candidate.carbs === 0 ? Infinity : budget.carbs / candidate.carbs, available) * 4 + 1e-7) / 4;
-        if (servings < .25 || servings > available + 1e-7 || nutrientCost(candidate.calories, servings) > budget.calories + 1e-7 || budget.carbs !== null && nutrientCost(candidate.carbs, servings) > budget.carbs + 1e-7) return [];
+        if (explicit === undefined) servings = Math.floor(Math.min(servings, budget.calories / candidate.calories, context.preferencePolicy === "advisory_v1" || budget.carbs === null || candidate.carbs === 0 ? Infinity : budget.carbs / candidate.carbs, available) * 4 + 1e-7) / 4;
+        if (servings < .25 || servings > available + 1e-7 || nutrientCost(candidate.calories, servings) > budget.calories + 1e-7 || context.preferencePolicy !== "advisory_v1" && budget.carbs !== null && nutrientCost(candidate.carbs, servings) > budget.carbs + 1e-7) return [];
         available -= servings; return [{ member, servings }];
       });
       if (portions.length > chosen.length) { chosen = portions; recipe = candidate; }

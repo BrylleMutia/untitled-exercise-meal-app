@@ -9,6 +9,15 @@ function fixture(count = 2) {
 describe("private group allocation", () => {
   it.each([1, 2, 3, 4, 5, 6])("plans for %i members without duplicate slots", n => { const { context, input } = fixture(n); const p = planCookingGroup(context, input); expect(p.assignments).toHaveLength(n * 2); expect(new Set(p.assignments.map(a => `${a.memberId}:${a.date}:${a.slot}`)).size).toBe(n * 2); });
   it("uses one recipe per shared slot and personal quarter-serving portions", () => { const { context, input } = fixture(); const p = planCookingGroup(context, input); expect(p.assignments.find(a => a.memberId === "member-0")?.servings).toBe(1.5); expect(p.assignments.find(a => a.memberId === "member-1")?.servings).toBe(1.75); expect(p.batches[0]).toMatchObject({ portions: 6.5, batches: 2, leftovers: 1.5 }); });
+  it("advisory allocation ignores diet eligibility and carb caps while retaining calorie and batch limits", () => {
+    const { context, input } = fixture(1);
+    context.preferencePolicy = "advisory_v1";
+    context.members[0].allowed = [];
+    context.members[0].days[0].remainingCarbs = 0;
+    expect(planCookingGroup(context, input).assignments).toHaveLength(2);
+    context.members[0].days[0].remainingCalories = 0;
+    expect(planCookingGroup(context, input).assignments).toHaveLength(0);
+  });
   it("is deterministic and never returns private target facts", () => { const { context, input } = fixture(); expect(planCookingGroup(context, input)).toEqual(planCookingGroup(context, input)); expect(JSON.stringify(planCookingGroup(context, input))).not.toMatch(/"(?:remainingCalories|remainingCarbs|allowed|eligible)":/); });
   it("fills empty members only", () => { const { context, input } = fixture(); context.members[0].occupied.push({ id: "old", date: "2026-10-18", slot: "lunch", name: "Personal meal", protected: false, calories: 500, carbs: 10 }); expect(planCookingGroup(context, input).assignments.filter(a => a.slot === "lunch").map(a => a.memberId)).toEqual(["member-1"]); });
   it("replaces selected pending assignments while preserving eaten basis", () => { const { context, input } = fixture(); input.mode = "replace"; context.members[0].occupied.push({ id: "old", date: "2026-10-18", slot: "lunch", name: "Personal meal", protected: false, calories: 500, carbs: 10 }, { id: "eaten", date: "2026-10-18", slot: "dinner", name: "Eaten", protected: true, calories: 500, carbs: 10 }); const p = planCookingGroup(context, input); expect(p.replacements.map(r => r.id)).toEqual(["old"]); expect(p.assignments.some(a => a.memberId === "member-0" && a.slot === "dinner")).toBe(false); });

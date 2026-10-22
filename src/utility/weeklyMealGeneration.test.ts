@@ -16,6 +16,11 @@ function snapshot(meals: Meal[], planned: PlannedMeal[] = []): AppSnapshot {
 const row = (date: string, slot: PlannedMeal["slot"], mealId = "existing", servings = 1): PlannedMeal => ({ id: `${date}-${slot}`, date, slot, mealId, label: mealId, servings });
 
 describe("weekly recipe generation", () => {
+  it("does not allocate using an old eligible target when the profile is unsupported", () => {
+    const data = snapshot([recipe("a", ["lunch"], 4)]);
+    data.profile = { ...data.profile!, targetEligibility: "unsupported" };
+    expect(generateWeeklyMeals(data, week, ["a"], "unsupported").assignments).toEqual([]);
+  });
   it("defaults dates to today onward, all future days, and no past days", () => {
     expect(defaultPlanningDates("2026-10-11", "2026-10-15")).toEqual(["2026-10-15", "2026-10-16", "2026-10-17"]);
     expect(defaultPlanningDates("2026-10-18", "2026-10-15")).toEqual(weekDates("2026-10-18"));
@@ -72,11 +77,13 @@ describe("weekly recipe generation", () => {
     expect(weeklyRecipeOptions(data, week)[0].reasonCode).toBe("exhausted");
     expect(generateWeeklyMeals(data, week, ["a"], "select-exhausted").assignments).toEqual([]);
   });
-  it("excludes unassigned, archived, invalid, allergic, and over-time recipes", () => {
+  it("excludes structural invalidity but keeps over-time recipes with warnings", () => {
     const data = snapshot([recipe("none", []), { ...recipe("archived", ["lunch"]), archivedAt: "now" }, recipe("fraction", ["lunch"], 2.5), { ...recipe("slow", ["lunch"]), totalTimeMinutes: 60 }]);
     data.profile!.cookingTimeMinutes = 15;
-    expect(weeklyRecipeOptions(data, week).every(option => option.reason)).toBe(true);
-    expect(generateWeeklyMeals(data, week, data.savedMeals.map(meal => meal.id), "x").assignments).toEqual([]);
+    expect(weeklyRecipeOptions(data, week).find(option => option.recipe.id === "slow")?.reason).toBeUndefined();
+    const preview = generateWeeklyMeals(data, week, data.savedMeals.map(meal => meal.id), "x");
+    expect(preview.assignments).toHaveLength(4);
+    expect(preview.preferenceReview?.recipeWarnings).toContainEqual(expect.objectContaining({ recipeId: "slow", code: "cooking-time" }));
   });
   it("uses only dates with an eligible target and preserves supplied macros", () => {
     const beef = SAVED_MEALS.find(meal => meal.id === "meal-korean-beef-bowl")!;
@@ -86,27 +93,29 @@ describe("weekly recipe generation", () => {
     expect(preview.assignments).toHaveLength(4);
     expect(preview.assignments.every(entry => entry.date >= "2027-01-01" && entry.expectedCalories === 560 && entry.expectedProteinG === 45 && entry.expectedCarbsG === 58 && entry.expectedFatG === 16)).toBe(true);
   });
-  it("maximizes assignments under a daily carbohydrate cap", () => {
+  it("fills slots without enforcing carbohydrate preferences and reports exceeded days", () => {
     const data = snapshot([recipe("high", ["lunch", "dinner"], 7), recipe("low", ["lunch", "dinner"], 7)]);
     data.profile!.dietaryPattern = "Keto-style";
     data.foods = [{ ...FOODS[0], id: "high-food", valueSource: "trusted_catalog", carbsG: 40 }, { ...FOODS[0], id: "low-food", valueSource: "trusted_catalog", carbsG: 10 }];
     data.savedMeals.forEach((meal, i) => { meal.ingredients = [{ foodId: data.foods[i].id, servings: 7 }]; });
     const preview = generateWeeklyMeals(data, week, ["high", "low"], "x");
     expect(preview.assignments).toHaveLength(14);
-    for (const date of weekDates(week)) expect(preview.assignments.filter(row => row.date === date).reduce((sum, row) => sum + row.expectedCarbsG!, 0)).toBeLessThanOrEqual(50);
+    expect(preview.preferenceReview?.dailyWarnings.length).toBeGreaterThan(0);
+    expect(preview.preferenceReview?.dailyWarnings.every(day => day.limit === 50 && day.totalCarbs! > 50)).toBe(true);
   });
   it("accepts only whole recipe yields", () => {
     for (const value of [0, 0.5, 2.5, 10001, NaN, Infinity]) expect(validRecipeYield(value)).toBe(false);
     for (const value of [1, 4, 10000]) expect(validRecipeYield(value)).toBe(true);
   });
-  it("bounds symmetric carb-constrained arrangements without enumerating equivalent permutations", () => {
+  it("fills symmetric arrangements and warns rather than constraining carb totals", () => {
     const data = snapshot(Array.from({ length: 7 }, (_, i) => recipe(`recipe-${i}`, recipeMealSlots, 4)));
     data.profile!.dietaryPattern = "Keto-style";
     data.foods = [{ ...FOODS[0], valueSource: "trusted_catalog", carbsG: 26 }];
     data.savedMeals.forEach(meal => { meal.ingredients = [{ foodId: data.foods[0].id, servings: 4 }]; });
     const preview = generateWeeklyMeals(data, week, data.savedMeals.map(meal => meal.id), "symmetric");
-    expect(preview.assignments).toHaveLength(7);
+    expect(preview.assignments).toHaveLength(28);
+    expect(preview.preferenceReview?.dailyWarnings).toHaveLength(7);
     expect(new Set(preview.assignments.map(row => row.date)).size).toBe(7);
-    expect(preview.unused.reduce((sum, row) => sum + row.servings, 0)).toBe(21);
+    expect(preview.unused.reduce((sum, row) => sum + row.servings, 0)).toBe(0);
   });
 });

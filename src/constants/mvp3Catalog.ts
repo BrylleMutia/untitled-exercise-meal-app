@@ -37,5 +37,5 @@ export const MVP3_MEALS: Meal[] = [
     ingredients: [{ foodId: tofu, servings: 2 }, { foodId: broccoli, servings: 0.5 }, { foodId: almonds, servings: 0.28 }, { foodId: oil, servings: 0.2 }] },
 ];
 
-export const MVP3_MEAL_COST: Record<string, number> = { "meal-mvp3-eggs": 4, "meal-mvp3-chicken": 7, "meal-mvp3-tofu": 4, "meal-mvp3-tofu-almonds": 6 };
+export const MVP3_MEAL_COST: Record<string, number> = { "meal-mvp3-eggs": 0, "meal-mvp3-chicken": 0, "meal-mvp3-tofu": 0, "meal-mvp3-tofu-almonds": 0 };
 export const MVP3_MEAL_PREP: Record<string, number> = { "meal-mvp3-eggs": 15, "meal-mvp3-chicken": 30, "meal-mvp3-tofu": 15, "meal-mvp3-tofu-almonds": 15 };
