@@ -92,8 +92,10 @@ test("preserves signup values and shows accessible password mismatch errors", as
     await expect(confirmPassword).toHaveValue("Mvp1-Different-Pass");
     await expect(password).toHaveAttribute("aria-invalid", "true");
     await expect(confirmPassword).toHaveAttribute("aria-invalid", "true");
-    await expect(password).toHaveClass(/border-coral-300/);
-    await expect(confirmPassword).toHaveClass(/border-coral-300/);
+    await expect(password).toHaveClass(/border-danger-600/);
+    await expect(confirmPassword).toHaveClass(/border-danger-600/);
+    await expect(password).toHaveCSS("border-color", "rgb(220, 38, 38)");
+    await expect(page.locator("form").getByRole("alert")).toHaveCSS("background-color", "rgb(254, 226, 226)");
     await expect(page.locator("#password-error")).toHaveText("Passwords do not match.");
     await expect(page.locator("#confirmPassword-error")).toHaveText("Passwords do not match.");
 
