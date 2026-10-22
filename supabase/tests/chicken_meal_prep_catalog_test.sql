@@ -23,22 +23,22 @@ values('00000000-0000-0000-0000-000000007901','Chicken catalog',30,'female',165,
 insert into public.goals(app_id,user_id,goal_type,weekly_workout_target,effective_date) values('chicken-goal','00000000-0000-0000-0000-000000007901','maintain',3,'2026-09-01');
 insert into public.daily_targets(app_id,user_id,goal_row_id,version,effective_date,calories,protein_g,carbs_g,fat_g,bmr,bmi,tdee,activity_factor,formula,disclaimer)
 values('chicken-target','00000000-0000-0000-0000-000000007901',(select row_id from public.goals where app_id='chicken-goal'),1,'2026-09-01',2000,120,220,65,1400,23.9,2000,1.5,'test','Estimates only');
-create function pg_temp.check_chicken(recipe_id text,pattern text default 'No restrictions',allergies text[] default '{}',minutes int default 45,budget int default 12) returns void language plpgsql as $$
+create function pg_temp.check_chicken(recipe_id text,pattern text default 'No restrictions',allergies text[] default '{}',minutes int default 45,budget int default 12) returns jsonb language plpgsql as $$
 declare recipe public.meals; profile public.profiles;
-begin select * into recipe from public.meals where app_id=recipe_id; select * into profile from public.profiles where id='00000000-0000-0000-0000-000000007901'; profile.dietary_pattern:=pattern;profile.allergies:=allergies;profile.cooking_time_minutes:=minutes;profile.meal_budget:=budget;perform private.assert_generation_recipe(recipe,profile);end;$$;
+begin select * into recipe from public.meals where app_id=recipe_id; select * into profile from public.profiles where id='00000000-0000-0000-0000-000000007901'; profile.dietary_pattern:=pattern;profile.allergies:=allergies;profile.cooking_time_minutes:=minutes;profile.meal_budget:=budget;perform private.assert_generation_recipe(recipe,profile);return private.recipe_preference_warnings(recipe,profile);end;$$;
 select lives_ok($$select pg_temp.check_chicken('meal-sticky-teriyaki-chicken')$$,'teriyaki eligible normally');
 select lives_ok($$select pg_temp.check_chicken('meal-chicken-burrito-protein-boxes')$$,'burrito eligible normally');
-select throws_ok($$select pg_temp.check_chicken('meal-sticky-teriyaki-chicken','Vegetarian')$$,'P0001',null,'new raw chicken denied for vegetarian');
-select throws_ok($$select pg_temp.check_chicken('meal-chicken-burrito-protein-boxes','Vegan')$$,'P0001',null,'new raw chicken denied for vegan');
-select throws_ok($$select pg_temp.check_chicken('meal-sticky-teriyaki-chicken','No restrictions',array['sesame'])$$,'P0001',null,'unmeasured sesame still checked for allergies');
-select throws_ok($$select pg_temp.check_chicken('meal-sticky-teriyaki-chicken','No restrictions',array['wheat'])$$,'P0001',null,'sauce wheat allergy checked');
-select throws_ok($$select pg_temp.check_chicken('meal-sticky-teriyaki-chicken','No restrictions','{}',29)$$,'P0001',null,'thirty minute recipe excluded at twenty nine minutes');
-select throws_ok($$select pg_temp.check_chicken('meal-chicken-burrito-protein-boxes','No restrictions','{}',45,6)$$,'P0001',null,'relative budget enforced');
+select ok(pg_temp.check_chicken('meal-sticky-teriyaki-chicken','Vegetarian') @> '[{"code":"diet"}]','new raw chicken warned for vegetarian');
+select ok(pg_temp.check_chicken('meal-chicken-burrito-protein-boxes','Vegan') @> '[{"code":"diet"}]','new raw chicken warned for vegan');
+select ok(pg_temp.check_chicken('meal-sticky-teriyaki-chicken','No restrictions',array['sesame']) @> '[{"code":"avoided-food"}]','unmeasured sesame still checked for allergies');
+select ok(pg_temp.check_chicken('meal-sticky-teriyaki-chicken','No restrictions',array['wheat']) @> '[{"code":"avoided-food"}]','sauce wheat allergy checked');
+select ok(pg_temp.check_chicken('meal-sticky-teriyaki-chicken','No restrictions','{}',29) @> '[{"code":"cooking-time"}]','thirty minute recipe warned at twenty nine minutes');
+select lives_ok($$select pg_temp.check_chicken('meal-chicken-burrito-protein-boxes','No restrictions','{}',45,6)$$,'cost classification is paused');
 
 create function pg_temp.chicken_generation() returns jsonb language sql as $$
 with recipes as (select * from public.meals where app_id in ('meal-sticky-teriyaki-chicken','meal-chicken-burrito-protein-boxes')),
 entries as (select jsonb_agg(jsonb_build_object('id',r.app_id||'-'||n,'date',('2026-10-19'::date+n-1)::text,'slot',case when r.app_id='meal-sticky-teriyaki-chicken' then 'lunch' else 'breakfast' end,'mealId',r.app_id,'label',r.name,'servings',1)) rows from recipes r cross join generate_series(1,4) n)
-select jsonb_build_object('weekOf','2026-10-19','idempotencyKey','chicken-generation','recipes',(select jsonb_agg(jsonb_build_object('id',app_id,'revision',revision)) from recipes),'assignments',(select rows from entries),
+select jsonb_build_object('reviewPolicyVersion','advisory_v1','reviewAcknowledged',true,'weekOf','2026-10-19','idempotencyKey','chicken-generation','recipes',(select jsonb_agg(jsonb_build_object('id',app_id,'revision',revision)) from recipes),'assignments',(select rows from entries),
 'mealPlan',jsonb_build_object('id','chicken-plan','weekOf','2026-10-19','targetId','chicken-target','meals',(select rows from entries)),
 'grocery',jsonb_build_object('id','chicken-grocery','weekOf','2026-10-19','items','[]'::jsonb),
 'expectedVersions',jsonb_build_object('profileRevision',(select revision from public.profiles where id=auth.uid()),'mealPlanVersion',0,'groceryRevision',0));$$;
