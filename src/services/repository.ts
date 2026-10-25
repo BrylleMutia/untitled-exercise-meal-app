@@ -31,6 +31,7 @@ import type {
   UpdateLoggedMealInput,
   DeleteLoggedMealInput,
   SkipPlannedMealInput,
+  RemovePlannedMealInput,
   StartSessionInput,
   UpdateUnitsInput,
   WorkoutPlanOverrideInput,
@@ -90,6 +91,7 @@ export interface SnapshotRepository {
   regenerateGrocery(input: RegenerateGroceryInput): Promise<MutationOutcome>;
   setGroceryTotalAmount(input: SetGroceryTotalAmountInput): Promise<MutationOutcome>;
   skipPlannedMeal(input: SkipPlannedMealInput): Promise<MutationOutcome>;
+  removePlannedMeal(input: RemovePlannedMealInput): Promise<MutationOutcome>;
   editMealPlan(input: EditMealPlanInput): Promise<MutationOutcome>;
   generateNutritionWeek(input: GenerateNutritionWeekInput): Promise<MutationOutcome>;
   addPlannedMeal(input: AddPlannedMealInput): Promise<MutationOutcome>;

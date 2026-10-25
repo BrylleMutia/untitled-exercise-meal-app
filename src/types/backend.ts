@@ -194,6 +194,7 @@ export type AbandonSessionInput = IdempotentInput & {
 };
 
 export type NutritionInput = IdempotentInput & {
+  singlePlannedPortion?: boolean;
   expectedMealPlanVersion?: number;
   entry: Omit<NutritionLog, "id" | "createdAt"> & {
     servingQuantity?: number;
@@ -260,7 +261,10 @@ export type SkipPlannedMealInput = IdempotentInput & {
   expectedVersions?: ExpectedVersions;
 };
 
+export type RemovePlannedMealInput = SkipPlannedMealInput;
+
 export type EditMealPlanInput = IdempotentInput & {
+  removePlannedMealId?: string;
   mealPlan: MealPlan;
   currentSnapshot: AppSnapshot;
   expectedVersions?: ExpectedVersions;
@@ -281,8 +285,17 @@ export type AddPlannedMealInput = IdempotentInput & {
   plannedMeal: PlannedMeal;
   newFoods?: Food[];
   newMeal?: Meal;
+  reviewAcknowledged?: boolean;
+  reviewPolicyVersion?: "advisory_v1";
   currentSnapshot: AppSnapshot;
   expectedVersions?: ExpectedVersions;
+};
+
+export type ManualPlanningReview = {
+  reviewAcknowledged: true;
+  reviewPolicyVersion: "advisory_v1";
+  profileRevision: number;
+  recipeRevision?: number;
 };
 
 export type ResetPlanInput = IdempotentInput & {
@@ -405,6 +418,7 @@ export type ReviewedMealIngredientInput = Omit<NutritionLog, "id" | "createdAt" 
 };
 
 export type SaveReviewedMealInput = IdempotentInput & {
+  singlePlannedPortion?: boolean;
   recipeServings?: number;
   plannedMealId?: string;
   expectedMealPlanVersion?: number;

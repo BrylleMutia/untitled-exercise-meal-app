@@ -60,6 +60,7 @@ import type {
   SaveRecipeInput,
   SaveSessionInput,
   SkipPlannedMealInput,
+  RemovePlannedMealInput,
   StartSessionInput,
   UpdateUnitsInput,
   WeightInput,
@@ -656,7 +657,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     };
     return this.mutate(
       entry.plannedMealId ? "log_planned_meal" : "save_nutrition_log",
-      { ...(entry.plannedMealId ? { kind: "food", plannedMealId: entry.plannedMealId, expectedMealPlanVersion: input.expectedMealPlanVersion } : {}), entry, idempotencyKey: mutationKey },
+      { ...(entry.plannedMealId ? { kind: "food", plannedMealId: entry.plannedMealId, expectedMealPlanVersion: input.expectedMealPlanVersion, ...(input.singlePlannedPortion ? { singlePlannedPortion: true } : {}) } : {}), entry, idempotencyKey: mutationKey },
       [{ type: "nutrition-entry-saved", entryId: id }],
     );
   }
@@ -838,6 +839,13 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     return this.editMealPlan({ ...input, mealPlan });
   }
 
+  async removePlannedMeal(input: RemovePlannedMealInput): Promise<MutationOutcome> {
+    const current = input.currentSnapshot;
+    if (!current.mealPlan?.meals.some(meal => meal.id === input.id)) throw repositoryException(toRepositoryError("not_found: Planned meal is no longer available. Refresh this day."));
+    if ([...current.nutritionLogs, ...current.loggedMeals].some(log => log.plannedMealId === input.id)) throw repositoryException(toRepositoryError("conflict: This meal has already been logged. Edit its saved entry instead."));
+    return this.editMealPlan({ ...input, removePlannedMealId: input.id, mealPlan: { ...current.mealPlan, meals: current.mealPlan.meals.filter(meal => meal.id !== input.id) } });
+  }
+
   async resetPlan(input: ResetPlanInput): Promise<MutationOutcome> {
     if (!input.currentSnapshot.profile) {
       throw repositoryException(toRepositoryError("validation_failed: profile is required"));
@@ -902,7 +910,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     return this.mutate(
       input.plannedMealId ? "log_planned_meal" : "save_reviewed_meal",
       {
-        ...(input.plannedMealId ? { kind: "meal", plannedMealId: input.plannedMealId, expectedMealPlanVersion: input.expectedMealPlanVersion } : {}),
+        ...(input.plannedMealId ? { kind: "meal", plannedMealId: input.plannedMealId, expectedMealPlanVersion: input.expectedMealPlanVersion, ...(input.singlePlannedPortion ? { singlePlannedPortion: true } : {}) } : {}),
         date: input.date,
         slot: input.slot,
         name: input.name,
@@ -968,6 +976,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     return this.mutate(
       "edit_meal_plan",
       {
+        ...(input.removePlannedMealId ? { removePlannedMealId: input.removePlannedMealId } : {}),
         mealPlan: input.mealPlan,
         grocery,
         expectedVersions: input.expectedVersions ?? {
@@ -1005,6 +1014,10 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
 
   async addPlannedMeal(input: AddPlannedMealInput): Promise<MutationOutcome> {
     const { plannedMeal, currentSnapshot } = input;
+    if ((input.reviewAcknowledged !== undefined || input.reviewPolicyVersion !== undefined)
+      && (input.reviewAcknowledged !== true || input.reviewPolicyVersion !== "advisory_v1")) {
+      throw repositoryException(toRepositoryError("validation_failed: Refresh the selected portion and its planning warnings."));
+    }
     const weekOf = startOfWeek(plannedMeal.date, currentSnapshot.profile?.weekStartsOn ?? 0);
     const currentPlan = currentSnapshot.mealPlan?.weekOf === weekOf ? currentSnapshot.mealPlan : null;
     const target = targetForDate(currentSnapshot.nutritionWeekTargets, plannedMeal.date)
@@ -1025,11 +1038,13 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const grocery = existingGrocery ? mergeGroceryLists(existingGrocery, generatedGrocery) : generatedGrocery;
     return this.mutate("add_planned_meal", {
       mealPlan, plannedMeal, grocery,
+      ...(input.reviewAcknowledged === undefined ? {} : { reviewAcknowledged: input.reviewAcknowledged, reviewPolicyVersion: input.reviewPolicyVersion }),
       newFoods: input.newFoods ?? [],
       ...(input.newMeal ? { newMeal: input.newMeal } : {}),
-      expectedVersions: input.expectedVersions ?? {
+      expectedVersions: {
         ...(currentPlan ? { mealPlanVersion: currentPlan.version } : { mealPlanVersion: 0 }),
         ...(existingGrocery ? { groceryRevision: existingGrocery.revision } : {}),
+        ...input.expectedVersions,
       },
       idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
     }, [

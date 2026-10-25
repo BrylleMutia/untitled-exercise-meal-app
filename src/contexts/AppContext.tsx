@@ -13,6 +13,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { createSupabaseRepository } from "@/services/supabaseRepository";
+import { reviewedMealValidationError } from "@/utility/reviewedMealValidation";
 import type {
   DraftEnvelope,
   AccountExport,
@@ -30,6 +31,7 @@ import type {
   NutritionWeekReadModel,
   SetRecipeFavoriteInput,
   SetGroceryTotalAmountInput,
+  ManualPlanningReview,
 } from "@/types/backend";
 import type {
   AppSnapshot,
@@ -95,7 +97,7 @@ export interface AppActions {
   saveSession(session: WorkoutSession): Promise<void>;
   finishSession(sessionId: string): Promise<boolean>;
   abandonSession(sessionId: string): Promise<boolean>;
-  logNutrition(input: Omit<NutritionLog, "id" | "createdAt">, fixedKey?: string, week?: NutritionWeekReadModel): Promise<boolean>;
+  logNutrition(input: Omit<NutritionLog, "id" | "createdAt">, fixedKey?: string, week?: NutritionWeekReadModel, singlePlannedPortion?: boolean): Promise<boolean>;
   updateNutrition(entry: NutritionLog): Promise<boolean>;
   saveFood(food: Omit<Food, "id"> & { id?: string }): Promise<boolean>;
   logSavedMeal(
@@ -108,8 +110,8 @@ export interface AppActions {
   ): Promise<boolean>;
   saveReviewedMeal(input: Omit<SaveReviewedMealInput, "idempotencyKey">, fixedKey?: string, week?: NutritionWeekReadModel): Promise<boolean>;
   updateLoggedMeal(loggedMeal: LoggedMeal, ingredients: Array<Omit<NutritionLog, "id" | "createdAt">>, portion?: { servings: number; previousServings?: number; retryKey: string }): Promise<boolean>;
-  deleteLoggedMeal(loggedMealId: string, expectedRevision?: number): Promise<void>;
-  deleteNutrition(id: string, expectedRevision?: number): Promise<void>;
+  deleteLoggedMeal(loggedMealId: string, expectedRevision?: number, fixedKey?: string): Promise<boolean>;
+  deleteNutrition(id: string, expectedRevision?: number, fixedKey?: string): Promise<boolean>;
   logWeight(weightKg: number, date: string): Promise<void>;
   toggleGrocery(id: string, week?: NutritionWeekReadModel): Promise<void>;
   setGroceryQuantity(id: string, quantity: number, week: NutritionWeekReadModel, options: { calendarRevision: number; groceryRevision: number; idempotencyKey: string }): Promise<boolean>;
@@ -118,9 +120,10 @@ export interface AppActions {
   regenerateGrocery(week?: NutritionWeekReadModel): Promise<void>;
   setGroceryTotalAmount(input: Omit<SetGroceryTotalAmountInput, "currentSnapshot">, week: NutritionWeekReadModel): Promise<boolean>;
   skipPlannedMeal(id: string, week?: NutritionWeekReadModel): Promise<void>;
+  removePlannedMeal(id: string, week: NutritionWeekReadModel, fixedKey: string): Promise<boolean>;
   editMealPlan(mealPlan: MealPlan, week?: NutritionWeekReadModel): Promise<boolean>;
   generateNutritionWeek(input: Omit<GenerateNutritionWeekInput, "currentSnapshot">, week: NutritionWeekReadModel): Promise<boolean>;
-  addPlannedMeal(plannedMeal: PlannedMeal, newFoods?: Food[], newMeal?: Meal, fixedKey?: string, week?: NutritionWeekReadModel): Promise<boolean>;
+  addPlannedMeal(plannedMeal: PlannedMeal, newFoods?: Food[], newMeal?: Meal, fixedKey?: string, week?: NutritionWeekReadModel, review?: ManualPlanningReview): Promise<boolean>;
   resetPlan(): Promise<void>;
   applyWorkoutOverride(input: Omit<WorkoutPlanOverrideInput, "currentSnapshot">): Promise<void>;
   removeWorkoutOverride(input: Omit<RemoveWorkoutOverrideInput, "currentSnapshot">): Promise<void>;
@@ -630,7 +633,7 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async logNutrition(input, fixedKey, week) {
+      async logNutrition(input, fixedKey, week, singlePlannedPortion) {
         const numericValues = [
           input.servings,
           ...(input.servingQuantity === undefined ? [] : [input.servingQuantity]),
@@ -646,6 +649,7 @@ export function AppProvider({
         }
         const outcome = await execute("save_nutrition_log", (current, idempotencyKey) => repository!.saveNutrition({
           entry: input,
+          ...(singlePlannedPortion ? { singlePlannedPortion: true } : {}),
           ...(input.plannedMealId ? { expectedMealPlanVersion: week?.mealPlan?.version ?? current.mealPlan?.version } : {}),
           idempotencyKey,
         }), fixedKey);
@@ -653,13 +657,9 @@ export function AppProvider({
       },
 
       async saveReviewedMeal(input, fixedKey, week) {
-        if (!input.name.trim() || input.ingredients.length === 0 || input.ingredients.length > 10) {
-          notify("Add at least one reviewed ingredient before saving the meal.", "error");
-          return false;
-        }
-        const invalid = input.ingredients.some((entry) => !Number.isFinite(entry.servings) || entry.servings <= 0 || [entry.calories, entry.proteinG, entry.carbsG, entry.fatG, ...(entry.fiberG === undefined ? [] : [entry.fiberG])].some((value) => !Number.isFinite(value) || value < 0));
-        if (invalid) {
-          notify("Review quantities and nutrition values before saving.", "error");
+        const validationError = reviewedMealValidationError(input);
+        if (validationError) {
+          notify(validationError, "error");
           return false;
         }
         const outcome = await execute("save_reviewed_meal", (current, idempotencyKey) => repository!.saveReviewedMeal({
@@ -738,21 +738,22 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async deleteLoggedMeal(loggedMealId, expectedRevision) {
+      async deleteLoggedMeal(loggedMealId, expectedRevision, fixedKey) {
         const current = snapshotRef.current;
         const meal = current.loggedMeals.find((item) => item.id === loggedMealId);
-        if (!meal && expectedRevision === undefined) return;
-        await execute("delete_logged_meal", (fresh, idempotencyKey) => repository!.deleteLoggedMeal({
+        if (!meal && expectedRevision === undefined) return false;
+        const outcome = await execute("delete_logged_meal", (fresh, idempotencyKey) => repository!.deleteLoggedMeal({
           loggedMealId,
           expectedRevision: expectedRevision ?? fresh.loggedMeals.find((item) => item.id === loggedMealId)?.revision ?? meal!.revision,
           currentSnapshot: fresh,
           expectedVersions: { recordRevision: expectedRevision ?? fresh.loggedMeals.find((item) => item.id === loggedMealId)?.revision ?? meal!.revision },
           idempotencyKey,
-        }));
+        }), fixedKey);
+        return Boolean(outcome);
       },
 
-      async deleteNutrition(id, expectedRevision) {
-        await execute("delete_nutrition_log", (current, idempotencyKey) =>
+      async deleteNutrition(id, expectedRevision, fixedKey) {
+        const outcome = await execute("delete_nutrition_log", (current, idempotencyKey) =>
           repository!.deleteNutrition({
             id,
             currentSnapshot: current,
@@ -760,8 +761,9 @@ export function AppProvider({
               recordRevision: expectedRevision ?? current.nutritionLogs.find((entry) => entry.id === id)?.revision,
             },
             idempotencyKey,
-          }),
+          }), fixedKey,
         );
+        return Boolean(outcome);
       },
 
       async logWeight(weightKg, date) {
@@ -827,6 +829,13 @@ export function AppProvider({
         );
       },
 
+      async removePlannedMeal(id, week, fixedKey) {
+        const outcome = await execute("remove_planned_meal", (current, idempotencyKey) => repository!.removePlannedMeal({
+          id, currentSnapshot: nutritionWeekSnapshot(current, week), idempotencyKey,
+        }), fixedKey);
+        return Boolean(outcome);
+      },
+
       async resetPlan() {
         await execute("reset_plan", (current, idempotencyKey) =>
           repository!.resetPlan({ currentSnapshot: current, idempotencyKey }),
@@ -847,9 +856,12 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async addPlannedMeal(plannedMeal, newFoods, newMeal, fixedKey, week) {
+      async addPlannedMeal(plannedMeal, newFoods, newMeal, fixedKey, week, review) {
         const outcome = await execute("add_planned_meal", (current, idempotencyKey) =>
-          repository!.addPlannedMeal({ plannedMeal, newFoods, newMeal, currentSnapshot: nutritionWeekSnapshot(current, week), idempotencyKey }),
+          repository!.addPlannedMeal({ plannedMeal, newFoods, newMeal, currentSnapshot: nutritionWeekSnapshot(current, week), idempotencyKey,
+            ...(review ? { reviewAcknowledged: review.reviewAcknowledged, reviewPolicyVersion: review.reviewPolicyVersion,
+              expectedVersions: { profileRevision: review.profileRevision, ...(review.recipeRevision === undefined ? {} : { recordRevision: review.recipeRevision }) } } : {}),
+          }),
           fixedKey,
         );
         return Boolean(outcome);

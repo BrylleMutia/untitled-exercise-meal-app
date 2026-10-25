@@ -8,6 +8,9 @@ import { foodMacros } from "@/utility/nutrition";
 import { generateWeeklyMeals, weeklyRecipeOptions } from "@/utility/weeklyMealGeneration";
 import { recipeIngredientDraft, recipePreview, recipeUnitConversion } from "@/utility/recipeEditor";
 import { providedRecipeLogEntry } from "@/utility/providedRecipeNutrition";
+import { logMeal } from "@/utility/mealLogging";
+import { reviewedMealValidationError } from "@/utility/reviewedMealValidation";
+import type { AppActions } from "@/contexts/AppContext";
 import { createSupabaseRepository } from "@/services/supabaseRepository";
 import type { Database } from "@/types/database.generated";
 import type { AppSnapshot, UserProfile, WorkoutSession } from "@/types/domain";
@@ -128,6 +131,65 @@ function completedSession(snapshot: AppSnapshot, session: WorkoutSession): Worko
 }
 
 describe("Supabase repository against the disposable local stack", () => {
+  it("versions reviewed manual additions as advisory, preserves history and rejects stale reviews and policy forgery", async () => {
+    const account = await createAccount();
+    const base = (await account.repository.completeOnboarding({ profile: { ...profile(account.id, "Direct meals"), dietaryPattern: "Vegan Keto-style", allergies: ["soy"], cookingTimeMinutes: 15 }, currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
+    const recipe = base.savedMeals.find(meal => meal.id === "meal-korean-beef-bowl")!;
+    const weekOf = addDays(startOfWeek(todayKey(), 1), 21), date = addDays(weekOf, 2);
+    const initial = nutritionWeekSnapshot(base, await account.repository.loadNutritionWeek(weekOf));
+    const input = { currentSnapshot: initial, plannedMeal: { id: randomUUID(), date, slot: "dinner" as const, mealId: recipe.id, label: recipe.name, servings: 2.5 }, reviewAcknowledged: true, reviewPolicyVersion: "advisory_v1" as const,
+      expectedVersions: { profileRevision: base.profile!.revision, recordRevision: recipe.revision }, idempotencyKey: randomUUID() };
+    await expect(account.repository.addPlannedMeal({ ...input, reviewAcknowledged: false })).rejects.toThrow();
+    await expect(account.repository.addPlannedMeal({ ...input, expectedVersions: { ...input.expectedVersions, recordRevision: 999 } })).rejects.toThrow();
+    await account.repository.addPlannedMeal(input);
+    await account.repository.addPlannedMeal(input);
+    let week = await account.repository.loadNutritionWeek(weekOf);
+    expect(week.mealPlan).toMatchObject({ preferencePolicy: "advisory_v1", version: 1 });
+    expect(week.mealPlan!.meals).toHaveLength(1);
+    expect(week.mealPlan!.meals[0]).toMatchObject({ servings: 2.5, expectedCarbsG: 145, source: "source-provided" });
+    expect(week.nutritionLogs).toEqual([]);
+    expect(week.grocery!.items.length).toBeGreaterThan(0);
+    await account.repository.editMealPlan({ currentSnapshot: nutritionWeekSnapshot(base, week), mealPlan: { ...week.mealPlan!, preferencePolicy: "enforced", meals: week.mealPlan!.meals.map(meal => ({ ...meal, servings: 3 })) }, idempotencyKey: randomUUID() });
+    week = await account.repository.loadNutritionWeek(weekOf);
+    expect(week.mealPlan).toMatchObject({ preferencePolicy: "advisory_v1", version: 2 });
+    expect(week.mealPlan!.meals[0].servings).toBe(3);
+    const empty = await account.repository.loadNutritionWeek(addDays(weekOf, 7));
+    await account.repository.addPlannedMeal({ currentSnapshot: nutritionWeekSnapshot(base, empty), plannedMeal: { id: randomUUID(), date: empty.weekOf, slot: "lunch", foodId: "food-mvp3-169967", label: "Broccoli", servings: 1 }, idempotencyKey: randomUUID() });
+    const enforced = await account.repository.loadNutritionWeek(empty.weekOf);
+    expect(enforced.mealPlan!.preferencePolicy).toBe("enforced");
+    await expect(account.repository.editMealPlan({ currentSnapshot: nutritionWeekSnapshot(base, enforced), mealPlan: { ...enforced.mealPlan!, preferencePolicy: "advisory_v1", meals: [{ ...input.plannedMeal, date: empty.weekOf }] }, idempotencyKey: randomUUID() })).rejects.toThrow();
+    await account.repository.addPlannedMeal({ ...input, currentSnapshot: nutritionWeekSnapshot(base, enforced), plannedMeal: { ...input.plannedMeal, id: randomUUID(), date: empty.weekOf }, idempotencyKey: randomUUID() });
+    const upgraded = await account.repository.loadNutritionWeek(empty.weekOf);
+    expect(upgraded.mealPlan).toMatchObject({ preferencePolicy: "advisory_v1", version: 2 });
+    expect(upgraded.mealPlan!.meals).toHaveLength(2);
+    const race = await Promise.allSettled([1, 2].map(servings => account.repository.addPlannedMeal({ currentSnapshot: nutritionWeekSnapshot(base, upgraded), plannedMeal: { id: randomUUID(), date: empty.weekOf, slot: "snack", foodId: "food-egg", label: "Concurrent addition", servings }, reviewAcknowledged: true, reviewPolicyVersion: "advisory_v1", expectedVersions: { profileRevision: base.profile!.revision }, idempotencyKey: randomUUID() })));
+    expect(race.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(race.find(result => result.status === "rejected")).toMatchObject({ reason: { repositoryError: { code: "stale_version" } } });
+    const changed = await account.repository.setWeekStart({ weekStartsOn: 0, expectedRevision: base.profile!.revision!, idempotencyKey: randomUUID() });
+    expect((await account.repository.loadNutritionWeek(startOfWeek(date, 0))).mealPlan!.preferencePolicy).toBe("advisory_v1");
+    expect(changed.snapshot.profile!.dietaryPattern).toBe("Vegan Keto-style");
+    expect(changed.snapshot.nutritionLogs).toEqual(base.nutritionLogs);
+  });
+  it("serializes one-tap planned logging and versions removal without changing saved intake", async () => {
+    const account = await createAccount();
+    const onboarded = (await account.repository.completeOnboarding({ profile: profile(account.id, "Meal actions"), currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
+    const date = todayKey();
+    const edited = (await account.repository.editMealPlan({ currentSnapshot: onboarded, mealPlan: { ...onboarded.mealPlan!, meals: [
+      { id: "one-tap", date, slot: "breakfast", foodId: "food-egg", label: "Egg", servings: 1 },
+      { id: "remove-me", date, slot: "lunch", foodId: "food-egg", label: "Later egg", servings: 1 },
+    ] }, idempotencyKey: randomUUID() })).snapshot;
+    const keys = [randomUUID(), randomUUID()];
+    const results = await Promise.allSettled(keys.map(idempotencyKey => account.repository.saveNutrition({ entry: { ...eggEntry(date), plannedMealId: "one-tap" }, expectedMealPlanVersion: edited.mealPlan!.version, singlePlannedPortion: true, idempotencyKey })));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    const logged = (await account.repository.load())!;
+    expect(logged.nutritionLogs.filter(log => log.plannedMealId === "one-tap")).toHaveLength(1);
+    await expect(account.repository.removePlannedMeal({ id: "one-tap", currentSnapshot: logged, idempotencyKey: randomUUID() })).rejects.toThrow();
+    const removed = await account.repository.removePlannedMeal({ id: "remove-me", currentSnapshot: logged, idempotencyKey: randomUUID() });
+    expect(removed.snapshot.mealPlan!.version).toBe(logged.mealPlan!.version + 1);
+    expect(removed.snapshot.mealPlan!.meals.map(meal => meal.id)).toEqual(["one-tap"]);
+    expect(removed.snapshot.nutritionLogs).toEqual(logged.nutritionLogs);
+  });
   it("saves exact weekly spending, preserves it across refresh, exports it, and rejects competing writers", async () => {
     const account = await createAccount();
     const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Weekly spending"), currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
@@ -405,6 +467,47 @@ describe("Supabase repository against the disposable local stack", () => {
     await account.repository.editMealPlan(competing[winner]);
     expect((await account.repository.loadNutritionWeek(weeks[0])).mealPlan?.version).toBe(restored.mealPlan!.version + 1);
     expect((await account.repository.loadNutritionWeek(weeks[1])).mealPlan).toEqual(newer.mealPlan);
+  });
+
+  it("logs the actual eleven-ingredient Hainanese recipe directly and from its planned portion", async () => {
+    const account = await createAccount();
+    const base = (await account.repository.completeOnboarding({ profile: profile(account.id, "Hainanese logging"), currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
+    const recipe = base.savedMeals.find(meal => meal.id === "meal-default-hainanese-chicken-rice")!;
+    expect(recipe.ingredients).toHaveLength(11);
+    const date = todayKey();
+    const planned = (await account.repository.editMealPlan({ currentSnapshot: base, mealPlan: { ...base.mealPlan!, meals: [{ id: "hainanese-planned", date, slot: "dinner", mealId: recipe.id, label: recipe.name, servings: 1.5 }] }, idempotencyKey: randomUUID() })).snapshot;
+    const actions = {
+      logSavedMeal: async (logDate, slot, entries, meal, idempotencyKey, recipeServings) => Boolean(await account.repository.saveSavedMealLog({ date: logDate, slot, entries, meal, idempotencyKey, recipeServings })),
+      saveReviewedMeal: async (input, idempotencyKey) => {
+        expect(reviewedMealValidationError(input)).toBeNull();
+        return Boolean(await account.repository.saveReviewedMeal({ ...input, expectedMealPlanVersion: planned.mealPlan!.version, idempotencyKey }));
+      },
+    } satisfies Pick<AppActions, "logSavedMeal" | "saveReviewedMeal">;
+    for (const [slot, portion, plannedId] of [["lunch", 1.25, undefined], ["dinner", 1.5, "hainanese-planned"]] as const) {
+      const key = randomUUID();
+      const ingredients = recipe.ingredients.map(ingredient => ({ ...ingredient, servings: ingredient.servings * portion / recipe.servings }));
+      for (let retry = 0; retry < 2; retry++) {
+        expect(await logMeal(actions as AppActions, ingredients, date, slot, recipe, base.foods, plannedId, key, portion)).toBe(true);
+      }
+      const saved = await account.repository.loadNutritionWeek(planned.mealPlan!.weekOf);
+      const meals = saved.loggedMeals.filter(meal => meal.date === date && meal.slot === slot);
+      expect(meals).toHaveLength(1);
+      expect(meals[0]).toMatchObject({ recipeServings: portion, ...(plannedId ? { plannedMealId: plannedId } : {}) });
+      expect(saved.nutritionLogs.filter(entry => entry.loggedMealId === meals[0].id)).toHaveLength(11);
+    }
+    expect((await account.repository.loadNutritionWeek(planned.mealPlan!.weekOf)).mealPlan).toEqual(planned.mealPlan);
+    const beforeUndo = await account.repository.loadNutritionWeek(planned.mealPlan!.weekOf);
+    const dinner = beforeUndo.loggedMeals.find(meal => meal.plannedMealId === "hainanese-planned")!;
+    await expect(account.repository.deleteLoggedMeal({ loggedMealId: dinner.id, expectedRevision: dinner.revision + 1, currentSnapshot: base, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    await expect(userB.repository.deleteLoggedMeal({ loggedMealId: dinner.id, expectedRevision: dinner.revision, currentSnapshot: (await userB.repository.load())!, idempotencyKey: randomUUID() })).rejects.toThrow();
+    const undo = { loggedMealId: dinner.id, expectedRevision: dinner.revision, currentSnapshot: base, idempotencyKey: randomUUID() };
+    await account.repository.deleteLoggedMeal(undo);
+    await account.repository.deleteLoggedMeal(undo);
+    const afterUndo = await account.repository.loadNutritionWeek(planned.mealPlan!.weekOf);
+    expect(afterUndo.loggedMeals).toEqual(beforeUndo.loggedMeals.filter(meal => meal.id !== dinner.id));
+    expect(afterUndo.nutritionLogs).toEqual(beforeUndo.nutritionLogs.filter(entry => entry.loggedMealId !== dinner.id));
+    expect(afterUndo.mealPlan).toEqual(beforeUndo.mealPlan);
+    expect(await logMeal(actions as AppActions, recipe.ingredients.map(ingredient => ({ ...ingredient, servings: ingredient.servings * 1.5 / recipe.servings })), date, "dinner", recipe, base.foods, "hainanese-planned", randomUUID(), 1.5)).toBe(true);
   });
 
   it("exposes approved shared recipes and zero-calorie water to independent accounts", async () => {
