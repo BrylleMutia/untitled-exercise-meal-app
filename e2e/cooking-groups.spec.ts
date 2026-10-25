@@ -113,8 +113,10 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
       }
       await route.fulfill({ response, json });
     });
-    await pa.getByRole("button", { name: "Generate", exact: true }).click();
+    await pa.getByRole("button", { name: "Generate", exact: true }).focus();
+    await pa.keyboard.press("Enter");
     const dialog = pa.getByRole("dialog", { name: "Generate plan" });
+    await expect(dialog).toBeVisible();
     const recipeChoices = dialog.getByRole("group", { name: "Choose recipes", exact: true });
     const batchLimit = recipeChoices.getByRole("spinbutton", { name: "Batches for Korean Beef Bowl", exact: true });
     const minus = recipeChoices.getByRole("button", { name: "Decrease batches for Korean Beef Bowl", exact: true });
@@ -346,7 +348,12 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     // the disclosure's automatic loading state.
     await expect(beaPrivate.getByLabel("Extra grocery item name", { exact: true })).toBeEnabled();
     await expect(privateToggle).toBeEnabled();
-    if (await privateToggle.getAttribute("aria-expanded") !== "true") await privateToggle.click();
+    // Pin this disclosure open rather than relying on its automatic loading expansion.
+    if (await privateToggle.getAttribute("aria-expanded") === "true") {
+      await privateToggle.click();
+      await expect(privateToggle).toHaveAttribute("aria-expanded", "false");
+    }
+    await privateToggle.click();
     await expect(beaPrivate.getByLabel("Extra grocery item name", { exact: true })).toBeVisible();
     await beaPrivate.getByLabel("Extra grocery item name", { exact: true }).fill("Bea private draft");
     await pb.reload();
@@ -396,6 +403,7 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     await pa.setViewportSize({ width: 320, height: 930 });
     await expect.poll(() => pa.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally {
+    await Promise.allSettled([pa.unrouteAll({ behavior: "ignoreErrors" }), pb.unrouteAll({ behavior: "ignoreErrors" })]);
     await Promise.allSettled([ca.close(), cb.close()]);
     const cleanup = await Promise.allSettled([deleteLocalAccount(b), deleteLocalAccount(a)]);
     const failures = cleanup.filter((result): result is PromiseRejectedResult => result.status === "rejected");
