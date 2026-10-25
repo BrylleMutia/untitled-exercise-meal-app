@@ -296,18 +296,15 @@ Rules:
   or search field to mount. Close/success focus return waits for pending controls
   to re-enable. Food-review saving also disables parent entry controls, and queued
   draft writes finish before authoritative-success cleanup.
-- Saved-card Add to plan uses the same authorized `addPlannedMeal` action, not
-  a nutrition-save action. `SavedRecipePlanReview` resolves the current recipe
-  and ingredient records, previews a positive portion with `recipePortion`, and
-  requires a meal slot for the selected day. Its stable top-level component
-  retains the submitted planned-row identity and retry key through failed or
-  lost responses; deliberate slot/portion changes start a new intent. Stale
-  recipe contents require explicit renewed review, and missing ingredients or
-  planning-ineligible values cannot submit. The review is local presentation
-  state, without a new recoverable draft contract; reload or cancellation ends
-  that open review. Authoritative success closes it and focus return waits for
-  controls to re-enable. Existing plan/grocery concurrency, eligibility and
-  transaction boundaries remain unchanged. No migration or public RPC is added.
+- Direct food/recipe selection uses the shared `MealEntryContent` portion panel,
+  `SelectedMealActions`, `MealEntryWarnings` and pure `mealEntryReview`. Source
+  details and uncertainty are visible before the first Log meal/Add to plan
+  actions. Manual and AI authoring retain their review stages. The old second
+  `RecipePortionReview` stage is removed. Account/date/slot drafts retain selected
+  identity, contents/revision, portions, submitted planned-row ID and fixed keys.
+  Network failures reuse those keys; changed selections/portions or refreshed
+  plan/profile/grocery bases start a new intent. A matching authoritative planned
+  row completes recovery after a lost success response.
 - Direct logging from a planned row uses the authenticated `log_planned_meal`
   wrapper around the existing food or grouped-meal save path. The wrapper
   checks the current owned plan version, date, slot, and reference, then stores
@@ -1060,6 +1057,11 @@ screen reading.
 - AI output must remain a draft until the user confirms it through the separate
   `save_reviewed_meal` mutation, which creates the reusable recipe, grouped
   parent, and ordered historical child snapshots atomically.
+- Saved-recipe logging accepts 1–100 measured ingredients, matching recipe
+  authoring, while AI-assisted reviews retain their 1–10 ingredient bound.
+  Client and RPC validation distinguish missing ingredients from excessive
+  counts. Each ingredient keeps its own authorized nutrition snapshot; recipes
+  are never collapsed into fabricated nutrition to bypass the bound.
 - Restaurant meals, sauces, cooking oils, and mixed dishes must remain visibly uncertain and must not display false precision.
 - Do not send complete profiles, full histories, credentials, or unrelated user data to the model. Send only the minimum context required for the requested extraction.
 - Define request timeouts, rate limits, sanitized error logging, provider failure behavior, and data retention before enabling the integration.
@@ -1528,3 +1530,92 @@ denial and cross-member review isolation. Use forward migrations, generated
 contracts, local database verification and the repository's linked migration
 preflight for any eventual rollout. This documentation follow-up changes no
 runtime behavior, schema, saved settings or plan data.
+
+
+## Shared daily meal entry and planned actions
+
+Home reads the same focused nutrition week as Nutrition and merges referenced
+recipes/foods through nutritionWeekSnapshot. A pure dailyMealRows projection
+orders slots, excludes skipped prescriptions, replaces linked planned rows with
+historical actual entries, groups meal ingredients once, and labels missing
+nutrition without inventing zero. Summary rings/macros still use actual intake.
+Home's logged checkmark calls the existing revision-checked deleteLoggedMeal
+or deleteNutrition action using the projection's explicit record kind and ID.
+Grouped deletion removes its historical ingredient snapshots atomically;
+prescriptions stay intact and become visible again through the same projection.
+Deletion returns a typed success flag and accepts a stable retry key. Pending
+actions lock competing controls; failed undo retains the record, while success
+refreshes the authoritative week and returns focus to the meal-slot plus.
+The shared Add meal dialog extracts the existing guided/manual flows, retains
+account/date/slot draft identities, and scopes durable actions to that week.
+
+removePlannedMeal is an owner-scoped typed intent implemented through the existing
+edit_meal_plan RPC and its version/idempotency/calendar guards. Forward migration
+20261022061624 rejects omission of linked logged prescriptions and explicitly
+reconciles affected shared weeks when no planned INSERT remains to trigger it.
+Historical assignment records, generation summaries and plan versions remain.
+Shared edits and planned logging acquire group/profile/week locks consistently.
+The optional singlePlannedPortion intent on linked food/recipe logs prevents
+one-tap duplicates under concurrent calls while preserving explicitly reviewed
+legacy additional portions. Retries reuse their keys; failure preserves the
+current row/draft. Private helpers remain non-executable by clients and public
+wrappers retain authenticated grants and server-derived ownership. No tables,
+planner calculations, preference-policy rules or nutrition formulas change.
+
+
+## Reviewed manual planning policy
+
+`AddPlannedMealInput` optionally carries `reviewAcknowledged: true` and
+`reviewPolicyVersion: "advisory_v1"`. The shared selection panel sends the
+displayed profile revision and applicable saved-recipe revision through existing
+expected-version guards. `mealEntryReview` reuses the individual daily
+carbohydrate assessment, retained prescriptions and linked-log deduplication;
+personal details come only from the signed-in viewer snapshot. It does not
+change stored preferences or fabricate unknown nutrition.
+
+Forward migration `20261025035351_reviewed_manual_meal_planning.sql` extends the
+existing authorized add RPC's JSON contract. After authorization, idempotency,
+group/profile/week locks, target eligibility, plan/grocery concurrency and selected
+recipe validation, the reviewed intent requests advisory policy only around the
+server-owned plan INSERT. The prior transaction setting is restored, including
+on failure. Preference snapshots remain intact and previous enforced versions
+are preserved. Existing policy capture handles subsequent edits/calendar copies;
+ordinary edit payloads cannot choose policy. The AI-source trigger reads the
+stored plan policy, permitting usable estimated nutrition in advisory versions
+and retaining restrictions on enforced versions. The add helper separately
+preserves unacknowledged legacy-source restrictions. Trusted generation keeps
+its existing revision validation and deterministic allocation.
+
+No public RPC signature, table, RLS policy or grant is expanded. Private helpers
+remain revoked from public/anonymous/authenticated callers. New manual additions
+use existing atomic grocery reconciliation, ownership, numeric and portion
+validation; failures retain drafts and submitted identity. Verification covers
+empty and enforced weeks, stale reviews, fractional supplied/estimated values,
+retries, ordinary-edit forgery, later edits/calendar copies, grocery/history
+preservation and cross-owner/anonymous denial.
+
+Verified linked rollout on 2026-10-25: all 102 local/remote migration versions
+align and all 12 schema fingerprint groups match the locally replayed schema.
+The forward migration changes only two private function bodies and preserves
+existing table, policy and grant fingerprints. Regenerated public database
+types are unchanged. Deployed checks confirm authenticated wrapper access,
+anonymous/private-helper denial, owner-table RLS, direct-write denial and an
+unauthenticated RPC rejection before mutation.
+
+
+## Home activity cards and shared step editing
+
+Home derives weekly workout completion and today's action state in pure presentation
+utilities, preserving the existing energy estimators. Start/Resume uses the existing
+logger; a completed workout links to Workouts to avoid its automatic session creation.
+One workout card replaces duplicated responsive summaries. Today's step summary and
+seven day rows use the snapshot's owner-scoped dailySteps and saved week-start setting.
+
+DailyStepEditor is shared by Activity and Home's fixed-date modal. Existing authorized
+saveDailySteps/deleteDailySteps, revision checks, retryLast and conflict reapply remain
+the durable boundary. Both hosts use daily-steps:YYYY-MM-DD account-scoped drafts.
+A shared per-account/date promise queue serializes writes across editor lifetimes;
+reads await preceding writes and confirmed save/removal enqueues clearing after all
+writes. Cancellation does not clear drafts. Pending state locks inputs and modal
+dismissal; success applies authoritative state and restores the date action's focus.
+This refactor adds no schema, RPC, nutrition-target or workout-calculation changes.

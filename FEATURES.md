@@ -298,34 +298,101 @@ Support these input methods in the MVP:
 - Add a saved meal or recipe
 - Enter a meal using plain text
 
-The Nutrition day view has a Planned card with Breakfast, Lunch, Dinner, and
-Snack groups. Each group may contain multiple planned rows and independently
-marked Eaten rows. Empty slots say “Nothing planned or logged.” The summary and
-contextual help retain the distinction between unknown and zero intake. Planned and Eaten entries
-share compact status/name, nutrition and action rows without recipe banners
-or favorite controls. Planned
-nutrition describes its shown portion and preserves stored prescription values;
-Eaten nutrition retains saved historical values. Recipe yield/time/complexity
-pills remain on Saved recipe cards. Each meal-group heading has a Plus + Add meal
-button, even before a weekly plan exists. It opens the shared search, description,
-AI review, or manual editor beneath that heading with the slot already fixed;
-there is no Planned-header entry button or meal-slot selector in this editor.
-Only one editor is open at a time. Switching groups preserves their separate
-account/date/slot drafts. Closing or successful saving returns focus to the
-originating Add meal control. A confirmed candidate
-offers Add to plan and Log meal: the first versions the plan and reconciles
-groceries, while the second records actual intake without changing the plan.
-New plans use the active eligible target; without one, logging remains available
-and the card explains how to add a goal. AI-only estimates can be logged with
-uncertainty but must be matched or corrected before planning. Carb-limited plans
-require trusted eligible nutrition data.
+The Nutrition day view has Breakfast, Lunch, Dinner, and Snack groups with
+multiple planned and Eaten rows. Empty slots retain their headings and Add meal
+icons without a “Nothing planned or logged” placeholder. Planned nutrition uses
+saved prescription values; Eaten nutrition retains historical saved values.
 
-Every visible planned row offers Edit, Skip or Plan again, and Log. Log confirms
-the actual serving and nutrition before adding a linked Eaten row. The planned
-record remains in its versioned plan but is hidden in the day view while linked
-Eaten entries exist. Linked Eaten rows offer Edit and Delete; corrections modify
-the saved quantity rather than logging another portion. Deleting the last linked
-entry shows the Planned row again.
+Home uses the selected Card A: a pastel Today's meals card with its local-date
+pill at the right, the calorie ring on the left, and Protein, Carbs and Fat bars
+stacked vertically on the right, centered against the circle itself, without a
+separate summary background. Home shows no caption or meal-count line beneath
+the circle; its inner value/unit and accessible calorie summary remain. Nutrition
+retains its ring captions. The four
+meal-slot previews follow in one rounded soft-white list, with no gaps between
+slots and three subtle dividers. Meal entries span their full slot width with
+square edges and adjacent dividers. They use compact thumbnails and plain
+approximate-calorie text below each name. Logged names and calorie lines share
+one 44px-minimum link; the name alone does not reserve extra height. Unavailable
+and partial calories remain explicit. Home has no macro pills or pill scroller.
+Recorded calories use historical nutrition; plans use saved portion values.
+Home and Nutrition both use transparent 44px meal-slot plus buttons
+with slot-specific tooltips, visible keyboard focus and subtle hover feedback.
+The ring and macros describe recorded intake only. Unknown intake stays unknown;
+“No meals logged yet” is removed. Slot totals summarize displayed portions, count
+linked plans/logs once and explicitly label incomplete nutrition. Active plans
+and actual entries appear together. Logged entries use a mint checkmark button
+to undo that recorded meal immediately. A linked planned meal becomes pending
+again; an independent log disappears. Grouped recipes undo all their recorded
+ingredients together. The action keeps its retry identity and retains saved
+intake on failure. Meal names open Nutrition for corrections. Legacy skipped
+entries are excluded from Home.
+
+Home's lavender Workouts card combines weekly progress with today's prescribed
+workout, using a 116px ring beside completed/scheduled counts and estimated weekly
+energy. Its compact lower section retains the prescription and progression copy.
+Start/Resume opens the existing logger; completed workouts and calendar access open
+Workouts without creating another session. Rest days remain explicit.
+
+Home workout and step metrics use compact horizontal label/value rows, with
+a natural 20px line height and consistent 4px gap at the base font size. Values
+with explanations do not reserve extra height. Wrapping alone may enlarge a row. Completed
+and Scheduled omit redundant weekly suffixes; Est. kcal retains approximate
+values/ranges. Steps displays 0 without a target or 0 / target when unlogged,
+with an unknown ring and an accessible placeholder explanation. Missing walking
+time/energy stays a dash with accessible and hover/focus reasons, never a fabricated
+zero. Recorded zero remains distinct. Weekly ring and list context stays visible.
+
+Home's Steps card uses the same ring-left/metrics-right composition and a compact
+horizontal This week selector ordered by the saved week start. It defaults to
+today; selecting any of the seven weekday/date tiles updates the ring, steps,
+walking time, energy estimate and header date without saving data. Today's tile
+is labeled Today independently of the dark selected state. Full dates, visible
+focus, aria-pressed and one polite status make selection accessible. Tiles grow
+with text, retain 44px minimum targets and native horizontal scrolling/scrollbars;
+automatic selection visibility never scrolls the page vertically.
+Selection is local to this mounted Home card, independent of Nutrition. The week
+remains anchored to the real current day, with no other-week navigation. A changed
+week retains an in-range selection or resets to today. Past/today missing entries
+keep an explained numeric placeholder and unknown ring; saved zero stays distinct.
+Future selections show Upcoming with an unknown ring and dash values, and cannot
+open logging. Current saved targets/profile assumptions apply to selected dates.
+One header Add/Edit icon beside the selected date opens the fixed-date steps modal.
+The shared Activity editor owns steps, optional
+walking minutes, source/estimate context, revision conflicts and retry. Home and
+Activity reuse account/date drafts; cancellation preserves them, and successful
+save/removal drains writes before clearing that date. Pending operations lock
+inputs and dismissal. Successful modal actions refresh the selected overview and
+return focus to the header action, falling back to its selected date tile. An open
+editor retains its original date even when current-week bounds change.
+Both cards follow meals on mobile and stack beside it on desktop.
+
+Both pages use the same search-first Add meal modal (selected Modal A), bound to
+the originating date and slot. Search food/recipes or describe a meal, select a
+result and adjust its portion inline. Saved recipes, local foods and explicitly
+selected USDA results offer Log meal immediately as the primary action and Add
+to plan as the secondary action. There is no intermediate Review meal screen.
+Change selection restores matches and retains the query; modal Cancel dismisses.
+Enter manually and AI description/ingredient review retain their existing review
+requirements. Existing
+provider matching, AI review, source labels, uncertainty and numeric validation
+remain in effect. Account/date/slot drafts are shared across routes, survive
+method changes and dismissal, and are cleared only after confirmed success and
+queued draft writes have stopped. Escape/close returns focus to the slot action;
+saving locks dismissal and competing controls. Failures retain input for retry.
+
+Pending planned entries offer a 44px check icon that immediately logs the saved
+portion, and an X that opens Remove planned meal? with Cancel initially focused.
+Removal versions only the owner's selected entry and reconciles personal/shared
+groceries, including removal of the last shared entry. It preserves old versions,
+other members' assignments, saved generation summaries and actual history.
+A linked logged entry cannot be removed through this action. The one-tap log
+intent rejects a second linked log even with a different retry key; deliberately
+reviewed legacy additional portions retain their existing contract. Unresolved
+nutrition explains why logging is disabled rather than disappearing from the
+plan. Nutrition retains Edit and a restore icon for legacy skipped rows. Linked
+Eaten rows retain edit/delete; deleting the last linked log restores its plan row.
+
 Independent logs do not consume a plan item. Older logs are linked only when a
 same-date, same-slot food or meal reference yields one clear pair; ambiguous
 history remains unlinked. Unresolved plans explain why logging is disabled
@@ -487,10 +554,16 @@ with up to six recipe suggestions. Neither searching nor selecting sends a
 provider request; USDA and DeepSeek remain explicit actions, and a matching
 recipe suppresses the no-match analysis suggestion.
 
-Selecting opens Review recipe servings for the selected date and meal slot,
+Selecting opens the first portion panel for the selected date and meal slot,
 focuses a one-serving input, and accepts positive fractional portions. Log meal
 creates one independent grouped Eaten entry. Add to plan references the existing
-recipe through atomic planning, retaining goal, diet and trusted-value checks.
+recipe through atomic planning, retaining structural and goal checks. The direct
+selection panel shows personal cooking-time, diet, avoided-food/allergy, nutrition
+source and uncertainty warnings. Foods omit recipe cooking-time warnings. Daily
+carbohydrate assessment includes retained plans and actual intake, deduplicates
+linked logs, and explicitly explains incomplete totals. Add to plan acknowledges
+the current visible assessment without another checkbox or screen; preference
+conflicts alone do not disable it.
 Neither logging nor preview changes the recipe's whole yield or consumes an
 existing planned meal. Supplied per-serving macros stay authoritative: half a
 Korean Beef Bowl is 280 kcal / 22.5g protein / 29g carbs / 8g fat. Ingredient-based
@@ -499,7 +572,7 @@ portions use the same scaled quantities and rounding as the existing logger.
 Recipe and food portion selection are mutually exclusive. A selected match hides
 search controls, all results, entry tabs and unrelated description review; the
 quantity/servings field receives focus. Pending saves disable portion controls
-and the surrounding meal-group entry buttons. Cancel returns focus
+and the surrounding meal-group entry buttons. Change selection returns focus
 to search and retains query and description-review inputs. Account/date/slot
 recovery retains recipe identity, reviewed revision/contents, servings text and
 submission identity. Failed saves retain the review and retry the same intent;
@@ -514,7 +587,8 @@ planned portion, records source-provided provenance and recipe revision, and
 leaves fiber unknown when no fiber was supplied. These values do not become
 trusted catalog nutrition merely because ingredient records are trusted;
 historical enforced carb-limited versions still require verified catalog values.
-New advisory Generate versions permit usable supplied nutrition with uncertainty warnings. Recipes without supplied
+New advisory Generate versions and acknowledged direct manual additions permit
+usable supplied nutrition with uncertainty warnings. Recipes without supplied
 macros and food-only plans retain their existing calculation paths. The forward
 correction does not backfill existing prescriptions or recalculate eaten history;
 explicitly saving an edited plan creates a corrected new version while retaining
@@ -993,39 +1067,24 @@ unsaved changes; they must not be shown as completed server mutations.
   retains a recoverable draft on failure, and navigates after a confirmed save.
   An existing account loads its saved data after sign-in in a fresh browser.
 - Home offers food, steps, and workout actions in its summary cards, with today's
-  local date in a white pill beside the meals-card help icon. `/activity` stores one
+  local date in a white pill beside the meals-card heading. Meals, progress, and
+  steps summaries have no contextual-help buttons. `/activity` stores one
   manual step observation per local date, editable for the past year, with
   optional walking minutes. Zero steps is an observation; a deleted/missing
   entry is unlogged. Failed saves preserve drafts and require an explicit retry.
-- At 1024px and wider, Home stacks meals and today's workout in the left column,
-  with compact workout-progress and steps summaries in the right column and
-  shortcuts below both stacks. Cards have content-driven heights. Smaller-screen
-  order is meals, workout progress, steps, the compact full-width workout
-  summary, then shortcuts. The steps card reads only today's confirmed account entry, including
-  explicit zero and optional walking minutes. Its single current/target count
-  reads "2,000 / 10,000", announced as "2,000 of 10,000 steps"; an unset
-  target keeps "2,000" with "No daily target" and announces "2,000 steps".
-  The heading supplies the visible unit. Date/source explanations
-  stay in contextual help. Recorded minutes appear in a white clock pill beside
-  a matching white fire-icon pill for the approximate energy range, in a wrapping
-  detail row. Below 768px, the complete progress and steps summaries, including
-  steps actions and each wrapped detail row, are centered beneath their rings;
-  wider layouts retain left alignment. When today's entry is missing, the
-  count shows "0 / 10,000" (or "0" without a target) and white clock/fire
-  pills show "0 walking minutes" and "0 kcal" as visual placeholders. The
-  visible "Not logged" label and unavailable ring distinguish this from a
-  saved zero; assistive text also identifies the placeholders. Missing minutes
-  on a saved entry, saved zero minutes, and unsupported energy estimates retain
-  distinct visible messages. At/above target, the ring says "Target reached"
-  while the actual count remains unchanged. Workout-energy status messages
-  use a white fire-icon pill in Your progress with a 17px top margin. The walking
-  detail row has a 16px top margin at every screen size. The overlapping steps
-  plus is the single log/edit action, labeled for the current saved/unlogged
-  state; the target link remains beneath the details. The plus and help's
-  estimate-detail link open `/activity`; unfinished drafts and failed saves never replace the saved
-  Home value. Home and Activity share walking-estimate profile eligibility.
-  Overlapping plus actions on the Home rings open the Workouts tab directly
-  or open the daily-steps editor.
+- Home places meals in the left desktop column, with one Workouts card and
+  Steps stacked in the right column. Below 1024px the order is meals,
+  workouts, steps, shortcuts. Ring-left/metrics-right summaries remain side by
+  side at every width; values wrap at large text without page overflow.
+- Home step observations are manual daily totals, not device synchronization.
+  Missing observations remain unlogged; their overview's explained 0 count is
+  only a display placeholder. Future dates show Upcoming with dash values.
+  A saved zero remains a distinct valid observation.
+  Walking minutes and rough energy stay visibly separate from workout estimates
+  and never change nutrition targets. Date-row plus/edit icons open the shared
+  Activity editor in a modal. Missing/zero minutes and unsupported profiles keep
+  their explicit explanations. Cancel preserves drafts, pending saves lock
+  dismissal, and successful save/removal closes and returns focus to the date.
 - Daily step targets are optional, user-chosen profile preferences. Movement
   onboarding starts blank, retains recoverable drafts, allows skipping, and
   includes the choice or "Not set" in Review. `/settings#daily-step-target`
@@ -1060,8 +1119,10 @@ unsaved changes; they must not be shown as completed server mutations.
   rounds the range outward to tens of kcal. It is separate from workout energy and never increases
   the food target. Automatic device sync remains deferred.
 - Home and Nutrition show a decreasing calories-remaining ring. Unlogged intake
-  is unknown; partial logs say “Still logging”; estimates are labeled; over-target
-  intake has a neutral numeric message; missing targets stay unavailable.
+  is unknown; estimates are labeled and missing targets stay unavailable.
+  Nutrition retains “Still logging” for partial logs and neutral over-target
+  captions. Home hides below-ring captions and the meal count, keeping the inner
+  value/unit and accessible calorie summary.
   The selected date uses its effective target version; a later target change
   never replaces an earlier day's estimate.
 - Gentle motivation is off by default. A saved opt-in shows personal firsts and
@@ -1422,3 +1483,24 @@ Before closing this follow-up:
 
 Engineering compatibility and rollout requirements are owned by
 [ARCHITECTURE.md](ARCHITECTURE.md#future-generation-policy-changes).
+
+
+### Reviewed manual meal additions
+
+The optional acknowledged `advisory_v1` manual-add intent creates a new
+server-owned advisory plan version, including when the current week was
+enforced. Older versions, preference snapshots and logged history stay intact.
+Later edits and calendar copies inherit that version policy; an ordinary edit
+cannot switch an enforced version to advisory. Legacy additions without the
+review intent retain their restrictions. Usable source-provided, user-entered
+and estimated nutrition is allowed with visible uncertainty; missing/invalid
+nutrition, invalid portions, inaccessible/archived recipes, stale profile or
+recipe revisions and ineligible targets still block. Planning never records
+intake. Direct Log meal records exactly the displayed portion. Stable submitted
+identities survive failed saves and cross-route draft recovery; selection/portion
+changes or a refreshed planning basis start a new intent. Pending saves lock
+competing actions and dismissal. Confirmed success clears only that slot draft.
+Saved recipes support logging their full set of up to 100 measured ingredients,
+including through a planned portion’s check action. AI-assisted meal reviews
+remain limited to 10 ingredients. An invalid count reports the actual limit;
+valid recipes with more than 10 ingredients do not require another review.

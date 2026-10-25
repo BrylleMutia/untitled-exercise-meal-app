@@ -103,105 +103,91 @@ tints and rounded corners; screens are stat-focused and mobile-first.
   cards with a greeting, stat grids, and quick-link cards. The Home screen
   follows this shape: a blush "Today's meals" hero, compact workout and activity
   summaries, and a four-tile quick-links grid.
-  The meals hero groups its heading, local-date pill, logging status, and three
-  compact macro columns on the left, with
-  a vertically centered 116px calorie ring and overlapping Add food action on
-  the right, matching the workout and steps summaries. The ring retains its
-  short logging-status caption. Each macro column shows its label, bold recorded
-  value (or "Not logged"), an "of {target} g" line, and a short bar underneath.
-  Bars align across the strip, including when a value wraps. Card-content widths
-  below 420px on non-mobile layouts place the heading and date across the top,
-  logging status beside the ring, and the full-width macro strip beneath.
-  Below the 768px mobile breakpoint, the ring is horizontally centered below
-  the heading and date, with logging status and full-width macros underneath.
-  The strip uses three equal
-  columns when it has at least 15rem available, otherwise stacks the macros to
-  support narrow cards and enlarged text. Long values wrap without truncation.
-  Target assumptions stay in contextual help;
-  unlogged days say "Not logged" instead of showing
-  zero intake. It keeps one Add food action, without duplicate meal or progress
-  shortcuts. Target details remain available in Nutrition and Settings. The
-  weekly progress ring tracks workout completion and centers a rough energy
-  estimate from completed sessions when supported profile inputs are available.
-- Beside the meals hero, compact lavender "Your progress" and mint "Today's
-  steps" cards form a right-column stack with a 16px gap and content-driven
-  heights. At 1024px and wider, meals and "Today's workout" form an independent
-  left-column stack, while progress and steps occupy the right-column stack.
-  Both stacks start 35px below the dashboard origin, with 16px between cards.
-  Desktop meals uses 50px vertical and 23px horizontal padding; today's workout
-  uses 39px vertical padding and its existing 16px horizontal padding. Progress
-  and steps each use 26px vertical and 23px horizontal padding from 768px upward.
-  At 768–1023px, meals also uses 26px vertical and 23px horizontal padding.
-  These Home-only overrides follow the existing tablet and desktop breakpoints;
-  below 768px, meals retains 20px padding and the other summaries retain 16px.
-  Today's workout keeps 16px padding below 1024px. Meals follows its content height
-  rather than stretching to match the right column. Columns need not end at the same height; shortcuts
-  begin below the taller stack. Below 1024px, only meals keeps the 35px top margin.
-  Both right-column rings are 116px, matching the meals ring, and
-  centered vertically beside each card's full summary. Below 1024px, the order
-  is meals, workout progress, steps, the compact full-width workout card, then
-  shortcut tiles. The workout action sits beside its summary when its card has at least
-  420px of content width; otherwise it sits below at full width. Long content
-  and enlarged text can increase either stack's height without a fixed budget.
-  A shared stateless workout summary serves two responsive placements with
-  distinct heading IDs. Complementary display rules expose only one region and
-  action at a time, preserving visible reading and keyboard order.
-  Each ring has a 44px circular plus action overlapping its upper-right edge,
-  using the meals card's pale surface and chip shadow. Workout plus opens
-  `/workouts` directly; steps plus opens `/activity` as the sole log/edit steps
-  action, with an accessible label reflecting whether today's entry exists.
-- The workout progress summary always has a white fire-icon pill showing the
-  numeric energy count (for example, "0 kcal" or "140 kcal"). When the estimate
-  is unavailable, zero is a visual placeholder with an assistive explanation;
-  the ring keeps its unavailable dash and "kcal est." label. Available values
-  retain the existing rough weekly estimate and its help/assistive context.
-- Steps shows one bold, tabular confirmed count: "2,000 / 10,000" when a
-  target exists, or "2,000" with "No daily target" when unset. The heading
-  supplies the visible unit; assistive text announces "steps" and reads the
-  slash as "of" once. The date and manual-source explanation
-  stay in help. A missing entry displays "0 / 10,000" when a target is set,
-  or "0" without one, with a visible "Not logged" status and an unavailable
-  ring. The zero is a visual placeholder, not a saved observation; assistive
-  text says no steps were logged. Saved zero remains an observation.
-  Recorded walking time uses compact units ("0 mins", "35 mins", "1 hr", or
-  "1 hr 30 mins") in a white clock-icon pill matching
-  the meals date pill. The approximate calorie range ("≈110–160 kcal") uses
-  a matching white pill with a decorative fire icon on the left. These
-  informational pills share a wrapping row with a 12px gap and a fixed 16px
-  top margin at every breakpoint.
-  For unlogged activity, matching clock and fire pills show "0 mins"
-  and "0 kcal" as placeholders, with the visible "Not logged" status and
-  assistive descriptions preserving their meaning. For a saved entry, missing
-  walking time stays explicitly "Walking time not logged"; energy states
-  distinguish missing minutes, zero minutes, and unsupported profiles. The ring
-  sits to the right of the summary and its target action.
-  The duplicate log/edit steps button is omitted; the overlapping plus action
-  serves both states. Estimate details open from the card's help panel. Below
-  768px, workout and steps headings precede their horizontally centered rings;
-  the completion percentage and step counter appear beneath their respective
-  rings. Below 768px, the full progress and steps summaries are centered,
-  including percentages, counts, supporting states, pills, each wrapped detail
-  row, and steps actions. At 768px and wider, summaries and action rows remain
-  left-aligned beside the rings. Headings and help controls keep their positions.
-  Missing/unavailable walking energy on saved entries remains plain supporting text. Their
-  summaries and actions wrap to preserve readable enlarged text. Shortcut headings
-  and icons wrap as well. All actions remain at least 44px tall.
-  No target shows an empty track and dash with "No daily target"; a chosen
-  target with unlogged activity also shows a dash, labeled "Not logged" rather
-  than 0%. Saved zero shows 0%; other saved values fill steps divided by target.
-  At or above the target, visual fill caps at 100% and the ring caption replaces
-  "Of target" with "Target reached";
-  the actual count remains unchanged. Accessible labels distinguish these states.
+  The selected Card A uses a right-aligned compact date pill in the heading,
+  then a 116px calorie ring on the left with three vertically stacked macro bars
+  on the right. This two-column summary stays side by side at every viewport;
+  macro labels and values wrap at enlarged text sizes. The macro stack's vertical
+  midpoint aligns with the circle itself. Home hides all below-ring captions and
+  the logged-meal count; the value/unit inside and accessible calorie summary remain.
+  Nutrition retains the shared ring's default captions.
+  There is no overlapping ring action or “No meals logged yet” paragraph.
+  The ring/macros summary has no separate background fill. Beneath it, one
+  rounded soft-white list contains Breakfast, Lunch, Dinner and Snack with no
+  inter-slot gaps and three subtle 1px ink/10 dividers. Slot interiors retain
+  header padding; entries span the full slot width with square edges, no gaps,
+  and subtle dividers. Overflow stays visible for tooltips and focus outlines.
+  Each slot has an icon, heading, calorie summary and right-aligned transparent
+  44px plus. Compact meal rows use a small image, wrapping title,
+  a plain approximate-calorie line, navy check and quiet X controls. Logged rows show a checkmark in a
+  mint circle inside a transparent 44px undo button, with an “Undo logged [meal]”
+  accessible name and “Undo meal log” tooltip. Undo restores linked planned rows;
+  separately logged entries disappear. Failures retain the log with retry feedback.
+  Meal names and calories form one compact text stack. Logged rows use one
+  44px-minimum link for both lines, without a separate minimum height around the
+  name. Home has no macro pills or nutrition scroller. Calories retain historical
+  or saved portion values, including unavailable and partial-total explanations.
+  Empty slots retain their heading and plus without a placeholder panel. Unknown
+  nutrition stays explicit and linked planned/logged entries appear only once.
+  Target assumptions remain available in Nutrition and Settings. The existing
+  workout progress ring remains separate from food intake.
+- Home has one lavender Workouts card and one mint Steps card, both using
+  the meals card's header icon, right-aligned compact local-date pill, transparent
+  summary, left 116px ring and vertically centered right-hand metric stack.
+  The ring/metrics stay side by side at every viewport; full labels wrap at large text.
+  All three cards use 20px padding below 768px, then 26px vertical and 23px horizontal.
+  Below 1024px, reading order is meals, workouts, steps, shortcuts. Desktop places
+  meals on the left and workouts/steps in a right-hand stack, with 16px gaps and
+  the existing 35px top offset. Cards follow content height.
+- Activity metrics use horizontal label/value rows with values right-aligned:
+  Completed, Scheduled and Est. kcal for workouts; Steps, Walk time and Est. kcal
+  for steps. Repeated weekly suffixes are omitted; ring/list weekly context stays.
+  All metric rows use a natural 20px line height and 4px gap at the base font
+  size; description-bearing values have no separate minimum height. These
+  read-only values keep keyboard explanations without adopting button sizing.
+  Actual actions remain at least 44px. Labels wrap inside their column at large text. Unknown time/energy displays a
+  dash with the full reason accessible and shown on hover/focus. Unlogged steps
+  display 0 or 0 / target as a numeric placeholder, while the ring remains unknown
+  and assistive text distinguishes it from a saved zero.
+- Workouts combines the former Your progress and separate Today's workout cards.
+  Its ring shows weekly completion percentage and This week, or a dash without a
+  plan. Right-hand metrics show completed/scheduled workouts and approximate weekly
+  energy; unavailable energy is explicit, never a numeric zero placeholder.
+  A soft-white Today's workout section retains title, focus, exercise count,
+  estimated duration and progression explanation. Transparent 44px calendar and
+  Start/Resume/View actions have hover/focus tooltips. Completed workouts link to
+  Workouts rather than entering the auto-start logger. Rest days keep their copy.
+- Steps defaults to today and uses the selected date's confirmed count/target,
+  walking time and rough walking energy range. Missing/zero minutes and unsupported
+  profiles remain distinct. Target access stays in Settings; current target/profile
+  assumptions apply to every selected date. No historical targets are invented.
+  Below the overview, This week contains seven compact two-line weekday/date-number
+  buttons on a soft-white surface. Today replaces the weekday on today's tile;
+  the selected tile is dark with aria-pressed and a full-date accessible name.
+  Tiles remain at least 44px in each dimension and grow with text. Native horizontal
+  scrolling and its scrollbar stay available; revealing selection scrolls only the
+  strip, without shifting the page vertically. Nutrition/Generate keep their existing
+  full weekday/number/month tile appearances.
+  The week stays anchored to the real current day and saved week start. Selection is
+  local to the mounted card and resets to today only if it falls outside a changed
+  current week. The header date pill and one polite status announce selection.
+  Past/today missing observations keep an unknown ring and explained 0 / target
+  placeholder; saved zero remains an observation. Future tiles show Upcoming, an
+  unknown ring and dash statistics, with no logging action.
+  One header 44px plus/pencil beside the selected date opens Add/Edit steps for that
+  date. Its tooltip names the date. Overlapping ring plus controls are removed.
+  The modal keeps its fixed date, Steps, optional Walking minutes, estimate context,
+  Cancel/Save steps footer and Remove entry for a saved record. Pending operations
+  lock dismissal; success closes and returns focus to the header action, falling
+  back to the selected date tile if the action is unavailable. Selection changes
+  never retarget an already-open editor.
+  Modal scrolling, help dismissal, draft recovery and validation match Activity.
 - The optional Movement onboarding target starts blank, can be skipped, and
   appears in Review as the chosen number or "Not set". Settings has a dedicated
   `/settings#daily-step-target` section for save/remove and draft recovery.
   It is a personal preference with no suggested default or calorie reward.
   Supported walking energy remains separate and uses the same broad range as
-  Activity, with assumptions and an "Estimate details" link in contextual help.
-- The workout-energy unlogged/unavailable status in Your progress uses a white
-  informational pill with a decorative fire icon and a fixed 17px top margin
-  at every breakpoint. It wraps with enlarged text
-  and is omitted when the ring has an available estimate.
+  Activity; assumptions and source details remain on Activity.
+
 - **Tone:** warm greetings ("Hello, {name}!" / "Welcome back"), encouraging,
   non-guilt-based feedback ("Rest days are part of the plan, not a failure",
   "Unlogged day — no entries, that is fine"), and explicit estimate/disclaimer
@@ -242,8 +228,7 @@ names directly (for example `bg-cream`, `text-ink`, `bg-lav-100`).
   and nutrition pills use these same fills. Larger metric surfaces use the
   corresponding `100` tint; calorie rings use `coral-300`. Home, Nutrition,
   onboarding, Settings, Progress, and activity energy share this mapping. The
-  Home steps summary is an explicit exception: its clock and walking-calorie
-  pills both use white backgrounds.
+  Home activity summaries use plain stacked metrics instead of nutrition pills.
 - **Nutrition summaries** use separate rounded pills in Calories → Protein →
   Carbs → Fat order, with dark ink text, explicit units and macro labels, and
   tabular numerals. They wrap naturally at narrow widths and enlarged text.
@@ -421,13 +406,20 @@ suggestions retain the Close match label. A saved match suppresses the analysis
 suggestion; explicit provider actions remain available.
 
 Selecting a saved recipe, local food, or explicit USDA result replaces search
-controls and all matches with its inline white portion review. Entry tabs and
+controls and all matches with its inline pastel portion panel. Entry tabs and
 unrelated description review are hidden while preserving their input. The review
 retains date/slot context and the search query. Focus
 moves to the visible Recipe servings field, initialized to 1. Shared macro pills
 show the selected portion, followed by a concise estimate/source statement and
-contextual source help. Log meal is primary, Add to plan secondary, then Cancel.
-Controls and pills wrap on narrow screens and enlarged text. Cancel returns
+contextual source help. Log meal is primary and Add to plan secondary, together
+in a flexible two-column action row. A quiet Change selection action follows;
+modal Cancel stays in the footer. No intermediate Review meal stage is shown for
+selected recipes or single foods. Personal cooking-time, diet, avoided-food and
+source/uncertainty warnings appear above the actions, with daily carbohydrate
+assessment for the displayed portion. Allergy matches use the semantic danger
+surface and clear uncertainty wording. Preference warnings do not disable
+planning; selecting Add to plan acknowledges the visible assessment.
+Controls and pills wrap on narrow screens and enlarged text. Change selection returns
 focus to search. Pending saves disable selection and portion changes; errors
 and stale/unavailable-recipe recovery stay visible in the review. This flow adds
 no motion beyond the existing reduced-motion-aware shared controls.
@@ -447,9 +439,11 @@ request.
   route title (from a `TITLES` map) or a "Welcome back / Hello, {name}!"
   greeting.
   Home's greeting has no date row. The local date appears as a white rounded
-  pill immediately after the meals-card help icon, with a 12px left margin.
-  It wraps within the heading group at narrow widths and enlarged text sizes.
+  pill aligned to the right of the meals-card heading row, with a 12px minimum horizontal gap.
+  Its visible format is `Thu, 10/11` (abbreviated weekday and zero-padded month/day), with the full date retained for assistive technology.
+  It stays right-aligned when wrapping within the heading group at narrow widths and enlarged text sizes.
   Home has no separate Quick actions card.
+  The meals, progress, and steps card headings have no contextual-help buttons.
 - Center (desktop only, `md:flex`): inline primary nav links (Home, Workouts,
   Nutrition, Grocery, Progress) as rounded pills.
 - Right: a notification bell placeholder and a settings button,
@@ -475,8 +469,10 @@ and explain that they are relative costs, not prices. The final button says
 disabled until the save resolves, and failures leave the draft visible.
 
 Home and Nutrition use a decreasing calories-remaining ring with accessible
-numeric text. An unlogged day shows a dash, partial logs say “Still logging,”
-over-target intake has a neutral numeric label, and missing targets are explicit.
+numeric text. An unlogged day shows a dash and missing targets are explicit.
+Nutrition retains the “Still logging” caption for partial logs and a neutral
+numeric over-target caption. Home hides below-ring captions and the meal count,
+while preserving the accessible calorie summary and the value/unit inside.
 The ring follows the selected date's effective target version; a later target
 change does not alter the earlier day's display.
 Food intake and activity energy remain separate. Home summary actions use large
@@ -593,21 +589,23 @@ Macros retain one decimal where needed in both summary modes. Controls and label
 wrap at 320px and enlarged text, with existing focus and reduced-motion treatment.
 
 A single Planned card follows the daily summary for every selected day. Each
-Breakfast, Lunch, Dinner and Snack heading has a right-aligned Plus + Add meal
-control. It opens one inline editor beneath that heading with the slot fixed;
-there is no header Add to plan button or entry slot selector. Switching groups
-preserves account/date/slot drafts. Search/manual mode has a Close control;
-closing or successful saving returns focus to the originating Add meal button.
-Selection shows only the food/recipe review, focusing quantity/servings. Review
-Cancel restores search/results and focus without discarding description input.
-Log meal and Add to plan remain separate review actions. Pending food and recipe
+Breakfast, Lunch, Dinner and Snack heading has a right-aligned 44px Plus icon
+named Add meal with a slot-specific tooltip. It opens the shared Add meal modal
+with a fixed date/slot subtitle. Home uses the same modal. Search/description,
+selectable results and inline portions share the first view; Enter manually
+preserves the alternate manual form. Selected recipes and single foods expose
+source details, warnings and direct Log meal/Add to plan in the first portion
+panel; manual and AI authoring retain their review steps. Account/date/slot drafts survive route or method changes.
+Closing or successful saving returns focus to the originating plus button.
+Change selection restores search/results without discarding description input.
+Log meal and Add to plan remain separate intake/planning actions. Pending food and recipe
 saves disable portion changes, dismissal and all group entry controls. If no
 eligible goal is available, the prerequisite is explained while logging remains
 available.
 
 Four Breakfast, Lunch, Dinner, and Snack groups contain multiple planned and
 Eaten rows. These labels distinguish prescription from intake without a
-separate Logged section. An empty group states “Nothing planned or logged.” Daily summary and help retain
+separate Logged section. Empty groups retain their headers without placeholders. Daily summary and help retain
 the distinction between unknown intake and zero. Planned
 and Eaten entries share compact lavender rows with a status, name, wrapping
 calorie/protein/carbohydrate/fat pills, source context and right-aligned actions.
@@ -615,8 +613,11 @@ They have no image banners, recipe yield/time/complexity pills or favorite contr
 Planned values describe the displayed planned portion; Eaten values come from
 saved history. Planned recipe summaries open the overview. Actions wrap below
 the summary when space is limited; expanded details/editors remain inside the row.
-Planned rows retain Edit and Skip/Plan again and add Log, which opens an in-place
-actual-serving confirmation. A successful linked log hides its Planned row to
+Planned rows retain Edit and use tooltip-equipped check/X icons. Check immediately
+logs the saved planned portion; X opens Remove planned meal? with Cancel initially
+focused, the meal/date/slot and a danger Remove meal action. Legacy skipped rows
+have a restore icon. Pending mutations lock competing actions; failures retain
+the row and retry identity. A successful linked log hides its Planned row to
 avoid repetition while keeping the plan snapshot intact. Linked Eaten rows
 offer Edit and Delete without Log again; deleting the last linked Eaten row
 reveals Planned again. Eaten rows retain expand, edit, and delete.
@@ -635,16 +636,16 @@ The upper-right badge is Popular for the five most eaten recipes in the last
 30 local days, or Favorite when favorited outside that group. The wrapping name
 and separate 44px heart occupy the next row. Image and name open the overview;
 the heart only changes the personal favorite and reflects server confirmation.
-Coral calories remain per serving, with an accessible basis label and contextual
-help rather than a visible suffix. A mint pie-icon pill shows the whole recipe
+Coral calories remain per serving, displaying ≈number kcal without a calorie icon,
+with an accessible basis label. A mint pie-icon pill shows the whole recipe
 yield. Lavender time means whole-recipe minutes displayed as “X mins”;
 its accessible label retains the whole-recipe
 basis. Missing time reads “Not set” and explicit zero remains valid. Peach
 complexity shows Easy, Medium, or Hard, defaulting missing recipe values to Medium.
 Descriptions are omitted. The Planned section uses compact meal rows instead
 of recipe cards, including valid food-only and skipped entries. Unloggable
-planned rows are hidden; a slot with no visible planned or eaten rows uses
-“Nothing planned or logged.” with its heading and Add meal action. Loading/error
+planned rows remain visible with disabled logging and an actionable explanation;
+an empty slot retains its heading and Add meal action. Loading/error
 states remain distinct. This presentation does not remove stored records or
 alter planned totals, actual intake or generation occupancy.
 
@@ -686,7 +687,8 @@ tab stop, with visible focus and a scrolling description; the scrollbar is
 visually hidden while touch, trackpad and keyboard scrolling remain available. Desktop restores regular wrapping. Generate's compact wrapping
 and cooking-overview cards retain their layouts. Meal-entry and daily nutrition
 summaries retain their existing units.
-Breakfast, Lunch, Dinner and Snack headers use 44px secondary Plus icons named
+Breakfast, Lunch, Dinner and Snack headers on Home and Nutrition use transparent
+44px ghost Plus icons with subtle dark hover feedback. Nutrition's icons are named
 Add meal, with slot-specific tooltips. Existing IDs, expanded state, pending
 restrictions, toggling, drafts and focus return are preserved at all widths.
 
@@ -699,8 +701,8 @@ filters. No matches, empty collection, shared loading/error and unavailable
 favorite metadata have distinct feedback. Filters remain page-session state.
 
 Meal duplication is removed; ordinary Create and Edit draft recovery remains.
-Planned rows retain Edit, Skip/Plan again, and Log beside the summary. Expanded
-editors and confirmations follow the summary. Opening Planned Edit focuses its
+Planned rows retain Edit beside the check/X actions. Expanded editors follow
+the summary; removal uses the shared confirmation modal. Opening Planned Edit focuses its
 choice field
 after draft recovery; cancellation or successful saving returns to Edit.
 Lists preserve slot grouping and ordering. Planned/Eaten rows remain a single
@@ -1287,3 +1289,20 @@ per-account assignment counts (including zero), ID-based “(you)” labels, and
 private Your review at generation snapshot. Existing cross-route notices reopen
 this historical review. Text wraps within scrolling modals at enlarged sizes;
 44px controls, keyboard focus and reduced-motion behavior remain intact.
+
+### Shared Add meal modal and planned actions
+
+The selected Modal A is search-first, with food/recipe results, recipe thumbnails,
+inline portion controls and direct Log meal/Add to plan actions for selected
+recipes, local foods and explicit USDA selections. Manual entry stays in the same dialog
+with Back to search. Date and slot are fixed by the triggering plus. Existing
+source/uncertainty information and personal planning warnings appear in the first
+portion panel. Manual forms and AI ingredient review retain explicit review
+requirements. Change selection is distinct from footer Cancel.
+Use the shared scrollable modal, retained per-slot drafts, visible keyboard focus,
+44px controls and focus return after dismissal or successful saves. A planned
+check logs its saved portion directly, without opening this review flow. The X
+opens Remove planned meal? with the meal/date/slot, a focused Cancel button and
+pastel-danger Remove meal. Errors remain in the confirmation for retry. Nutrition
+uses these same icon actions, retains Edit and a legacy restore icon, and no
+longer places an inline entry form or empty placeholder beneath slot headings.
