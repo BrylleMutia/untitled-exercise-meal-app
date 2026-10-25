@@ -61,7 +61,7 @@ describe("Nutrition day slots", () => {
       expect(html).toContain(`aria-label="${slot}"`);
       expect(html).toContain(`id="add-meal-${slot.toLowerCase()}"`);
     }
-    expect(html.match(/Nothing planned or logged\./g)).toHaveLength(4);
+    expect(html).not.toContain("Nothing planned or logged.");
     expect(html).toContain("Set an eligible daily goal to add to the plan. You can still log food you ate.");
     expect(html).not.toContain("Meals for this day");
     expect(html).not.toContain('aria-label="Logged"');
@@ -81,7 +81,7 @@ describe("Nutrition day slots", () => {
     expect(plannedHtml).toContain("0.5 servings");
     expect(plannedHtml).toContain("Eaten food");
     expect(plannedHtml).toContain("100 kcal");
-    expect(plannedHtml).toContain("Plan again");
+    expect(plannedHtml).toContain('aria-label="Restore planned Skipped food"');
     expect(plannedHtml).toContain("Nutrition unavailable");
     expect(plannedHtml).not.toContain("recipe-card");
     expect(plannedHtml).not.toContain("recipe-default.png");
@@ -111,8 +111,9 @@ describe("Nutrition day slots", () => {
     const original = structuredClone(snapshot);
     const html = renderToStaticMarkup(<NutritionPage />);
     const planned = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
-    expect(planned.match(/Nothing planned or logged\./g)).toHaveLength(4);
-    for (const text of ["Unresolved meal", "Choose a meal", "Missing food", "Missing recipe", "Incomplete recipe", "Recipe without ingredients", "Edit planned", "Plan again", "Nutrition unavailable", "log-planned-"]) expect(planned).not.toContain(text);
+    expect(planned).not.toContain("Nothing planned or logged.");
+    for (const text of ["Choose a meal", "Missing food", "Missing recipe", "Incomplete recipe", "Recipe without ingredients", "Nutrition unavailable"]) expect(planned).toContain(text);
+    expect(planned).toContain("Edit this planned meal before logging");
     for (const slot of ["breakfast", "lunch", "dinner", "snack"]) expect(planned).toContain(`id="add-meal-${slot}"`);
     expect(snapshot).toEqual(original);
   });
@@ -131,8 +132,8 @@ describe("Nutrition day slots", () => {
     const original = structuredClone(snapshot);
     const html = renderToStaticMarkup(<NutritionPage />);
     const planned = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
-    for (const text of ["Available recipe", "Skipped food", "Plan again", "Recorded food", "Recorded meal", "100 kcal", "log-planned-valid", "log-planned-skipped"]) expect(planned).toContain(text);
-    expect(planned).not.toContain("Unresolved meal");
+    for (const text of ["Available recipe", "Skipped food", "Restore planned Skipped food", "Recorded food", "Recorded meal", "100 kcal", "log-planned-valid", "Remove planned Skipped food"]) expect(planned).toContain(text);
+    expect(planned).toContain("Unresolved meal");
     expect(planned).not.toContain("Nothing planned or logged.");
     expect(snapshot).toEqual(original);
   });

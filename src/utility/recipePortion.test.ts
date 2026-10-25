@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FOODS } from "@/constants/foods";
 import type { Meal } from "@/types/domain";
 import { foodMacros } from "./nutrition";
-import { recipePortion, recipeReviewToken } from "./recipePortion";
+import { recipePortion, recipeReviewToken, foodReviewToken } from "./recipePortion";
 
 const food = { ...FOODS[0], valueSource: "trusted_catalog" as const };
 const recipe: Meal = { id: "beef", name: "Korean Beef Bowl", revision: 1, servings: 4, ingredients: [{ foodId: food.id, servings: 8 }], providedNutrition: { calories: 560, proteinG: 45, carbsG: 58, fatG: 16 } };
@@ -14,7 +14,7 @@ describe("reviewed recipe portions", () => {
     expect(recipe.servings).toBe(4);
     expect(recipe.ingredients[0].servings).toBe(8);
   });
-  it.each(["", " ", "0", "-1", "Infinity", "NaN", "not a number"])("rejects invalid servings %s", value => {
+  it.each(["", " ", "0", "0.00001", "10001", "-1", "Infinity", "NaN", "not a number"])("rejects invalid servings %s", value => {
     expect(recipePortion(recipe, [food], value)).toBeNull();
   });
   it("calculates the ingredient portion using the same scaled quantities as logging", () => {
@@ -29,10 +29,9 @@ describe("reviewed recipe portions", () => {
     expect(recipePortion({ ...recipe, servings: 0 }, [food], "1")).toBeNull();
     expect(recipePortion({ ...recipe, providedNutrition: { ...recipe.providedNutrition!, calories: NaN } }, [food], "1")).toBeNull();
   });
-  it("keeps logging available while applying planning source restrictions", () => {
-    expect(recipePortion(recipe, [food], "1", true)?.canPlan).toBe(false);
-    expect(recipePortion({ ...recipe, providedNutrition: undefined }, [food], "1", true)?.canPlan).toBe(true);
-    expect(recipePortion(recipe, [{ ...food, valueSource: "ai_estimate" }], "1")?.canPlan).toBe(false);
+  it("accepts usable source-provided and estimated nutrition without preference exclusions", () => {
+    expect(recipePortion(recipe, [food], "1")?.nutrition).toEqual(recipe.providedNutrition);
+    expect(recipePortion({ ...recipe, providedNutrition: undefined }, [{ ...food, valueSource: "ai_estimate" }], "1")?.nutrition).toEqual(foodMacros(food, 2));
   });
   it("detects changed recipes and ingredient values after restoring by identity", () => {
     const token = recipeReviewToken(recipe, [food]);
@@ -41,5 +40,11 @@ describe("reviewed recipe portions", () => {
     expect(recipeReviewToken({ ...recipe, servings: 2 }, [food])).not.toBe(token);
     expect(recipeReviewToken(recipe, [{ ...food, calories: food.calories + 1 }])).not.toBe(token);
     expect(recipeReviewToken(recipe, [])).not.toBe(token);
+  });
+  it("compares meaningful food changes without treating import bookkeeping as a stale portion", () => {
+    expect(foodReviewToken({ ...food, providerImportedAt: "2026-10-25" })).toBe(foodReviewToken(food));
+    expect(foodReviewToken(Object.fromEntries(Object.entries(food).reverse()) as typeof food)).toBe(foodReviewToken(food));
+    expect(foodReviewToken({ ...food, carbsG: food.carbsG + 1 })).not.toBe(foodReviewToken(food));
+    expect(foodReviewToken({ ...food, valueSource: "user_provided" })).not.toBe(foodReviewToken(food));
   });
 });
