@@ -23,6 +23,17 @@ it("keeps danger icons semantic and portaled tooltips opt-in", () => {
   expect(html).not.toContain('role="tooltip"');
 });
 
+it("supports transparent ghost actions while preserving their names, targets and disabled explanations", () => {
+  const html = renderToStaticMarkup(<IconButton variant="ghost" size="compact" label="Add meal" tooltip="Add meal to Lunch" disabled><svg aria-hidden="true" /></IconButton>);
+  expect(html).toContain('aria-label="Add meal"');
+  expect(html).toContain('title="Add meal to Lunch"');
+  expect(html).toContain('disabled=""');
+  expect(html).toContain("bg-transparent text-ink-soft hover:bg-black/5");
+  expect(html).toContain("!min-h-[44px] !h-[44px] !w-[44px]");
+  expect(html).not.toContain("bg-cream");
+  expect(html).not.toContain("bg-white/70");
+});
+
 it("isolates circular white image actions and retains disabled explanations", () => {
   const html = renderToStaticMarkup(<IconButton variant="image" size="compact" label="Archive retained recipe" tooltip="Retained in saved plans" disabled><svg aria-hidden="true" /></IconButton>);
   expect(html).toContain("!rounded-full !bg-white");

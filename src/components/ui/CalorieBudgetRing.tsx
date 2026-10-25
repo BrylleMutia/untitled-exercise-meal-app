@@ -3,10 +3,11 @@ import { calorieBudgetState, type CalorieBudgetInput } from "@/utility/calorieBu
 
 type CalorieBudgetRingProps = CalorieBudgetInput & {
   size?: number;
+  showCaption?: boolean;
 };
 
 /** A remaining-target display. An unlogged day is unknown, never zero intake. */
-export function CalorieBudgetRing({ target, logged, status, estimated = false, mode = "eaten", size = 116 }: CalorieBudgetRingProps) {
+export function CalorieBudgetRing({ target, logged, status, estimated = false, mode = "eaten", size = 116, showCaption = true }: CalorieBudgetRingProps) {
   const { hasTarget, hasLogs, remaining, over, fraction, summary } = calorieBudgetState({ target, logged, status, estimated, mode });
   const stroke = 10;
   const radius = (size - stroke) / 2;
@@ -25,9 +26,9 @@ export function CalorieBudgetRing({ target, logged, status, estimated = false, m
           <span className="text-[10px] font-bold text-ink-soft">{hasTarget ? mode === "planned" ? "kcal to target" : "kcal left" : "no target"}</span>
         </span>
       </div>
-      <span className="max-w-32 text-[11px] font-semibold text-ink-soft">{mode === "planned"
+      {showCaption ? <span className="max-w-32 text-[11px] font-semibold text-ink-soft">{mode === "planned"
         ? over ? `≈${Math.round(logged - target!)} kcal above target` : hasLogs ? status === "partial" ? "Partial total" : "Planned estimate" : "No active plan"
-        : over ? `≈${Math.round(logged - target!)} kcal above estimate` : hasLogs ? status === "partial" ? "Still logging" : "Daily estimate" : "Not logged"}</span>
+        : over ? `≈${Math.round(logged - target!)} kcal above estimate` : hasLogs ? status === "partial" ? "Still logging" : "Daily estimate" : "Not logged"}</span> : null}
     </div>
   );
 }
