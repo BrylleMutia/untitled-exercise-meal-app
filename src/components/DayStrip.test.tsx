@@ -4,6 +4,22 @@ import { DayStrip } from "./DayStrip";
 
 afterEach(() => vi.useRealTimers());
 describe("Local calendar day labels", () => {
+  it("keeps the compact week anchored independently of selection and distinguishes today", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 11, 30, 12));
+    const html = renderToStaticMarkup(<DayStrip compact weekOf="2026-12-28" selected="2027-01-01" onSelect={() => {}} />);
+    expect(html.match(/aria-pressed=/g)).toHaveLength(7);
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Friday, January 1, 2027"');
+    expect(html).toContain('aria-label="Monday, December 28, 2026"');
+    expect(html).toContain('aria-current="date"');
+    expect(html).toContain('>Today</span>');
+    expect(html).not.toMatch(/>Dec<\/span>|>Jan<\/span>/);
+    expect(html).toContain("bg-ink text-white");
+    expect(html).toContain("min-h-11 min-w-11");
+    const anchored = renderToStaticMarkup(<DayStrip compact weekOf="2026-12-28" selected="2027-01-15" onSelect={() => {}} />);
+    expect(anchored).toContain('data-date="2026-12-28"');
+    expect(anchored).not.toContain('data-date="2027-01-15"');
+  });
   it("shows weekday, number and month in order, with a full selected-date label", () => {
     const html = renderToStaticMarkup(<DayStrip selected="2026-10-14" onSelect={() => {}} />);
     expect(html).toContain('aria-label="Wednesday, October 14, 2026"');

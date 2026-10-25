@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import { formatFullDate, fromKey, todayKey, weekdayShort, startOfWeek, weekDates } from "@/utility/dates";
 import type { Weekday } from "@/types/domain";
 
@@ -6,6 +9,8 @@ interface DayStripProps {
   onSelect: (date: string) => void;
   disabled?: boolean;
   weekStartsOn?: Weekday;
+  compact?: boolean;
+  weekOf?: string;
 }
 
 const stripClassName = "flex min-w-0 gap-1 overflow-x-auto p-1.5";
@@ -50,12 +55,33 @@ export function DayCheckboxStrip({ weekOf, selectedDates, onToggle, disabled = f
 }
 
 /** Local-calendar week selector with full dates for assistive navigation. */
-export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 0 }: DayStripProps) {
+export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 0, compact = false, weekOf }: DayStripProps) {
   const today = todayKey();
-  const days = weekDates(startOfWeek(selected, weekStartsOn));
+  const anchor = weekOf ?? startOfWeek(selected, weekStartsOn);
+  const days = weekDates(anchor);
+  const strip = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!compact || !strip.current) return;
+    const container = strip.current;
+    // Only scroll this strip horizontally; scrollIntoView also moves the page.
+    const reveal = () => {
+      const tile = container.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!tile) return;
+      const bounds = container.getBoundingClientRect(), item = tile.getBoundingClientRect();
+      if (item.left < bounds.left + 6) container.scrollLeft += item.left - bounds.left - 6;
+      else if (item.right > bounds.right - 6) container.scrollLeft += item.right - bounds.right + 6;
+    };
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    observer.observe(container);
+    container.querySelectorAll("button").forEach(tile => observer.observe(tile));
+    document.fonts?.addEventListener("loadingdone", reveal);
+    return () => { observer.disconnect(); document.fonts?.removeEventListener("loadingdone", reveal); };
+  }, [compact, selected, anchor]);
 
   return (
-    <div className={stripClassName} role="group" aria-label="Choose a day">
+    <div ref={strip} className={stripClassName} role="group" aria-label="Choose a day">
       {days.map((key) => {
         const active = key === selected;
         const isToday = key === today;
@@ -68,9 +94,10 @@ export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 
             aria-pressed={active}
             aria-label={formatFullDate(key)}
             aria-current={isToday ? "date" : undefined}
-            className={`${tileClassName(active)} disabled:opacity-50`}
+            data-date={key}
+            className={`${compact ? `flex min-h-11 min-w-11 shrink-0 grow flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-extrabold transition-colors motion-reduce:transition-none ${active ? "border-ink bg-ink text-white" : "border-transparent bg-white/70 text-ink hover:bg-white"}` : tileClassName(active)} disabled:opacity-50`}
           >
-            <DayTileContent date={key} active={active} isToday={isToday} />
+            {compact ? <><span className="whitespace-nowrap font-semibold">{isToday ? "Today" : weekdayShort(key)}</span><span className="text-sm tabular-nums">{fromKey(key).getDate()}</span></> : <DayTileContent date={key} active={active} isToday={isToday} />}
           </button>
         );
       })}
