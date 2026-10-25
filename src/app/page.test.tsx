@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AppSnapshot, DailyStepEntry, NutritionLog, UserProfile } from "@/types/domain";
 import HomePage from "./page";
+import { TodayMealsCard } from "@/components/nutrition/TodayMealsCard";
 
 let snapshot: AppSnapshot;
 vi.mock("@/contexts/AppContext", () => ({ useApp: () => ({ snapshot }) }));
+vi.mock("@/components/nutrition/useNutritionWeek", () => ({ useNutritionWeek: () => ({ data: undefined, loading: false, refresh: vi.fn() }) }));
 
 const profile: UserProfile = {
   id: "home-test", name: "Home Test", age: 30, sex: "female", heightCm: 168,
@@ -34,164 +36,77 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe("Home saved steps summary", () => {
-  it("shows an unavailable ring for legacy profiles without a target", () => {
+describe("Home activity summaries", () => {
+  it("shows all seven days, future restrictions and one workout card", () => {
     const html = renderHome();
-    expect(html).toContain('aria-label="Daily step target is not set"');
-    expect(html).toContain("No daily target");
-    expect(html).toContain('href="/settings#daily-step-target"');
-    expect(html).toContain("Set target");
+    expect(html).toContain('aria-label="Daily step target is not set for Monday, October 5, 2026"');
+    expect(html).toContain("No target");
+    expect(html).toContain('id="home-steps-heading"');
+    expect(html).toContain('>Steps</h2>');
+    expect(html.match(/aria-pressed=/g)).toHaveLength(7);
+    expect(html).toContain('>Today</span>');
+    expect(html).not.toContain("This week&#x27;s steps");
+    expect(html.match(/id="home-workouts-heading"/g)).toHaveLength(1);
+    expect(html).not.toContain("home-workout-heading-desktop");
+    expect(html).not.toContain("Your progress");
+    expect(html).toContain('aria-label="Add steps for Monday, October 5, 2026"');
+    expect(html).not.toContain('aria-label="Add steps for Tuesday, October 6, 2026"');
+    expect(html.indexOf('id="home-meals-heading"')).toBeLessThan(html.indexOf('id="home-workouts-heading"'));
+    expect(html.indexOf('id="home-workouts-heading"')).toBeLessThan(html.indexOf('id="home-steps-heading"'));
   });
-
-  it("keeps target progress unknown until today has a confirmed observation", () => {
+  it.each([[0,"0%"],[6500,"81%"],[8000,"100%"],[12000,"100%"]])("retains saved %i steps and caps only the ring", (steps, percent) => {
     snapshot.profile = { ...profile, dailyStepTarget: 8000 };
-    snapshot.dailySteps = [step({ date: "2026-10-04" })];
+    snapshot.dailySteps = [step({ steps: Number(steps) })];
     const html = renderHome();
-    expect(html).toContain('aria-label="No steps logged today; daily target 8,000 steps"');
-    expect(html).not.toContain('aria-label="Daily step target progress: 0%"');
-    expect(html).toContain('<span aria-hidden="true">0 / 8,000</span>');
-    expect(html).toContain("No steps logged today; 0 of 8,000 steps shown as a placeholder");
-    expect(html).toContain("Not logged");
-    expect(html).toContain("Edit target");
+    expect(html).toContain(`aria-label="Daily step target progress for Monday, October 5, 2026: ${percent}"`);
+    expect(html).toContain(`${Number(steps).toLocaleString()} of 8,000 steps`);
+    expect(html.includes("Target reached")).toBe(Number(steps) >= 8000);
+    expect(html).toContain('aria-label="Edit steps for Monday, October 5, 2026"');
   });
-
-  it.each([
-    [0, "0%", "0 of 8,000 steps"],
-    [6500, "81%", "6,500 of 8,000 steps"],
-    [8000, "100%", "8,000 of 8,000 steps"],
-    [12000, "100%", "12,000 of 8,000 steps"],
-  ])("shows saved %i steps accurately while clamping only the ring", (steps, percent, count) => {
-    snapshot.profile = { ...profile, dailyStepTarget: 8000 };
-    snapshot.dailySteps = [step({ steps })];
+  it("keeps unlogged intake and walking time explicit without fake zeros", () => {
     const html = renderHome();
-    expect(html).toContain(`aria-label="Daily step target progress: ${percent}"`);
-    expect(html).toContain(count);
-    expect(html).toContain(`<span aria-hidden="true">${steps.toLocaleString()} / 8,000</span>`);
-    expect(html).toContain(`<span class="sr-only">${count}</span>`);
-    expect(html.includes("Target reached")).toBe(steps >= 8000);
-  });
-
-  it("keeps the right-column order and both responsive workout placements", () => {
-    const html = renderHome();
-    expect(html.indexOf("Your progress")).toBeLessThan(html.indexOf("Today&#x27;s steps"));
-    expect(html.indexOf("Today&#x27;s steps")).toBeLessThan(html.indexOf('href="/grocery"'));
-    expect(html.indexOf('id="home-workout-heading-desktop"')).toBeLessThan(html.indexOf("Your progress"));
-    expect(html.indexOf('id="home-workout-heading-mobile"')).toBeLessThan(html.indexOf('href="/grocery"'));
-  });
-
-  it("keeps missing activity unknown and excludes other dates", () => {
-    snapshot.dailySteps = [step({ date: "2026-10-04", steps: 1234 })];
-    const html = renderHome();
-    expect(html).toContain("Not logged");
-    expect(html).toContain("No steps logged today");
-    expect(html).toContain('<span aria-hidden="true">0</span>');
-    expect(html).toContain("0 mins");
-    expect(html).toContain("0 kcal");
-    expect(html).toContain("Walking time not logged; zero shown as a placeholder");
-    expect(html).toContain("Walking energy not logged; zero shown as a placeholder");
-    expect(html).toContain('class="lucide lucide-clock');
-    expect(html).toContain('class="lucide lucide-flame');
-    expect(html).toContain("bg-white px-3 py-1");
-    expect(html).not.toContain("1,234 steps");
-    expect(html).not.toContain("Manual entry");
-    expect(html).not.toContain("Edit steps");
-    expect(html).toContain('aria-label="Log daily steps"');
-    expect(html.match(/href="\/activity"/g)).toHaveLength(1);
-  });
-
-  it("distinguishes a saved zero from an unlogged day", () => {
-    snapshot.dailySteps = [step({ steps: 0, walkingMinutes: undefined })];
-    const html = renderHome();
-    expect(html).toContain('<span aria-hidden="true">0</span>');
-    expect(html).toContain('<span class="sr-only">0 steps</span>');
-    expect(html).not.toContain("Manual entry");
     expect(html).toContain("Walking time not logged");
-    expect(html).toContain("Add walking minutes for an estimate");
-    expect(html).toContain('aria-label="Edit daily steps"');
-    expect(html).not.toContain("Edit steps");
-    expect(html).not.toContain("Log steps");
-    expect(html.match(/href="\/activity"/g)).toHaveLength(1);
-    expect(html).not.toContain("No steps logged today");
+    expect(html).toContain("0 steps shown as a placeholder");
+    expect(html).not.toContain("0 mins");
   });
-
-  it("shows saved minutes and the existing broad range without changing food targets", () => {
-    snapshot.dailySteps = [step()];
+  it.each([18,60])("preserves saved activity with unavailable estimates at age %i", age => {
+    snapshot.profile = { ...profile, age }; snapshot.dailySteps = [step()];
     const html = renderHome();
-    expect(html).toContain('<span aria-hidden="true">6,500</span>');
-    expect(html).toContain('<span class="sr-only">6,500 steps</span>');
-    expect(html).toContain("35 mins");
-    expect(html).toContain("≈110–160 kcal");
-    expect(html).toContain("Estimated walking energy: approximately 110 to 160 kilocalories");
-    expect(html).toContain('class="lucide lucide-clock');
-    expect(html).not.toContain("Manual entry");
-    expect(html).not.toContain("Walking energy: roughly");
-    expect(html).toContain('aria-label="About Today&#x27;s steps"');
-    expect(html).not.toContain("Estimate details");
-    expect(html).not.toContain("Food targets stay unchanged.");
-    expect(html).toContain("Monday, October 5");
-  });
-
-  it("keeps zero walking minutes explicit without a calorie estimate", () => {
-    snapshot.dailySteps = [step({ walkingMinutes: 0 })];
-    const html = renderHome();
-    expect(html).toContain("0 mins");
-    expect(html).toContain("Energy unavailable for 0 minutes");
-    expect(html).not.toContain("Estimate details");
-    expect(html).not.toContain("Walking energy: roughly");
-  });
-
-  it.each([18, 60])("retains saved observations when age %i is outside the reference", (age) => {
-    snapshot.profile = { ...profile, age };
-    snapshot.dailySteps = [step()];
-    const html = renderHome();
-    expect(html).toContain('<span aria-hidden="true">6,500</span>');
-    expect(html).toContain('<span class="sr-only">6,500 steps</span>');
-    expect(html).toContain("35 mins");
+    expect(html).toContain("6,500 steps"); expect(html).toContain("35 mins");
     expect(html).toContain("Energy unavailable for this profile");
-    expect(html).not.toContain("Walking energy: roughly");
   });
-
-  it("does not estimate for an unsupported screening outcome", () => {
-    snapshot.profile = { ...profile, targetEligibility: "unsupported" };
-    snapshot.dailySteps = [step()];
-    expect(renderHome()).toContain("Energy unavailable for this profile");
-  });
-
-  it.each([undefined, 0])("keeps profile eligibility ahead of missing or zero walking minutes (%s)", (walkingMinutes) => {
-    snapshot.profile = { ...profile, age: 60 };
+  it.each([undefined,0])("retains missing/zero walking minutes (%s)", walkingMinutes => {
     snapshot.dailySteps = [step({ walkingMinutes })];
-    const html = renderHome();
-    expect(html).toContain("Energy unavailable for this profile");
-    expect(html).not.toContain("Add walking minutes for an estimate");
-    expect(html).not.toContain("Energy unavailable for 0 minutes");
+    expect(renderHome()).toContain(walkingMinutes === undefined ? "Walking time not logged" : "0 mins");
+    expect(renderHome()).toContain(walkingMinutes === undefined ? "Add walking minutes for an estimate" : "Energy unavailable for 0 minutes");
   });
-});
-
-describe("Home workout energy status", () => {
-  it.each([
-    ["eligible", "Energy estimate: not logged."],
-    ["unsupported", "Energy estimate unavailable for this profile."],
-  ] as const)("shows a calorie placeholder with an accessible %s status", (targetEligibility, message) => {
-    snapshot.profile = { ...profile, targetEligibility };
-    const html = renderHome();
-    const pill = html.match(/<p class="mt-\[17px\] inline-flex[^]*?<\/p>/)?.[0];
-    expect(pill).toContain("bg-white px-3 py-1");
-    expect(pill).toContain("lucide-flame");
-    expect(pill).toContain("0 kcal");
-    expect(pill).toContain(`<span class="sr-only">${message} Zero shown as a placeholder.</span>`);
-  });
-
-  it("shows the numeric estimate in a white pill when workout energy is available", () => {
+  it("keeps workout energy unavailable or visibly approximate", () => {
+    expect(renderHome()).toContain("Energy estimate: not logged.");
+    snapshot.profile = { ...profile, targetEligibility: "unsupported" };
+    expect(renderHome()).toContain("Energy estimate unavailable for this profile.");
+    snapshot.profile = profile;
     snapshot.sessions = [{ id: "session", plannedWorkoutId: "workout", date: "2026-10-05", startedAt: "2026-10-05T08:00:00Z", finishedAt: "2026-10-05T08:30:00Z", status: "completed", logs: [] }];
-    const html = renderHome();
-    expect(html).not.toContain("Energy estimate: not logged.");
-    const pill = html.match(/<p class="mt-\[17px\] inline-flex[^]*?<\/p>/)?.[0];
-    expect(pill).toContain("bg-white");
-    expect(pill).toContain(">130 kcal</span>");
+    expect(renderHome()).toContain("≈130");
+    expect(renderHome()).not.toContain("kcal this week");
   });
 });
 
 describe("Home meals summary states", () => {
+  it.each([[449.4, "≈449 kcal"], [0, "≈0 kcal"], [NaN, "Calories unavailable"]])("uses one compact link for a long meal name and calories (%s)", (calories, text) => {
+    const name = "Hainanese Chicken Rice with a long saved meal name";
+    snapshot.nutritionLogs = [{ id: "meal", date: "2026-10-05", slot: "dinner", customName: name, servings: 1, calories: Number(calories), proteinG: 28, carbsG: 61, fatG: 30, estimated: true, confidence: "high", source: "test", valueSource: "user_provided", createdAt: "2026-10-05T08:00:00Z" }];
+    const html = renderToStaticMarkup(<TodayMealsCard />);
+    const link = html.match(/<a[^>]*aria-label="View logged [^"]*"[^>]*>[^]*?<\/a>/)?.[0];
+    expect(link).toContain(name); expect(link).toContain(text);
+    expect(link).toContain("min-h-11"); expect(link).toContain("flex-col justify-center");
+    expect(html).not.toContain("data-nutrition-metric"); expect(html).not.toContain("Scroll horizontally");
+  });
+  it("uses the same statistic value sizing for known and description-bearing values", () => {
+    const html = renderHome();
+    const classes = [...html.matchAll(/<dd[^>]*class="([^"]*)"/g)].map(match => match[1]);
+    expect(classes).toHaveLength(6); expect(new Set(classes).size).toBe(1);
+    expect(classes[0]).toContain("leading-5"); expect(classes[0]).not.toContain("min-h-");
+  });
   it.each([
     { count: 0, calories: 0, estimated: false, caption: "Not logged", summary: "No meals logged; intake is unknown" },
     { count: 1, calories: 0, estimated: false, caption: "Still logging", summary: "2000 kcal remaining from the estimated target" },
@@ -209,10 +124,13 @@ describe("Home meals summary states", () => {
       proteinG: calories === 0 ? 0 : 10, carbsG: 20, fatG: 5,
       estimated, confidence: "high", source: "test", valueSource: "user_provided", createdAt: "2026-10-05T08:00:00Z",
     }));
-    const html = renderHome();
+    const html = renderToStaticMarkup(<TodayMealsCard />);
     expect(html).toContain(`aria-label="${summary}"`);
-    expect(html).toContain(caption);
-    expect(html).toContain(count === 0 ? "No meals logged yet" : `${count} of 4 meals logged`);
+    expect(html).not.toContain(`>${caption}</span>`);
+    expect(html).not.toContain("No meals logged yet");
+    expect(html.match(/aria-label="Undo logged /g) ?? []).toHaveLength(count);
+    expect(html).not.toContain(">Logged</span>");
+    expect(html.replace(/<[^>]*>/g, " ")).not.toMatch(/\b\d+ meals? logged\b/);
     expect(html).toContain('aria-label="Protein"');
     expect(html).toContain(count === 0 ? 'aria-valuetext="No entry logged"' : `aria-valuenow="${calories === 0 ? 0 : count * 10}"`);
   });
@@ -221,7 +139,7 @@ describe("Home meals summary states", () => {
     const html = renderHome();
     expect(html).toContain("Daily targets aren&#x27;t set yet. You can still log meals.");
     expect(html).toContain('aria-label="No calorie target set"');
-    expect(html).toContain('aria-label="Add food"');
+    for (const slot of ["Breakfast", "Lunch", "Dinner", "Snack"]) expect(html).toContain(`aria-label="Add meal to ${slot}"`);
   });
 });
 
@@ -229,7 +147,7 @@ describe("Home compact workout summary", () => {
   it("retains rest-day copy and navigation", () => {
     const html = renderHome();
     expect(html).toContain("Rest day — no workout scheduled.");
-    expect(html).toContain("View this week");
+    expect(html).toContain("View weekly workouts");
   });
 
   it("retains the prescribed workout, start destination, and progression explanation", () => {
@@ -246,7 +164,7 @@ describe("Home compact workout summary", () => {
     expect(html).toContain("Push + Core");
     expect(html).toContain("Chest and core");
     expect(html).toContain('href="/workouts/session/workout"');
-    expect(html).toContain("Start workout");
+    expect(html).toContain('aria-label="Start workout"');
     expect(html).toContain("Two manageable sessions in a row");
   });
 });
