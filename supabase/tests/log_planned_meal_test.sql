@@ -1,6 +1,6 @@
 begin;
 \ir fixtures/calendar_intent.inc
-select plan(19);
+select plan(24);
 
 select has_function('public','log_planned_meal',array['jsonb'],'planned logs have an authenticated RPC');
 select ok(has_function_privilege('authenticated','public.log_planned_meal(jsonb)','EXECUTE'),'authenticated users may log a planned meal');
@@ -62,6 +62,12 @@ select is((public.log_planned_meal(pg_temp.calendar_intent($json${
 select is((select planned_meal_app_id from public.logged_meals where app_id='eaten-yogurt-one'),'planned-yogurt','grouped Eaten row stores the plan link');
 select is((select count(*)::int from public.nutrition_logs where logged_meal_row_id=(select row_id from public.logged_meals where app_id='eaten-yogurt-one')),1,'grouped nutrition history remains separate');
 
+select lives_ok($$select public.log_planned_meal(pg_temp.calendar_intent('{"kind":"food","singlePlannedPortion":true,"plannedMealId":"planned-egg-one","expectedMealPlanVersion":1,"entry":{"id":"one-tap-egg","date":"2026-10-07","slot":"breakfast","foodId":"food-egg","servings":1,"calories":72,"proteinG":6.3,"carbsG":0.4,"fatG":4.8,"source":"Catalog"},"idempotencyKey":"one-tap-egg-key"}'::jsonb))$$,'one-tap logging saves the planned serving');
+select is((public.log_planned_meal(pg_temp.calendar_intent('{"kind":"food","singlePlannedPortion":true,"plannedMealId":"planned-egg-one","expectedMealPlanVersion":1,"entry":{"id":"one-tap-egg","date":"2026-10-07","slot":"breakfast","foodId":"food-egg","servings":1,"calories":72,"proteinG":6.3,"carbsG":0.4,"fatG":4.8,"source":"Catalog"},"idempotencyKey":"one-tap-egg-key"}'::jsonb))->>'replayed'),'true','one-tap retries replay their saved log');
+select throws_ok($$select public.log_planned_meal(pg_temp.calendar_intent('{"kind":"food","singlePlannedPortion":true,"plannedMealId":"planned-egg-one","expectedMealPlanVersion":1,"entry":{"id":"duplicate-one-tap-egg","date":"2026-10-07","slot":"breakfast","foodId":"food-egg","servings":1,"calories":72,"proteinG":6.3,"carbsG":0.4,"fatG":4.8,"source":"Catalog"},"idempotencyKey":"different-one-tap-key"}'::jsonb))$$,'P0001',null,'another one-tap intent cannot duplicate the linked meal');
+select is((select count(*)::int from public.nutrition_logs where planned_meal_app_id='planned-egg-one'),1,'one-tap guard retains exactly one saved intake entry');
+
+select throws_like($$select public.edit_meal_plan(pg_temp.calendar_intent('{"mealPlan":{"id":"planned-log-plan","weekOf":"2026-10-05","meals":[]},"grocery":{"id":"removal-grocery","weekOf":"2026-10-05","items":[]},"expectedVersions":{"mealPlanVersion":1,"groceryRevision":0},"idempotencyKey":"remove-logged-denied"}'::jsonb))$$,'%already been logged%','removal cannot erase a logged prescription from the active plan');
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000009202';
 select throws_ok($$select public.log_planned_meal(pg_temp.calendar_intent('{"kind":"food","plannedMealId":"planned-egg-one","expectedMealPlanVersion":1,"entry":{"id":"foreign-egg","date":"2026-10-07","slot":"breakfast","foodId":"food-egg","servings":1,"calories":72,"proteinG":6.3,"carbsG":0.4,"fatG":4.8,"source":"Catalog"},"idempotencyKey":"foreign-egg-key"}'::jsonb))$$,'P0001',null,'another account cannot consume a planned row');
 select is((select count(*)::int from public.nutrition_logs where app_id='foreign-egg'),0,'failed foreign attempt leaves no log');
