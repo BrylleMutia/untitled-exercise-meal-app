@@ -54,12 +54,12 @@ test("advisory individual and connected previews remain savable with private rec
     await expect(dialog).not.toBeVisible();
 
     console.log("Individual advisory save verified");
-    const invite = await owner.client.rpc("cooking_group_command", { p_payload: { action: "invite", idempotencyKey: crypto.randomUUID() } });
+    const invite = await owner.client.rpc("cooking_group_command", { p_payload: { action: "invite", grocerySharingAcknowledgment: "all-weeks-v1", idempotencyKey: crypto.randomUUID() } });
     if (invite.error) throw invite.error;
     const invitation = invite.data as { pin: string; group: { revision: number } };
     const inspected = await recipient.client.rpc("cooking_group_command", { p_payload: { action: "inspect-pin", pin: invitation.pin } });
     if (inspected.error) throw inspected.error;
-    const joined = await recipient.client.rpc("cooking_group_command", { p_payload: { action: "join", pin: invitation.pin, groupRevision: invitation.group.revision, idempotencyKey: crypto.randomUUID() } });
+    const joined = await recipient.client.rpc("cooking_group_command", { p_payload: { action: "join", grocerySharingAcknowledgment: "all-weeks-v1", pin: invitation.pin, groupRevision: invitation.group.revision, idempotencyKey: crypto.randomUUID() } });
     if (joined.error) throw joined.error;
     console.log("Advisory accounts connected");
     await pa.reload();

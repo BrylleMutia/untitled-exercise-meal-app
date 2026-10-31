@@ -283,7 +283,7 @@ test("weekly grocery spending recovers drafts, retries safely, and follows respo
     const zero = nextRpcResponse(page, "set_grocery_total_amount"); await save.click(); expect((await zero).ok()).toBe(true);
     await expect(spending.getByText("₱0.00", { exact: true })).toBeVisible();
     await previous.click(); await expect(spending.getByText("₱1,250.50", { exact: true })).toBeVisible();
-    const item = page.getByRole("textbox", { name: "Extra grocery item name", exact: true });
+    const item = page.getByRole("combobox", { name: "Extra grocery item name", exact: true });
     await item.fill("Weekly spending extra");
     const added = nextRpcResponse(page, "add_custom_grocery_item"); await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click(); expect((await added).ok()).toBe(true);
     const refresh = nextRpcResponse(page, "regenerate_grocery"); await page.getByRole("button", { name: "Refresh", exact: true }).click(); expect((await refresh).ok()).toBe(true);
@@ -351,7 +351,7 @@ test("grocery quantity edits require save and preserve recoverable revisions", a
     const next = page.getByRole("button", { name: "Next grocery week", exact: true });
     await next.click(); await next.click();
     const name = "Quantity test with a long ingredient name that wraps safely";
-    await page.getByRole("textbox", { name: "Extra grocery item name", exact: true }).fill(name);
+    await page.getByRole("combobox", { name: "Extra grocery item name", exact: true }).fill(name);
     const added = nextRpcResponse(page, "add_custom_grocery_item"); await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click(); expect((await added).ok()).toBe(true);
     const row = page.getByRole("listitem", { name, exact: true });
     const edit = row.getByRole("button", { name: `Edit quantity for ${name}`, exact: true });
@@ -441,7 +441,7 @@ test("grocery weeks audit generated recipe quantities and preserve isolated edit
     const changed = nextRpcResponse(page, "set_grocery_quantity");
     await chicken().getByRole("button", { name: "Save quantity for Chicken breast, skinless, boneless", exact: true }).click(); expect((await changed).ok()).toBe(true);
     await expect(chicken()).toContainText("1199");
-    const extra = page.getByRole("textbox", { name: "Extra grocery item name", exact: true });
+    const extra = page.getByRole("combobox", { name: "Extra grocery item name", exact: true });
     await extra.fill("Only first week draft");
     await page.getByRole("button", { name: "Next grocery week", exact: true }).click();
     await expect(navigator).toContainText(formatFullDate(addDays(weekOf, 7)));
@@ -2258,7 +2258,7 @@ async function freshAccountJourney(browser: Browser, testInfo: import("@playwrig
       await journeyPage.setViewportSize({ width: 342, height: 693 });
     }
     const customItem = `Journey item ${testInfo.project.name}`;
-    const customItemField = journeyPage.getByRole("textbox", { name: "Extra grocery item name" });
+    const customItemField = journeyPage.getByRole("combobox", { name: "Extra grocery item name" });
     await customItemField.fill(customItem);
     await expect(customItemField).toHaveValue(customItem);
     if (testInfo.project.name === "mobile") {
@@ -2851,7 +2851,7 @@ test.describe("MVP-1 release browser gate", () => {
   test("keeps a custom grocery draft through an offline failure and retries after reconnect", async ({ page, context }) => {
     await page.goto("/grocery");
     const name = `MVP offline item ${Date.now()}`;
-    const nameField = page.getByRole("textbox", { name: "Extra grocery item name" });
+    const nameField = page.getByRole("combobox", { name: "Extra grocery item name" });
     await nameField.fill(name);
     await context.setOffline(true);
     await page.getByRole("button", { name: "Add custom grocery item" }).click();

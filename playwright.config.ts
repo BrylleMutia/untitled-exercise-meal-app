@@ -25,7 +25,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: `npm run dev -- --port ${serverPort}`,
+    command: `npm run dev -- --webpack --port ${serverPort}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI && process.env.PLAYWRIGHT_LOCAL_TEST !== "1",
     timeout: 120_000,
@@ -49,7 +49,7 @@ export default defineConfig({
     },
     {
       name: "desktop",
-      testMatch: /(?:mvp[13]-release|contextual-help|cooking-groups|advisory-generation|home-meals|home-activity)\.spec\.ts/,
+      testMatch: /(?:mvp[13]-release|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -59,7 +59,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
-      testMatch: /(?:mvp[13]-release|contextual-help|cooking-groups|advisory-generation|home-meals|home-activity)\.spec\.ts/,
+      testMatch: /(?:mvp[13]-release|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Pixel 5"],

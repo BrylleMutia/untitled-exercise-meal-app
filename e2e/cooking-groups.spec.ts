@@ -55,10 +55,10 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     await review.getByRole("button", { name: "Connect and share" }).click();
     const connected = pb.getByRole("dialog", { name: "Accounts connected" }); await expect(connected.getByText("Cooking Bea", { exact: true })).toBeVisible(); await connected.getByRole("button", { name: "Done", exact: true }).click();
     await pa.goto("/grocery");
-    const privateExtras = pa.getByRole("region", { name: "Private extras — only you", exact: true });
-    await expect(privateExtras.getByRole("listitem", { name: "Alice private tea", exact: true })).toBeVisible();
-    await expect(privateExtras.getByText("₱0.00", { exact: true })).toBeVisible();
-    await expect(pa.getByRole("region", { name: "Shared grocery list", exact: true }).getByText("Alice private tea", { exact: true })).toHaveCount(0);
+    await expect(pa.getByRole("region", { name: "Private extras — only you", exact: true })).toHaveCount(0);
+    // New connections already confirm sharing during PIN creation and joining.
+    await expect(pa.getByRole("listitem", { name: "Alice private tea", exact: true })).toBeVisible();
+    await expect(pa.getByText("₱0.00", { exact: true })).toBeVisible();
     await expect(pa.getByRole("group", { name: "Choose a grocery week", exact: true })).toHaveCount(1);
     await pa.goto("/nutrition");
     await expect(pa.getByRole("button", { name: "Group", exact: true })).toHaveCount(0);
@@ -342,26 +342,13 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     await pb.goto("/nutrition"); await expect(pb.getByRole("dialog", { name: "You're all set!" })).not.toBeVisible();
     await pb.goto("/grocery");
     for (let i = 0; i < 2; i++) await pb.getByRole("button", { name: "Next grocery week", exact: true }).click();
-    const beaPrivate = pb.getByRole("region", { name: "Private extras — only you", exact: true });
-    const privateToggle = beaPrivate.getByRole("button", { name: /^(Add private extras|Private extras — only you)$/ });
-    // Wait for both the selected week and its recoverable draft before reading
-    // the disclosure's automatic loading state.
-    await expect(beaPrivate.getByLabel("Extra grocery item name", { exact: true })).toBeEnabled();
-    await expect(privateToggle).toBeEnabled();
-    // Pin this disclosure open rather than relying on its automatic loading expansion.
-    if (await privateToggle.getAttribute("aria-expanded") === "true") {
-      await privateToggle.click();
-      await expect(privateToggle).toHaveAttribute("aria-expanded", "false");
-    }
-    await privateToggle.click();
-    await expect(beaPrivate.getByLabel("Extra grocery item name", { exact: true })).toBeVisible();
-    await beaPrivate.getByLabel("Extra grocery item name", { exact: true }).fill("Bea private draft");
+    const sharedGroceries = pb.getByRole("region", { name: "Grocery list", exact: true });
+    await expect(sharedGroceries.getByLabel("Extra grocery item", { exact: true })).toBeEnabled();
+    await sharedGroceries.getByLabel("Extra grocery item", { exact: true }).fill("Bea shared draft");
     await pb.reload();
     for (let i = 0; i < 2; i++) await pb.getByRole("button", { name: "Next grocery week", exact: true }).click();
-    await expect(beaPrivate.getByLabel("Extra grocery item name", { exact: true })).toHaveValue("Bea private draft");
-    await expect(beaPrivate.getByLabel("Extra grocery item name", { exact: true })).toBeVisible();
+    await expect(sharedGroceries.getByLabel("Extra grocery item", { exact: true })).toHaveValue("Bea shared draft");
     await expect(pb.getByRole("listitem", { name: "Alice private tea", exact: true })).toHaveCount(0);
-    const sharedGroceries = pb.getByRole("region", { name: "Shared grocery list", exact: true });
     await sharedGroceries.getByLabel("Extra grocery item", { exact: true }).fill("Shared limes");
     await sharedGroceries.getByRole("button", { name: "Add extra item", exact: true }).click();
     const limes = pb.getByRole("listitem", { name: "Shared limes", exact: true });

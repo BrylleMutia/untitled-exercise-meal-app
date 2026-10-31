@@ -50,9 +50,9 @@ setup("prepare two fresh local authenticated fixtures", async ({ browser }) => {
         if (index === 0) {
           await page.goto("/grocery");
           const fixtureName = "E2E Private Fixture A";
-          await page.getByRole("textbox", { name: "Extra grocery item name" }).fill(fixtureName);
+          await page.getByRole("combobox", { name: "Extra grocery item name" }).fill(fixtureName);
           await page.getByRole("button", { name: "Add custom grocery item" }).click();
-          await expect(page.getByText(fixtureName)).toBeVisible();
+          await expect(page.getByRole("listitem", { name: fixtureName, exact: true })).toBeVisible();
         }
         await writeStorageState(context, path.join(authDirectory, states[index]));
       } finally {
