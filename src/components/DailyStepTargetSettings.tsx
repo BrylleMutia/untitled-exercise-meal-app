@@ -80,7 +80,7 @@ export function DailyStepTargetSettings() {
   const disabled = !ready || saving || refreshing || Boolean(pendingMutation);
   const stale = awaitingRefresh || refreshedForReapply || attempted && error?.code === "stale_version";
   return <Card id="daily-step-target" role="region" aria-labelledby="daily-step-target-heading">
-    <div className="flex items-center justify-between gap-2"><h2 id="daily-step-target-heading" className="font-extrabold">Daily step target</h2><HelpPopover title="Daily step target"><p>Choose a target that suits your routine. You can change or remove it here. This preference does not change your workout plan or food targets.</p><p>Use a whole number from 1 to 200,000. This is a technical limit, not a recommendation. Leave blank for no target.</p></HelpPopover></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 id="daily-step-target-heading" className="font-extrabold">Daily step target</h2><HelpPopover title="Daily step target"><p>Choose a target that suits your routine. You can change or remove it here. This preference does not change your workout plan or food targets.</p><p>Use a whole number from 1 to 200,000. This is a technical limit, not a recommendation. Leave blank for no target.</p></HelpPopover></div>
     <form className="mt-3 grid gap-3" onSubmit={(event) => { event.preventDefault(); void save(target); }}>
       <label className="sr-only" htmlFor="daily-step-target-input">Daily step target</label>
       <input id="daily-step-target-input" className="input" inputMode="numeric" value={draft.value} placeholder="Leave blank for no target" disabled={disabled}

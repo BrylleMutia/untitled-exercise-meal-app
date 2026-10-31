@@ -107,14 +107,15 @@ export function HelpPopover({ title, children, label }: {
   </FloatingNode>;
 }
 
-export function HelpHeading({ title, children, as: Tag = "h2", className = "font-extrabold" }: {
+export function HelpHeading({ title, children, as: Tag = "h2", className = "font-extrabold", wrap = false }: {
   title: string;
   children: ReactNode;
   as?: "h2" | "h3";
   className?: string;
+  wrap?: boolean;
 }) {
-  return <div className="flex min-w-0 items-center justify-between gap-2">
-    <Tag className={className}>{title}</Tag>
+  return <div className={`flex min-w-0 items-center justify-between gap-2 ${wrap ? "flex-wrap" : ""}`}>
+    <Tag className={`${className} ${wrap ? "min-w-0 break-words [overflow-wrap:anywhere]" : ""}`}>{title}</Tag>
     <HelpPopover title={title}>{children}</HelpPopover>
   </div>;
 }

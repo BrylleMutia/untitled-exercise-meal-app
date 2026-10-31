@@ -26,4 +26,31 @@ describe("Nutrition summaries", () => {
     expect(html).not.toContain("protein");
     expect(html).not.toContain("undefined");
   });
+
+  it("offers compact mobile macros with full accessible names and unchanged precision", () => {
+    const html = renderToStaticMarkup(<NutritionPills abbreviateOnMobile compactOnMobile approximate precision={1} values={{ calories: 1020.8, proteinG: 45.54, carbsG: 78.8, fatG: 57.7 }} />);
+    expect(html).toContain("≈1020.8 kcal");
+    for (const text of ["P ≈45.5g", "C ≈78.8g", "F ≈57.7g", "Protein: approximately 45.5 grams", "Carbs: approximately 78.8 grams", "Fat: approximately 57.7 grams", "≈45.5 g protein"]) expect(html).toContain(text);
+    expect(html).not.toContain("45.54");
+    expect(html).toMatch(/aria-hidden="true">P ≈45.5g/);
+  });
+
+  it("opts into a single-line strip without changing nutrition semantics", () => {
+    const html = renderToStaticMarkup(<NutritionPills scrollable abbreviateOnMobile compactOnMobile approximate precision={1} values={{ calories: 1020.8, proteinG: 45.54, carbsG: null, fatG: 0 }} />);
+    expect(html).toContain("overflow-x-auto");
+    expect(html).toContain("data-nutrition-strip");
+    expect(html).toContain("shrink-0 whitespace-nowrap");
+    expect(html).toContain("P ≈45.5g");
+    expect(html).toContain("Protein: approximately 45.5 grams");
+    expect(html).toContain("Carbs not logged");
+    expect(html).toContain("F ≈0g");
+    expect(html).not.toContain("tabindex");
+  });
+
+  it("retains explicit unknown labels and treats zero as a known compact value", () => {
+    const html = renderToStaticMarkup(<NutritionPills abbreviateOnMobile values={{ proteinG: 0, carbsG: null, fatG: Number.NaN }} />);
+    expect(html).toContain("P 0g"); expect(html).toContain("Protein: 0 grams");
+    expect(html).toContain("Carbs not logged"); expect(html).toContain("Fat unavailable");
+    expect(html).not.toContain("C 0g"); expect(html).not.toContain("NaN");
+  });
 });

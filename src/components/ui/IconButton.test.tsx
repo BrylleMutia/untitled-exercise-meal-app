@@ -40,3 +40,11 @@ it("isolates circular white image actions and retains disabled explanations", ()
   expect(html).toContain("shadow-[0_2px_6px_");
   expect(html).toContain('title="Retained in saved plans"');
 });
+
+it("supports a circular mint icon action without changing its accessible target", () => {
+  const html = renderToStaticMarkup(<IconButton variant="mint" size="compact" label="Undo logged meal" tooltip="Undo meal log" disabled><svg aria-hidden="true" /></IconButton>);
+  expect(html).toContain('aria-label="Undo logged meal"');
+  expect(html).toContain('title="Undo meal log"'); expect(html).toContain('disabled=""');
+  expect(html).toContain("!rounded-full !bg-mint-100"); expect(html).toContain("!h-[44px] !w-[44px]");
+  expect(html).not.toContain("bg-cream");
+});
