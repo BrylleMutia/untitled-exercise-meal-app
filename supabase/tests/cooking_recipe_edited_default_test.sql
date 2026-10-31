@@ -19,12 +19,12 @@ select ok(not has_function_privilege('anon','public.get_cooking_group_week(date)
 set local role authenticated;
 set local "request.jwt.claim.role"='authenticated';
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000005101';
-insert into edited_recipe_state values('invite',public.cooking_group_command('{"action":"invite","idempotencyKey":"edited-invite"}'));
+insert into edited_recipe_state values('invite',public.cooking_group_command('{"action":"invite","grocerySharingAcknowledgment":"all-weeks-v1","idempotencyKey":"edited-invite"}'));
 select is((select (r->>'isEditedDefault')::boolean from jsonb_array_elements(public.get_cooking_group_week('2026-10-18')->'recipes') r where r->>'id'='edited-default-test'),true,'owner sees confirmed customization provenance');
 select is((select r->>'name' from jsonb_array_elements(public.get_cooking_group_week('2026-10-18')->'recipes') r where r->>'id'='edited-default-test'),'Renamed customized supper','read model does not rename the stored recipe');
 set local "request.jwt.claim.sub"='00000000-0000-0000-0000-000000005102';
 insert into edited_recipe_state values('review',public.cooking_group_command(jsonb_build_object('action','inspect-pin','pin',(select value->>'pin' from edited_recipe_state where name='invite'))));
-select lives_ok($$select public.cooking_group_command(jsonb_build_object('action','join','pin',(select value->>'pin' from edited_recipe_state where name='invite'),'groupRevision',1,'idempotencyKey','edited-join'))$$,'second member joins with explicit recipe sharing');
+select lives_ok($$select public.cooking_group_command(jsonb_build_object('action','join','grocerySharingAcknowledgment','all-weeks-v1','pin',(select value->>'pin' from edited_recipe_state where name='invite'),'groupRevision',1,'idempotencyKey','edited-join'))$$,'second member joins with explicit recipe sharing');
 select is((select count(*) from public.recipe_catalog_preferences),0::bigint,'other member catalog preferences remain private');
 select is((select (r->>'isEditedDefault')::boolean from jsonb_array_elements(public.get_cooking_group_week('2026-10-18')->'recipes') r where r->>'id'='edited-default-test'),true,'shared recipe exposes only the derived edited flag');
 select is((select (r->>'isEditedDefault')::boolean from jsonb_array_elements(public.get_cooking_group_week('2026-10-18')->'recipes') r where r->>'id'='same-name-test'),false,'same name and high revision are not customization evidence');

@@ -190,7 +190,7 @@ begin
   end if;
   select array_agg(value order by ordinal) into slots from jsonb_array_elements_text(item->'slots') with ordinality as s(value,ordinal);
   if recipe.meal_slots=slots then continue; end if;
-  if cardinality(recipe.meal_slots)<>0 or (to_jsonb(recipe)-'row_id'-'created_at'-'updated_at') is distinct from item->'recipe' then
+  if cardinality(recipe.meal_slots)<>0 or (to_jsonb(recipe)-'row_id'-'created_at'-'updated_at'-'cooking_ingredients'-'nutrition_input') is distinct from item->'recipe' then
    raise exception 'Reviewed recipe changed; assignment backfill stopped: %',item->>'id';
   end if;
   select jsonb_agg(jsonb_build_object('foodId',f.app_id,'servings',i.servings,'order',i.ingredient_order,'cooking',i.cooking_measurement) order by i.ingredient_order)
