@@ -173,6 +173,11 @@ function asRefs(value: Json | undefined): Record<string, string> {
   );
 }
 
+function isExpiredAccessToken(reason: unknown): boolean {
+  const message = typeof reason === "string" ? reason : reason instanceof Error ? reason.message : "";
+  return /\btoken is expired\b|\bjwt expired\b/i.test(message);
+}
+
 function toRepositoryError(message: string, status?: number, detailsText?: string): RepositoryError {
   let declaredCode: RepositoryError["code"] | undefined;
   if (detailsText) {
@@ -187,7 +192,7 @@ function toRepositoryError(message: string, status?: number, detailsText?: strin
     // conflict contract for the grouped-history and nutrition edit paths so
     // the shell can offer explicit reapply/refresh actions.
     ?? (message.includes("refresh before editing") ? "stale_version" : undefined)
-    ?? (status === 401 ? "not_authenticated" : status === 0 || (status && status >= 500) ? "retryable" : "internal");
+    ?? (status === 401 || isExpiredAccessToken(message) ? "not_authenticated" : status === 0 || (status && status >= 500) ? "retryable" : "internal");
   let details: ConflictDetails | undefined;
   if (code === "stale_version" && detailsText) {
     try {
@@ -418,14 +423,33 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async load(): Promise<AppSnapshot | null> {
-    const { data, error } = await this.client.auth.getClaims();
-    if (error) {
-      throw repositoryException(toRepositoryError(error.message, error.status));
+    let originalUserId: string | null = null;
+    const read = async () => {
+      const { data, error } = await this.client.auth.getClaims();
+      if (error) throw repositoryException(toRepositoryError(error.message, error.status));
+      const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+      originalUserId ??= userId;
+      if (originalUserId && userId !== originalUserId) {
+        throw repositoryException(toRepositoryError("Your account changed. Reload to continue.", 401));
+      }
+      const snapshot = userId ? await loadAppSnapshot(this.client, userId) : null;
+      this.calendarRevision = snapshot?.profile?.calendarRevision;
+      return snapshot;
+    };
+    try {
+      return await read();
+    } catch (reason) {
+      if (!isExpiredAccessToken(reason)) throw reason;
+      // A skewed device clock can leave a server-expired token locally valid.
+      // Retry only this read, once, after the authority refreshes the session.
+      const { data, error } = await this.client.auth.refreshSession();
+      if (error) throw repositoryException(toRepositoryError(error.message, error.status));
+      if (!data.session) return null;
+      if (originalUserId && data.session.user.id !== originalUserId) {
+        throw repositoryException(toRepositoryError("Your account changed. Reload to continue.", 401));
+      }
+      return read();
     }
-    const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
-    const snapshot = userId ? await loadAppSnapshot(this.client, userId) : null;
-    this.calendarRevision = snapshot?.profile?.calendarRevision;
-    return snapshot;
   }
 
   async loadHistory(query: HistoryQuery = {}): Promise<HistoryReadModel> {
