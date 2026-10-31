@@ -17,10 +17,11 @@ import type { Food, Meal } from "@/types/domain";
 
 export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, editLabel = "Edit", sharedBy, error, pending = false }: {
   meal: Meal; foods: Food[]; returnFocus: RefObject<HTMLElement | null>;
-  onClose: () => void; onEdit: () => void; editLabel?: string; sharedBy?: string; error?: string; pending?: boolean;
+  onClose: () => void; onEdit?: () => void; editLabel?: string; sharedBy?: string; error?: string; pending?: boolean;
 }) {
   const [tab, setTab] = useState<RecipeTab>("details");
-  const known = meal.ingredients.length > 0 && meal.ingredients.every(item => foods.some(food => food.id === item.foodId));
+  const displayIngredients = meal.cookingIngredients?.map(item => ({ foodId: item.foodId ?? "", servings: item.nutritionServings ?? 0, cookingMeasurement: item.cookingMeasurement })) ?? meal.ingredients;
+  const known = Boolean(meal.providedNutrition) || displayIngredients.length > 0 && meal.ingredients.every(item => foods.some(food => food.id === item.foodId));
   const reference = safeRecipeReference(meal.reference);
   const nutrition = <div className="grid min-w-0 gap-2 rounded-2xl bg-lav-50 p-3">
     <h3 className="text-sm font-extrabold">Per serving · {meal.providedNutrition ? "source-provided macros" : "estimates"}</h3>
@@ -28,11 +29,11 @@ export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, edit
       : <p className="text-sm text-ink-soft">Nutrition is unavailable because an ingredient is missing.</p>}
   </div>;
   return <Modal open title="Recipe overview" dismissalDisabled={pending} returnFocus={returnFocus} onClose={onClose}
-    help={<HelpPopover title="Saved recipe"><p>Ingredient quantities describe the whole recipe. Nutrition is estimated per serving. Editing this recipe does not rewrite logged meals.</p></HelpPopover>}
+    help={<HelpPopover title="Saved recipe"><p>Ingredient quantities describe the whole recipe. Nutrition is estimated per serving.</p><p>{onEdit ? "Editing this recipe does not rewrite logged meals." : "This recipe view is read-only. Recipe nutrition does not recalculate your saved logged portion."}</p></HelpPopover>}
     footer={<div className="grid gap-2">
       {error ? <p role="alert" className="text-sm text-danger-900">{error}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="soft" disabled={pending} onClick={onClose}>Close</Button>
-        <Button disabled={pending} onClick={onEdit}><Pencil className="h-4 w-4" aria-hidden />{editLabel}</Button>
+        {onEdit ? <Button disabled={pending} onClick={onEdit}><Pencil className="h-4 w-4" aria-hidden />{editLabel}</Button> : null}
       </div>
     </div>}>
     <div className="grid min-w-0 gap-5">
@@ -40,17 +41,18 @@ export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, edit
         <RecipeCover image={meal.image} name={meal.name} />
         <h3 className="max-w-full break-words text-2xl font-extrabold leading-tight">{meal.name}</h3>
       </div>
+      {!onEdit ? <p className="text-sm text-ink-soft">Read-only recipe details. Recipe quantities and per-serving nutrition may differ from the portion saved in your food log. Your logged values remain as recorded.</p> : null}
       <RecipeTabs active={tab} onChange={setTab} panels={{
         ingredients: <div className="grid min-w-0 gap-4">
           <h3 className="text-sm font-extrabold">For the whole recipe</h3>
-          <ul className="grid min-w-0 gap-2">{meal.ingredients.map((item, index) => {
+          <ul className="grid min-w-0 gap-2">{displayIngredients.map((item, index) => {
             const food = foods.find(food => food.id === item.foodId);
             return <li key={`${item.foodId}-${index}`} className="flex min-w-0 flex-wrap items-start justify-between gap-2 rounded-2xl bg-cream p-3">
               <div className="min-w-0 flex-[1_1_10rem]"><p className="break-words text-sm font-bold">{item.cookingMeasurement?.name ?? food?.name ?? "Ingredient unavailable"}{item.cookingMeasurement?.optional ? " (optional)" : ""}</p>
                 {item.cookingMeasurement?.note ? <p className="break-words text-xs text-ink-soft">{item.cookingMeasurement.note}</p> : null}</div>
               <p className="max-w-full break-words text-sm font-bold tabular-nums">{formatCookingMeasurement(item, food)}</p>
             </li>;
-          })}{meal.unmeasuredIngredients?.map((item, index) => <li key={`unmeasured-${index}`} className="flex min-w-0 flex-wrap justify-between gap-2 rounded-2xl bg-cream p-3"><span className="break-words text-sm font-bold">{item.name}{item.optional ? " (optional)" : ""}</span><span className="text-sm font-bold">{item.measurement}</span></li>)}</ul>{!meal.ingredients.length && !meal.unmeasuredIngredients?.length ? <p className="text-sm text-ink-soft">No ingredients added.</p> : null}
+          })}{meal.unmeasuredIngredients?.map((item, index) => <li key={`unmeasured-${index}`} className="flex min-w-0 flex-wrap justify-between gap-2 rounded-2xl bg-cream p-3"><span className="break-words text-sm font-bold">{item.name}{item.optional ? " (optional)" : ""}</span><span className="text-sm font-bold">{item.measurement}</span></li>)}</ul>{!displayIngredients.length && !meal.unmeasuredIngredients?.length ? <p className="text-sm text-ink-soft">No ingredients added.</p> : null}
         </div>,
         details: <div className="grid min-w-0 gap-4">
           {meal.isSystem ? <p className="text-sm text-ink-soft"><span className="font-bold">Source: </span>Default recipe</p> : sharedBy ? <p className="break-words text-sm text-ink-soft"><span className="font-bold">Shared by: </span>{sharedBy}</p> : null}
@@ -59,11 +61,11 @@ export function RecipeOverview({ meal, foods, returnFocus, onClose, onEdit, edit
             <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" aria-hidden />{meal.totalTimeMinutes !== undefined ? `${meal.totalTimeMinutes} mins` : "Not set"}</span>
             <span>Complexity: {complexityLabels[meal.complexity ?? "medium"]}</span>
           </div>
-          <p className="text-sm text-ink-soft"><span className="font-bold">Use this recipe for: </span>{parseMealSlots(meal.mealSlots).map(slot => mealSlotLabels[slot]).join(", ") || "Not assigned — edit to include in weekly generation."}</p>{nutrition}
-          <p className="text-sm text-ink-soft">{meal.ingredients.length + (meal.unmeasuredIngredients?.length ?? 0)} ingredients · {meal.isSystem ? "Catalog recipe" : "Your saved recipe"}</p>
+          <p className="text-sm text-ink-soft"><span className="font-bold">Use this recipe for: </span>{parseMealSlots(meal.mealSlots).map(slot => mealSlotLabels[slot]).join(", ") || (onEdit ? "Not assigned — edit to include in weekly generation." : "Not assigned to weekly generation.")}</p>{nutrition}
+          <p className="text-sm text-ink-soft">{displayIngredients.length + (meal.unmeasuredIngredients?.length ?? 0)} ingredients · {meal.isSystem ? "Catalog recipe" : "Your saved recipe"}</p>
           <section className="grid min-w-0 gap-2" aria-label="Nutrition basis"><h3 className="text-sm font-extrabold">Nutrition basis</h3>
             {meal.nutritionNotes ? <p className="whitespace-pre-wrap break-words text-xs text-ink-soft">{meal.nutritionNotes}</p> : null}
-            <ul className="grid gap-2">{meal.ingredients.map((item, index) => { const food = foods.find(food => food.id === item.foodId); return <li key={index} className="break-words text-xs text-ink-soft">{item.cookingMeasurement?.name ?? food?.name ?? "Ingredient unavailable"}: {food ? `${formatCookingMeasurement({ ...item, cookingMeasurement: undefined }, food)} · ${food.preparationBasis ?? "basis unknown"} · ${food.source}` : "Nutrition source unavailable."}{item.cookingMeasurement?.kind === "range" ? " · upper range amount used" : ""}</li>; })}</ul>
+            <ul className="grid gap-2">{displayIngredients.map((item, index) => { const food = foods.find(food => food.id === item.foodId); return <li key={index} className="break-words text-xs text-ink-soft">{item.cookingMeasurement?.name ?? food?.name ?? "Ingredient unavailable"}: {food ? `${formatCookingMeasurement({ ...item, cookingMeasurement: undefined }, food)} · ${food.preparationBasis ?? "basis unknown"} · ${food.source}` : "Nutrition source unavailable."}{item.cookingMeasurement?.kind === "range" ? " · upper range amount used" : ""}</li>; })}</ul>
             {meal.unmeasuredIngredients?.length ? <p className="text-xs text-ink-soft">Unmeasured seasonings are excluded from nutrition and generated grocery quantities.</p> : null}
           </section>
           <div className="grid gap-1"><h3 className="text-sm font-extrabold">Reference</h3>{reference ? <a href={reference} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-ink-soft underline">{meal.reference}</a> : <p className="whitespace-pre-wrap break-words text-sm text-ink-soft">{meal.reference || "Reference not added."}</p>}</div>

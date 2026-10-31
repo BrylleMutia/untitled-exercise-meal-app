@@ -1,0 +1,117 @@
+import { randomUUID } from "node:crypto";
+import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import { createLocalAccount, createAuthenticatedContext, deleteLocalAccount } from "./local-account";
+import { createSupabaseRepository } from "../src/services/supabaseRepository";
+import type { Database } from "../src/types/database.generated";
+import type { Food, Meal, UserProfile } from "../src/types/domain";
+
+test("saved recipe conversions persist, reuse, resolve conflicts, and preserve edited drafts", async ({ browser }, info) => {
+  test.setTimeout(180000);
+  const account = await createLocalAccount("conversion-browser");
+  const client = createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, { auth: { persistSession: false } });
+  const login = await client.auth.signInWithPassword(account);
+  if (login.error || !login.data.user) throw login.error;
+  const repository = createSupabaseRepository(client);
+  const profile: UserProfile = { id: login.data.user.id, name: "Conversion browser", age: 30, sex: "female", heightCm: 165, weightKg: 65, units: "metric", weekStartsOn: 0, experience: "beginner", equipment: ["none"], daysPerWeek: 3, sessionMinutes: 30, goal: "maintain", dietaryPattern: "No restrictions", allergies: [], notificationsEnabled: false, targetEligibility: "eligible", createdAt: new Date().toISOString() };
+  const food: Food = { id: `conversion-food-${randomUUID()}`, name: "Reusable ingredient with a long preparation description", servingLabel: "100 g", servingGrams: 100, unit: "g", calories: 100, proteinG: 5, carbsG: 10, fatG: 5, source: "User entered", sourceVersion: "1", valueSource: "user_provided", estimated: true, confidence: "medium", category: "Other", preparationBasis: "raw" };
+  const recipe = (name: string, factor?: number): Meal => ({ id: `conversion-meal-${randomUUID()}`, name, servings: 2, mealSlots: ["lunch"], complexity: "easy", notes: "Prepare safely.", ingredients: [{ foodId: food.id, servings: 2, cookingMeasurement: { kind: "range", quantity: 100, upperQuantity: 200, unit: "g", gramsPerUnit: 1, ...(factor ? { conversionBases: [{ unit: "cup", gramsPerUnit: factor }] } : {}) } }] });
+  let context: Awaited<ReturnType<typeof createAuthenticatedContext>> | undefined;
+  let releaseHeld: (() => void) | undefined;
+  try {
+    await repository.completeOnboarding({ profile, currentSnapshot: (await repository.load())!, idempotencyKey: randomUUID() });
+    const first = recipe("Conversion first save"), second = recipe("Conversion future recipe"), third = recipe("Conversion conflict review");
+    for (const [index, meal] of [first, second, third].entries()) await repository.saveRecipe({ meal, newFoods: index === 0 ? [food] : [], currentSnapshot: (await repository.load())!, idempotencyKey: randomUUID() });
+    context = await createAuthenticatedContext(browser, process.env.PLAYWRIGHT_BASE_URL!, account);
+    const page = await context.newPage();
+    await page.setViewportSize({ width: info.project.name === "mobile" ? 412 : 1440, height: 930 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${process.env.PLAYWRIGHT_BASE_URL}/nutrition`);
+    const open = async (name: string) => {
+      await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Edit recipe", exact: true });
+      await dialog.getByRole("tab", { name: "Ingredients", exact: true }).click();
+      await expect(dialog.getByRole("combobox", { name: `${food.name} unit`, exact: true })).toBeEnabled();
+      return dialog;
+    };
+    let dialog = await open(first.name);
+    const unit = () => dialog.getByRole("combobox", { name: `${food.name} unit`, exact: true });
+    const quantity = () => dialog.getByRole("spinbutton", { name: `${food.name} quantity`, exact: true });
+    const factor = () => dialog.getByRole("spinbutton", { name: `${food.name} conversion grams per cup`, exact: true });
+    await unit().selectOption("cup");
+    await expect(dialog.getByText("Checking saved conversions… You can enter a weight manually.", { exact: true })).toBeHidden();
+    await factor().fill("80");
+    await dialog.getByRole("button", { name: "Confirm conversion", exact: true }).click();
+    await expect(quantity()).toHaveValue("1.25");
+    await expect(dialog.getByRole("spinbutton", { name: `${food.name} upper quantity`, exact: true })).toHaveValue("2.5");
+    await unit().selectOption("g");
+    await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(await repository.loadIngredientConversions([food.id])).toEqual(expect.arrayContaining([expect.objectContaining({ unit: "cup", gramsPerUnit: 80 })]));
+    await page.reload();
+    dialog = await open(second.name);
+    await unit().selectOption("cup");
+    await expect(dialog.getByText("Using saved conversion", { exact: true })).toBeVisible();
+    await expect(quantity()).toHaveValue("1.25");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const conflict = recipe("Different confirmed cup weight", 120);
+    await repository.saveRecipe({ meal: conflict, newFoods: [], currentSnapshot: (await repository.load())!, idempotencyKey: randomUUID() });
+    dialog = await open(third.name);
+    await unit().selectOption("cup");
+    await expect(dialog.getByText("Saved weights differ. Choose a value or enter your own.", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("radio")).toHaveCount(2);
+    await expect(dialog.getByRole("button", { name: "Confirm conversion", exact: true })).toBeDisabled();
+    await page.reload();
+    dialog = await open(third.name);
+    await expect(dialog.getByRole("radio")).toHaveCount(2);
+    await expect(factor()).toHaveValue("");
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ width, height: 930 });
+      for (const size of [100, 200]) {
+        const style = await page.addStyleTag({ content: `html { font-size: ${size}% !important; }` });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+        expect(await dialog.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(false);
+        await style.evaluate(element => (element as HTMLStyleElement).remove());
+      }
+    }
+    await page.setViewportSize({ width: info.project.name === "mobile" ? 412 : 1440, height: 930 });
+    await dialog.screenshot({ path: `output/recipe-conversions-${info.project.name}.png` });
+    await dialog.getByRole("radio").first().check();
+    await expect(factor()).toHaveValue("80");
+    await dialog.getByRole("button", { name: "Confirm conversion", exact: true }).click();
+    await expect(quantity()).toHaveValue("1.25");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    const late = recipe("Conversion late response");
+    await repository.saveRecipe({ meal: late, newFoods: [], currentSnapshot: (await repository.load())!, idempotencyKey: randomUUID() });
+    await page.reload();
+    dialog = await open(late.name);
+    const held = new Promise<void>(resolve => { releaseHeld = resolve; });
+    const rpc = "**/rest/v1/rpc/get_ingredient_conversions";
+    await page.route(rpc, async route => { await held; await route.continue(); });
+    await unit().selectOption("cup");
+    await expect(dialog.getByText("Checking saved conversions… You can enter a weight manually.", { exact: true })).toBeVisible();
+    await quantity().fill("150");
+    const response = page.waitForResponse(result => result.url().includes("get_ingredient_conversions"));
+    releaseHeld!();
+    await response;
+    await expect(quantity()).toHaveValue("150");
+    await expect(factor()).toHaveValue("");
+    await expect(dialog.getByRole("radio")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Cancel conversion", exact: true }).click();
+    await page.unroute(rpc);
+    await page.route(rpc, route => route.fulfill({ status: 503, json: { code: "PGRST000", message: "Conversion lookup unavailable" } }));
+    await unit().selectOption("cup");
+    await expect(dialog.getByText("Saved conversions are unavailable. Confirm this conversion manually.", { exact: true })).toBeVisible();
+    await factor().fill("90");
+    await dialog.getByRole("button", { name: "Confirm conversion", exact: true }).click();
+    await expect(quantity()).toHaveValue(String(150 / 90));
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect((await repository.loadIngredientConversions([food.id])).some(item => item.unit === "cup" && item.gramsPerUnit === 90)).toBe(false);
+  } finally {
+    releaseHeld?.();
+    await context?.close();
+    await deleteLocalAccount(account);
+  }
+});

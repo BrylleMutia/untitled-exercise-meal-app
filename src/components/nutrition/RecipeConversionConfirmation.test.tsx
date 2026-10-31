@@ -22,4 +22,22 @@ describe("conversion confirmation presentation", () => {
       expect(markup).toContain("positive finite weight"); expect(markup).not.toContain("Converted quantity");
     }
   });
+  it("shows conflicting saved weights and their sources without preselecting one", () => {
+    const markup = renderToStaticMarkup(<RecipeConversionConfirmation item={base} food={food} onChange={() => {}} savedCandidates={[
+      { foodId: food.id, unit: "cup", gramsPerUnit: 80, source: { kind: "personal", recipeName: "My saved recipe" } },
+      { foodId: food.id, unit: "cup", gramsPerUnit: 120, source: { kind: "group", recipeName: "Shared saved recipe" } },
+    ]} />);
+    expect(markup).toContain("Saved weights differ");
+    expect(markup.match(/type="radio"/g)).toHaveLength(2);
+    expect(markup).toContain("Your saved conversion: My saved recipe");
+    expect(markup).toContain("Shared recipe: Shared saved recipe");
+    expect(markup).not.toContain('checked=""');
+    expect(markup).toMatch(/disabled=""[^>]*>Confirm conversion/);
+  });
+  it("leaves manual confirmation available while saved lookup is loading or failed", () => {
+    const markup = renderToStaticMarkup(<RecipeConversionConfirmation item={{ ...base, pendingConversion: { unit: "cup", gramsPerUnit: "80" } }} food={food} onChange={() => {}} loading lookupError />);
+    expect(markup).toContain("Checking saved conversions");
+    expect(markup).toContain("Confirm this conversion manually");
+    expect(markup).not.toMatch(/disabled=""[^>]*>Confirm conversion/);
+  });
 });
