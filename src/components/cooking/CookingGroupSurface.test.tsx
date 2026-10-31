@@ -27,12 +27,14 @@ describe("unified cooking surfaces", () => {
     expect(html).not.toContain("Nutrition view");
     expect(html).not.toContain(">Generate</button>");
   });
-  it("shows one Grocery navigator, shared spending/list, then the private content", () => {
+  it("shows one Grocery navigator, spending editor and combined list without a private section", () => {
     const html = render("grocery");
     expect(html.match(/Choose a grocery week/g)).toHaveLength(1);
     expect(html).toContain("Shared grocery spending");
-    expect(html).toContain("Shared grocery list");
-    expect(html.indexOf("Shared grocery list")).toBeLessThan(html.indexOf("Private daily content"));
+    expect(html).toContain('aria-label="Grocery list"');
+    expect(html).not.toContain("Private daily content");
+    expect(html).not.toContain("Private extras");
+    expect(html).not.toContain("One grocery list for your group");
     expect(html).not.toContain("Grocery view");
     expect(html).not.toContain("Shared recipes");
   });

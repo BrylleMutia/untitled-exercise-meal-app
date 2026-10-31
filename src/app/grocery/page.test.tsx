@@ -10,6 +10,7 @@ let loading = false, error: string | undefined, pendingMutation: string | null =
 const snapshot = { userId: "grocery-test", grocery: { id: "wrong-list", weekOf: "2026-10-26", items: [{ id: "wrong", name: "Wrong week", quantity: 99 }] } } as AppSnapshot;
 vi.mock("@/contexts/AppContext", () => ({ useApp: () => ({ snapshot, pendingMutation, actions: {} }) }));
 vi.mock("@/components/nutrition/useNutritionWeek", () => ({ useNutritionWeek: () => ({ data, loading, error, refresh: vi.fn() }) }));
+vi.mock("@/components/cooking/useCookingGroup", () => ({ useCookingGroup: () => ({ data: { group: null, notices: [] }, loading: false, refresh: vi.fn() }) }));
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 16, 12));
   loading = false; error = undefined; pendingMutation = null;
@@ -25,7 +26,8 @@ describe("week-specific Grocery", () => {
   it("shows the selected week's list rather than the global current snapshot", () => {
     data!.grocery = { id: "selected", weekOf: data!.weekOf, items: [{ id: "rice", name: "Uncooked rice", category: "Grains", unit: "g", quantity: 550, generatedQuantity: 500, checked: true }] };
     const html = renderToStaticMarkup(<GroceryPage />);
-    expect(html).toContain("Uncooked rice"); expect(html).toContain("generated 500 g"); expect(html).toContain("adjusted by you");
+    expect(html).toContain("Uncooked rice"); expect(html).toContain("Generated"); expect(html).toContain("adjusted by you");
+    expect(html).not.toContain("generated 500 g"); expect(html).not.toContain("Plan quantity:");
     expect(html).not.toContain("Wrong week"); expect(html).toContain('aria-label="Mark Uncooked rice as done"');
   });
   it("distinguishes loading and failed reads from an empty week", () => {

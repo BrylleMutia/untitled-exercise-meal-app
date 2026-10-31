@@ -1,19 +1,26 @@
 "use client";
+import { GroceryNameInput } from "@/components/GroceryNameInput";
+import { createUuid } from "@/utility/uuid";
+import { GroceryCategoryField, categoryChoice } from "@/components/GroceryCategoryField";
+import { classifyGroceryName, normalizeGroceryName, type GroceryCategoryDraft, type GroceryExtraSubmission } from "@/utility/groceryCategory";
+import { cookingUnits, cookingUnitLabel } from "@/utility/cookingUnits";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, RefreshCw } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
+import { GroceryQuantityControl } from "@/components/GroceryQuantityControl";
+import { parseGroceryQuantity } from "@/utility/groceryQuantity";
 import { GroceryItemRow } from "@/components/GroceryItemRow";
 import { GroceryTotalAmount } from "@/components/GroceryTotalAmount";
 import { useNutritionWeek } from "@/components/nutrition/useNutritionWeek";
 import { startOfWeek, todayKey } from "@/utility/dates";
 import type { NutritionWeekReadModel } from "@/types/backend";
 import type { GroceryCategory } from "@/types/domain";
-import { clearDraft, createDraftEnvelope, draftTtlMs, listDrafts, readDraft, writeDraft } from "@/services/draftStore";
+import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 
 const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", "Pantry", "Other"];
 
@@ -28,58 +35,37 @@ export default function GroceryPage() {
   const week = useNutritionWeek(weekOf);
   const busy = amountSaving || itemSaving;
   return <CookingGroupSurface weekOf={weekOf} onWeekChange={setSelectedDate} kind="grocery" busy={busy}>
-    {({ connected, connectionKnown, sharedSaving }) => <PrivateGroceries key={`${snapshot.userId}:${weekOf}`} week={week} privateSection={connected || !connectionKnown}
-      disabled={Boolean(pendingMutation) || busy || sharedSaving || week.loading || Boolean(week.error)} onAmountSaving={setAmountSaving} onItemSaving={setItemSaving} />}
+    {({ connectionKnown, sharedSaving }) => connectionKnown ? <PersonalGroceries key={`${snapshot.userId}:${weekOf}`} week={week}
+      disabled={Boolean(pendingMutation) || busy || sharedSaving || week.loading || Boolean(week.error)} onAmountSaving={setAmountSaving} onItemSaving={setItemSaving} /> : null}
   </CookingGroupSurface>;
 }
 
-function PrivateGroceries({ week, privateSection, disabled, onAmountSaving, onItemSaving }: {
-  week: ReturnType<typeof useNutritionWeek>; privateSection: boolean; disabled: boolean;
+function PersonalGroceries({ week, disabled, onAmountSaving, onItemSaving }: {
+  week: ReturnType<typeof useNutritionWeek>; disabled: boolean;
   onAmountSaving: (saving: boolean) => void; onItemSaving: (saving: boolean) => void;
 }) {
   const { snapshot } = useApp();
-  const contentId = useId();
-  const [hasDraft, setHasDraft] = useState(false);
-  const [expanded, setExpanded] = useState<boolean | null>(null);
   const weekOf = week.data?.weekOf;
-  useEffect(() => {
-    if (!weekOf) return;
-    let active = true;
-    void listDrafts(snapshot.userId).then(drafts => {
-      if (!active) return;
-      setHasDraft(drafts.some(draft => draft.draftType === `grocery-custom:${weekOf}`
-        || draft.draftType === `grocery-total:${weekOf}` || draft.draftType.startsWith(`grocery-quantity:${weekOf}:`)
-        || draft.draftType === "grocery-custom" && weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0)));
-    });
-    return () => { active = false; };
-  }, [snapshot.userId, snapshot.profile?.weekStartsOn, weekOf]);
-  const hasContent = Boolean(week.data?.grocery?.items.some(item => !item.removed)) || week.data?.grocery?.totalAmountCentavos != null;
-  const content = <div data-grocery-section className="grid min-w-0 gap-4 pb-4">
+  return <div data-grocery-section className="grid min-w-0 gap-4 pb-4">
     {week.loading ? <p role="status">Loading this week&apos;s groceries…</p> : null}
     {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-danger-100 p-4 text-danger-900"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
-    {week.data ? <Card tone="mint">{privateSection ? <h3 className="font-extrabold">Private spending</h3> : null}<GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onAmountSaving} /></Card> : null}
+    {week.data ? <Card tone="mint"><GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onAmountSaving} /></Card> : null}
     {week.data?.grocery?.calendarReviewRequired ? <p role="status" className="rounded-2xl bg-peach-100 p-4 text-sm font-semibold">This list was regrouped after your start of week changed. Review ingredients and carried grocery edits.</p> : null}
     {week.data ? <GroceryWeek key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onItemSaving} /> : null}
   </div>;
-  if (!privateSection) return content;
-  const open = expanded ?? (hasContent || hasDraft || week.loading || Boolean(week.error));
-  return <section data-grocery-section aria-label="Private extras — only you" className="grid min-w-0 gap-3">
-    <h2><button type="button" disabled={week.loading} aria-expanded={open} aria-controls={contentId} className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 text-left font-extrabold shadow-chip disabled:opacity-50" onClick={() => setExpanded(!open)}>
-      <span className="min-w-0 break-words">{hasContent || hasDraft || week.loading || week.error ? "Private extras — only you" : "Add private extras"}</span>
-      <ChevronDown className={`h-4 w-4 shrink-0 ${open ? "rotate-180" : ""}`} aria-hidden />
-    </button></h2>
-    <div id={contentId} hidden={!open}>
-      <p className="mb-4 mt-2 text-xs text-ink-soft">Only you can see these additional groceries and spending. Shared cooking requirements are already covered in the shared list above.</p>
-      {content}
-    </div>
-  </section>;
 }
 
 function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void }) {
-  const { snapshot, actions } = useApp();
+  const { snapshot, actions, error } = useApp();
   const [name, setName] = useState("");
+  const extraName = useRef<HTMLInputElement>(null);
+  const extraSubmitting = useRef(false);
+  const [submission, setSubmission] = useState<GroceryExtraSubmission>();
+  const [categoryDraft, setCategoryDraft] = useState<GroceryCategoryDraft>();
+  const [resolvedCategory, setResolvedCategory] = useState<{ category: GroceryCategory; nameKey: string }>();
   const [quantity, setQuantity] = useState("1");
   const [unit, setUnit] = useState("pcs");
+  const parsedQuantity = parseGroceryQuantity(quantity, 1);
   const [draftReady, setDraftReady] = useState(false);
   const [draftWasRestored, setDraftWasRestored] = useState(false);
   const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
@@ -92,11 +78,13 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
   useEffect(() => {
     if (!userId) return;
     let active = true;
-    void (async () => await readDraft<{ name: string; quantity: string; unit: string }>(userId, draftType)
-      ?? (week.weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0) ? await readDraft<{ name: string; quantity: string; unit: string }>(userId, "grocery-custom") : null))().then((saved) => {
+    void (async () => await readDraft<{ name: string; quantity: string; unit: string; categoryDraft?: GroceryCategoryDraft; submission?: GroceryExtraSubmission }>(userId, draftType)
+      ?? (week.weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0) ? await readDraft<{ name: string; quantity: string; unit: string; categoryDraft?: GroceryCategoryDraft; submission?: GroceryExtraSubmission }>(userId, "grocery-custom") : null))().then((saved) => {
       if (!active) return;
       if (saved) {
         setName(saved.payload.name);
+        setCategoryDraft(saved.payload.categoryDraft);
+        setSubmission(saved.payload.submission);
         setQuantity(saved.payload.quantity);
         setUnit(saved.payload.unit);
         setDraftWasRestored(true);
@@ -119,11 +107,11 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
     void writeDraft(createDraftEnvelope({
       userId,
       draftType,
-      payload: { name, quantity, unit },
+      payload: { name, quantity, unit, categoryDraft, submission },
       baseVersions: { groceryRevision: list?.revision },
       ttlMs: draftTtlMs(draftType),
     })).then((saved) => setDraftWriteUnavailable(!saved));
-  }, [draftReady, draftType, list?.revision, name, quantity, unit, userId]);
+  }, [draftReady, draftType, list?.revision, name, quantity, unit, categoryDraft, submission, userId]);
 
   const customItemEditor = (
     <fieldset disabled={disabled || !draftReady} className="min-w-0" aria-label="Extra grocery item">
@@ -138,7 +126,7 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
               if (userId) void clearDraft(userId, draftType);
               if (userId && week.weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0)) void clearDraft(userId, "grocery-custom");
               suppressDraftWriteRef.current = true;
-              setName("");
+              setName(""); setCategoryDraft(undefined); setSubmission(undefined);
               setQuantity("1");
               setUnit("pcs");
               setDraftWasRestored(false);
@@ -157,65 +145,44 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
 
 
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-        <input
-          value={name}
-          onChange={(e) => {
-            suppressDraftWriteRef.current = false;
-            setName(e.target.value);
-          }}
-          placeholder="Item"
-          className="input min-w-0 basis-full md:basis-40 md:flex-1"
-          aria-label="Extra grocery item name"
-        />
-        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
-        <input
-          value={quantity}
-          onChange={(e) => {
-            suppressDraftWriteRef.current = false;
-            setQuantity(e.target.value);
-          }}
-          className="input !w-16 shrink-0"
-          inputMode="numeric"
-          aria-label="Quantity"
-        />
-        <select
-          value={unit}
-          onChange={(e) => {
-            suppressDraftWriteRef.current = false;
-            setUnit(e.target.value);
-          }}
-          className="input !w-20 shrink-0"
-          aria-label="Unit"
-        >
-          <option value="pcs">pcs</option>
-          <option value="g">g</option>
-          <option value="ml">ml</option>
-        </select>
+        <GroceryNameInput inputRef={extraName} value={name} label="Extra grocery item name" disabled={disabled || !draftReady} className="basis-full md:basis-40 md:flex-1" onChange={next => {
+          suppressDraftWriteRef.current = false;
+          if (normalizeGroceryName(next) !== normalizeGroceryName(name)) setCategoryDraft(undefined);
+          setSubmission(undefined); setName(next);
+        }} />
+        <div className="ml-auto flex min-w-0 max-w-full flex-1 basis-full flex-wrap items-start justify-end gap-2 md:basis-auto md:max-w-[26rem]">
+        <GroceryQuantityControl value={quantity} onChange={value => { suppressDraftWriteRef.current = false; setQuantity(value); setSubmission(undefined); }} label="Quantity" decreaseLabel="Decrease extra item quantity" increaseLabel="Increase extra item quantity" minimum={1} unit={unit} disabled={disabled || !draftReady} className="min-w-0 flex-1 basis-56" unitControl={<select value={unit === "L" ? "l" : unit} onChange={event => { suppressDraftWriteRef.current = false; setUnit(event.target.value); setSubmission(undefined); }} className="input !h-[44px] !min-h-[44px] !w-[76px] !px-[4px] !text-sm leading-none" aria-label="Unit">
+          {["pcs", ...cookingUnits.filter(u => u !== "piece")].map(u => <option key={u} value={u}>{cookingUnitLabel(u)}</option>)}
+        </select>} />
         <Button
           className="!min-h-12 !px-4"
           aria-label="Add custom grocery item"
-          disabled={disabled || !draftReady || !name.trim()}
+          disabled={disabled || !draftReady || !name.trim() || parsedQuantity === null}
           onClick={async () => {
-            const saved = await actions.addCustomGrocery(
-              name.trim(),
-              Math.max(1, Number(quantity) || 1),
-              unit,
-              week,
-            );
-            if (!saved) return;
-            if (userId) void clearDraft(userId, draftType);
-            if (userId && week.weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0)) void clearDraft(userId, "grocery-custom");
-            suppressDraftWriteRef.current = true;
-            setName("");
-            setQuantity("1");
-            setUnit("pcs");
-            setDraftWasRestored(false);
+            if (parsedQuantity === null || extraSubmitting.current) return;
+            extraSubmitting.current = true; onSavingChange(true);
+            try {
+              const intent = submission ?? { idempotencyKey: createUuid(), groceryRevision: list?.revision ?? 0, calendarRevision: snapshot.profile?.calendarRevision, choice: categoryChoice(name, categoryDraft) ?? { category: resolvedCategory?.nameKey === normalizeGroceryName(name) ? resolvedCategory.category : classifyGroceryName(name) } };
+              setSubmission(intent);
+              await writeDraft(createDraftEnvelope({ userId, draftType, payload: { name, quantity, unit, categoryDraft, submission: intent }, baseVersions: { groceryRevision: intent.groceryRevision }, ttlMs: draftTtlMs(draftType) }));
+              const saved = await actions.addCustomGrocery(name.trim(), parsedQuantity, unit, week, intent.choice, intent);
+              if (!saved) { onRefresh(); return; }
+              if (userId) await clearDraft(userId, draftType);
+              if (userId && week.weekOf === startOfWeek(todayKey(), snapshot.profile?.weekStartsOn ?? 0)) await clearDraft(userId, "grocery-custom");
+              suppressDraftWriteRef.current = true;
+              setName(""); setCategoryDraft(undefined); setSubmission(undefined);
+              setQuantity("1"); setUnit("pcs"); setDraftWasRestored(false);
+              requestAnimationFrame(() => extraName.current?.focus());
+            } finally { extraSubmitting.current = false; onSavingChange(false); }
+
           }}
         >
           <Plus className="h-4 w-4" aria-hidden />
         </Button>
         </div>
       </div>
+      {submission && error?.code === "stale_version" ? <button type="button" disabled={disabled} className="min-h-[44px] text-sm font-bold underline" onClick={() => { setSubmission(undefined); actions.clearError(); }}>Review latest list before adding</button> : null}
+      <div className="mt-2"><GroceryCategoryField initialCategory={submission?.choice.category} refreshKey={list?.revision} name={name} value={categoryDraft} onChange={value => { setCategoryDraft(value); setSubmission(undefined); }} disabled={disabled || !draftReady} onResolve={(category, nameKey) => setResolvedCategory({ category, nameKey })} /></div>
     </fieldset>
   );
 
