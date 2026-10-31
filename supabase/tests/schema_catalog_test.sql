@@ -32,14 +32,14 @@ select is((
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r'
-), 38, 'the public application schema contains exactly 38 tables');
+), 40, 'the public application schema contains exactly 40 tables');
 
 select is((
   select count(*)::int
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity
-), 38, 'every public application table has RLS enabled');
+), 40, 'every public application table has RLS enabled');
 
 select ok((
   select count(*) = 10

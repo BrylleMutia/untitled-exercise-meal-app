@@ -881,6 +881,44 @@ export type Database = {
         }
         Relationships: []
       }
+      grocery_category_preferences: {
+        Row: {
+          category: string | null
+          group_id: string | null
+          name_key: string
+          revision: number
+          scope_key: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          group_id?: string | null
+          name_key: string
+          revision?: number
+          scope_key: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          group_id?: string | null
+          name_key?: string
+          revision?: number
+          scope_key?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_category_preferences_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "cooking_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grocery_items: {
         Row: {
           app_id: string
@@ -992,6 +1030,42 @@ export type Database = {
           updated_at?: string
           user_id?: string
           week_of?: string
+        }
+        Relationships: []
+      }
+      ingredient_conversions: {
+        Row: {
+          created_at: string
+          food_identity: Json
+          food_key: string
+          grams_per_unit: number
+          id: number
+          source_recipe_id: string
+          source_recipe_name: string
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          food_identity: Json
+          food_key: string
+          grams_per_unit: number
+          id?: never
+          source_recipe_id: string
+          source_recipe_name: string
+          unit: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          food_identity?: Json
+          food_key?: string
+          grams_per_unit?: number
+          id?: never
+          source_recipe_id?: string
+          source_recipe_name?: string
+          unit?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1180,12 +1254,14 @@ export type Database = {
           app_id: string
           archived_at: string | null
           complexity: string
+          cooking_ingredients: Json | null
           created_at: string
           image: Json | null
           is_system: boolean
           meal_slots: string[]
           name: string
           notes: string | null
+          nutrition_input: Json | null
           nutrition_notes: string | null
           owner_user_id: string | null
           provided_nutrition: Json | null
@@ -1202,12 +1278,14 @@ export type Database = {
           app_id: string
           archived_at?: string | null
           complexity?: string
+          cooking_ingredients?: Json | null
           created_at?: string
           image?: Json | null
           is_system?: boolean
           meal_slots?: string[]
           name: string
           notes?: string | null
+          nutrition_input?: Json | null
           nutrition_notes?: string | null
           owner_user_id?: string | null
           provided_nutrition?: Json | null
@@ -1224,12 +1302,14 @@ export type Database = {
           app_id?: string
           archived_at?: string | null
           complexity?: string
+          cooking_ingredients?: Json | null
           created_at?: string
           image?: Json | null
           is_system?: boolean
           meal_slots?: string[]
           name?: string
           notes?: string | null
+          nutrition_input?: Json | null
           nutrition_notes?: string | null
           owner_user_id?: string | null
           provided_nutrition?: Json | null
@@ -2149,8 +2229,21 @@ export type Database = {
       generate_nutrition_week: { Args: { p_payload: Json }; Returns: Json }
       get_cooking_group_week: { Args: { p_week_of: string }; Returns: Json }
       get_cooking_recipe: { Args: { p_recipe_id: string }; Returns: Json }
+      get_grocery_category_preferences: {
+        Args: { p_group_id?: string }
+        Returns: Json
+      }
+      get_grocery_name_suggestions: {
+        Args: { p_group_id?: string; p_query: string }
+        Returns: Json
+      }
+      get_grocery_sharing_status: { Args: never; Returns: Json }
       get_group_planning_context: {
         Args: { p_actor: string; p_input: Json }
+        Returns: Json
+      }
+      get_ingredient_conversions: {
+        Args: { p_food_ids: string[] }
         Returns: Json
       }
       get_nutrition_week: { Args: { p_week_of: string }; Returns: Json }
@@ -2184,6 +2277,7 @@ export type Database = {
       set_grocery_total_amount: { Args: { p_payload: Json }; Returns: Json }
       set_recipe_favorite: { Args: { p_payload: Json }; Returns: Json }
       set_week_start: { Args: { p_payload: Json }; Returns: Json }
+      share_cooking_groceries: { Args: { p_payload: Json }; Returns: Json }
       skip_planned_meal: { Args: { p_payload: Json }; Returns: Json }
       start_custom_workout: { Args: { p_payload: Json }; Returns: Json }
       start_workout_session: { Args: { p_payload: Json }; Returns: Json }
