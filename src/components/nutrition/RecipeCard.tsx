@@ -10,24 +10,25 @@ import type { RecipeCardMetadata } from "@/types/backend";
 import { recipeBadge } from "@/utility/recipeCard";
 
 export function RecipeCard({ name, image, planned = false, context, calories, recipeServings, totalTimeMinutes, complexity,
-  metadata, favoriteAvailable = false, favoritePending = false, onFavorite, onOpen, children, actions, imageActions, mobileCompactResources = false }: {
+  metadata, favoriteAvailable = false, favoritePending = false, onFavorite, onOpen, children, actions, imageActions, mobileCompactResources = false, mobileFlatPanels = false }: {
   name: string; image?: RecipeImage | null; planned?: boolean; context?: string;
   calories?: number; recipeServings?: number; totalTimeMinutes?: number; complexity?: RecipeComplexity;
   metadata?: RecipeCardMetadata; favoriteAvailable?: boolean; favoritePending?: boolean;
   onFavorite?: () => void; onOpen?: MouseEventHandler<HTMLButtonElement>;
-  children?: ReactNode; actions?: ReactNode; imageActions?: ReactNode; mobileCompactResources?: boolean;
+  children?: ReactNode; actions?: ReactNode; imageActions?: ReactNode; mobileCompactResources?: boolean; mobileFlatPanels?: boolean;
 }) {
   const badge = recipeBadge(metadata);
   const banner = <><RecipeCover image={image} name={name} banner />
     {badge ? <span className="absolute right-[12px] top-[12px] inline-flex max-w-[calc(100%-24px)] items-center gap-[6px] rounded-full bg-white/90 px-[8px] py-1.5 text-xs font-extrabold text-ink">
       {badge === "Popular" ? <Flame className="h-[14px] w-[14px] shrink-0" aria-hidden /> : <Heart className="h-[14px] w-[14px] shrink-0 fill-current" aria-hidden />}<span className="min-w-0 [overflow-wrap:anywhere]">{badge}</span>
     </span> : null}</>;
-  const bannerClass = `relative block h-36 w-full overflow-hidden rounded-2xl sm:h-40 ${planned ? "bg-blush-100" : "bg-lav-100"}`;
-  return <Card className="recipe-card flex h-full min-w-0 flex-col !p-[12px] sm:!p-[16px]">
+  const bannerClass = `relative block h-36 w-full overflow-hidden rounded-2xl sm:h-40 ${planned ? "bg-blush-100" : "bg-lav-100"} ${mobileFlatPanels ? "max-sm:h-[156px] max-sm:rounded-none" : ""}`;
+  return <Card className={`recipe-card flex h-full min-w-0 flex-col !p-[12px] sm:!p-[16px] ${mobileFlatPanels ? "max-sm:rounded-none max-sm:border-b max-sm:border-ink/10 max-sm:p-0! max-sm:pb-4! max-sm:shadow-none" : ""}`}>
     <div className="relative min-w-0">
       {onOpen ? <button type="button" className={bannerClass} onClick={onOpen} aria-label={`View recipe image: ${name}`}>{banner}</button> : <div className={bannerClass}>{banner}</div>}
       {imageActions ? <div className="absolute bottom-[12px] right-[12px] flex gap-[8px]">{imageActions}</div> : null}
     </div>
+    <div className={`flex min-w-0 flex-1 flex-col ${mobileFlatPanels ? "max-sm:px-5" : ""}`}>
     <div className="flex items-start justify-between gap-2 pt-3">
       {onOpen ? <button type="button" className="min-h-11 min-w-0 flex-1 rounded-xl text-left text-lg font-extrabold leading-snug [overflow-wrap:anywhere]" aria-label={`View recipe: ${name}`} onClick={onOpen}>{name}</button>
         : <h4 className="min-w-0 flex-1 py-2 text-lg font-extrabold leading-snug [overflow-wrap:anywhere]">{name}</h4>}
@@ -42,5 +43,6 @@ export function RecipeCard({ name, image, planned = false, context, calories, re
     <RecipeResourcePills mobileScrollable={mobileCompactResources} calories={calories} recipeServings={recipeServings} totalTimeMinutes={totalTimeMinutes} complexity={complexity} />
     {children ? <div className="grid min-w-0 gap-3 pb-3">{children}</div> : null}
     {actions ? <div className="mt-auto grid min-w-0 gap-2 border-t border-ink/10 pt-3 [&_button]:min-w-0 [&_button]:[overflow-wrap:anywhere]">{actions}</div> : null}
+    </div>
   </Card>;
 }

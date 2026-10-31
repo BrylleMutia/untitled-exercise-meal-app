@@ -18,3 +18,11 @@ it("locks undo during another action or without a resolved log identity", () => 
   expect(renderToStaticMarkup(<LoggedMealAction row={row} disabled onUndone={() => {}} />)).toContain('disabled=""');
   expect(renderToStaticMarkup(<LoggedMealAction row={{ ...row, log: undefined }} disabled={false} onUndone={() => {}} />)).toContain('disabled=""');
 });
+
+it("uses a full circular icon treatment only for meal entries", () => {
+  const html = renderToStaticMarkup(<LoggedMealAction row={row} disabled={false} onUndone={() => {}} appearance="meal-entry" />);
+  expect(html).toContain('aria-label="Undo logged Chicken rice"');
+  expect(html).toContain("!rounded-full !bg-mint-100"); expect(html).not.toContain("h-[32px]");
+  const home = renderToStaticMarkup(<LoggedMealAction row={row} disabled={false} onUndone={() => {}} />);
+  expect(home).toContain("h-[32px]"); expect(home).toContain("bg-transparent");
+});

@@ -70,21 +70,36 @@ describe("Nutrition day slots", () => {
     const food = FOODS[0];
     snapshot.savedMeals = [{ id: "beef", name: "Beef bowl", servings: 4, ingredients: [{ foodId: food.id, servings: 1 }], providedNutrition: { calories: 560, proteinG: 45, carbsG: 58, fatG: 16 } }];
     snapshot.mealPlan = { id: "plan", version: 1, targetId: "target", weekOf: "2026-10-05", meals: [
-      { id: "beef-plan", date: "2026-10-05", slot: "lunch", mealId: "beef", label: "Beef bowl", servings: 0.5, expectedCalories: 280, expectedProteinG: 22.5, expectedCarbsG: 29, expectedFatG: 8 },
+      { id: "beef-plan", date: "2026-10-05", slot: "lunch", mealId: "beef", label: "Beef bowl", servings: 0.5, expectedCalories: 280, expectedProteinG: 22.5, expectedCarbsG: 29, expectedFatG: 8, source: "user-provided recipe" },
       { id: "skipped-food", date: "2026-10-05", slot: "dinner", foodId: food.id, label: "Skipped food", servings: 1, skipped: true },
     ] };
-    snapshot.nutritionLogs = [{ id: "eaten", date: "2026-10-05", slot: "lunch", customName: "Eaten food", servings: 1, calories: 100, proteinG: 10, carbsG: 15, fatG: 3, estimated: false, confidence: "high", source: "user", valueSource: "user_provided", createdAt: "2026-10-05T12:00:00Z" }];
+    snapshot.nutritionLogs = [{ id: "eaten", date: "2026-10-05", slot: "lunch", customName: "Eaten food", servings: 0.25, calories: 100, proteinG: 10, carbsG: 15, fatG: 3, estimated: false, confidence: "high", source: "user", valueSource: "user_provided", createdAt: "2026-10-05T12:00:00Z" }];
     const html = renderToStaticMarkup(<NutritionPage />);
     const plannedHtml = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
     expect(plannedHtml).toContain("Planned portion nutrition");
-    expect(plannedHtml).toContain("≈280 kcal");
+    expect(plannedHtml).toContain("280 kcal");
+    expect(plannedHtml).toContain("P 23g");
+    expect(plannedHtml).not.toContain("≈");
+    expect(plannedHtml).not.toContain("×");
+    expect(plannedHtml).not.toContain("Lunch ·");
+    expect([...plannedHtml.matchAll(/data-meal-serving="[^"]*"[^>]*>(.*?)<\/span>/g)].map(match => match[1])).toEqual(["0.5 servings", "0.25 servings", "1 serving"]);
     expect(plannedHtml).toContain("0.5 servings");
     expect(plannedHtml).toContain("Eaten food");
     expect(plannedHtml).toContain("100 kcal");
+    for (const label of ["Planned meal: Beef bowl", "Skipped planned meal: Skipped food", "Eaten meal: Eaten food"]) expect(plannedHtml).toContain(`aria-label="${label}"`);
+    expect(plannedHtml).not.toMatch(/>(?:Planned|Eaten|Planned · skipped)<\/(?:span|p)>/);
+    expect(plannedHtml).not.toContain("user-provided recipe");
+    expect(plannedHtml).not.toContain("your entry");
+    expect(plannedHtml).not.toContain("preparation unknown");
+
     expect(plannedHtml).toContain('aria-label="Restore planned Skipped food"');
     expect(plannedHtml).toContain("Nutrition unavailable");
     expect(plannedHtml).not.toContain("recipe-card");
-    expect(plannedHtml).not.toContain("recipe-default.png");
+    expect(plannedHtml.match(/data-meal-thumbnail/g)).toHaveLength(3);
+    expect(plannedHtml).toContain("recipe-default.png");
+    expect(plannedHtml.match(/data-nutrition-strip/g)).toHaveLength(2);
+    expect(plannedHtml).not.toMatch(/aria-label="Edit/);
+    expect(plannedHtml).not.toContain("lucide-trash");
     expect(plannedHtml).not.toContain("favorites:");
     expect(plannedHtml).not.toContain("Recipe yields");
     expect(html).toContain("View recipe image: Beef bowl");
@@ -94,6 +109,55 @@ describe("Nutrition day slots", () => {
     expect(html).not.toContain('aria-label="About Saved meals"');
     expect(html).toMatch(/<button[^>]*bg-ink text-white[^>]*aria-label="Generate"[^>]*><svg[^>]*lucide-wand-sparkles/);
     expect(html).toMatch(/<button[^>]*bg-ink text-white[^>]*aria-label="Create"[^>]*><svg[^>]*lucide-plus/);
+  });
+  it.each([
+    { servings: 1, expected: "1 serving" },
+    { servings: 0.5, expected: "0.5 servings" },
+    { servings: undefined, expected: "Servings not recorded" },
+    { servings: 0, expected: "Servings not recorded" },
+    { servings: Number.NaN, expected: "Servings not recorded" },
+  ])("uses the saved grouped portion ($expected) without inferring recipe servings", ({ servings, expected }) => {
+    const food = FOODS[0];
+    snapshot.foods = [food];
+    snapshot.savedMeals = [{ id: "recipe", name: "Recipe", servings: 4, ingredients: [{ foodId: food.id, servings: 2 }] }];
+    snapshot.loggedMeals = [{ id: "group", date: "2026-10-05", slot: "lunch", name: "Saved group", mealId: "recipe", sourceMode: "saved_meal", recipeServings: servings, revision: 1, createdAt: "2026-10-05T12:00:00Z" }];
+    snapshot.nutritionLogs = [{ id: "ingredient", loggedMealId: "group", date: "2026-10-05", slot: "lunch", foodId: food.id, servings: 1, calories: 100, proteinG: 10, carbsG: 15, fatG: 3, estimated: false, confidence: "high", source: "user", valueSource: "user_provided", createdAt: "2026-10-05T12:00:00Z" }];
+    const original = structuredClone(snapshot);
+    const html = renderToStaticMarkup(<NutritionPage />);
+    expect([...html.matchAll(/data-meal-serving="[^"]*"[^>]*>(.*?)<\/span>/g)].map(match => match[1])).toEqual([expected]);
+    expect(snapshot).toEqual(original);
+  });
+
+  it("rounds only Planned pill display and preserves saved fractional values and zero", () => {
+    snapshot.mealPlan = { id: "plan", version: 1, targetId: "target", weekOf: "2026-10-05", meals: [
+      { id: "fraction", date: "2026-10-05", slot: "breakfast", foodId: FOODS[0].id, label: "Fractional plan", servings: 0.25, expectedCalories: 1020.8, expectedProteinG: 45.5, expectedCarbsG: 78.8, expectedFatG: 0 },
+    ] };
+    const original = structuredClone(snapshot);
+    const html = renderToStaticMarkup(<NutritionPage />);
+    const planned = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
+    for (const value of ["1021 kcal", "P 46g", "C 79g", "F 0g", "0.25 servings"]) expect(planned).toContain(value);
+    for (const value of ["1020.8", "45.5", "78.8", "≈", "Breakfast ·"]) expect(planned).not.toContain(value);
+    expect(snapshot).toEqual(original);
+  });
+
+  it("retains meaningful estimate warnings without routine source captions", () => {
+    const entry = { date: "2026-10-05", servings: 1, calories: 100, proteinG: 10, carbsG: 15, fatG: 3, estimated: true, confidence: "low" as const, source: "recorded-source-marker", valueSource: "ai_estimate" as const, preparationBasis: "as_labeled" as const, estimateRange: { calories: { low: 80, base: 100, high: 140 }, proteinG: { low: 8, base: 10, high: 12 }, carbsG: { low: 10, base: 15, high: 20 }, fatG: { low: 2, base: 3, high: 4 } }, createdAt: "2026-10-05T12:00:00Z" };
+    snapshot.nutritionLogs = [
+      { ...entry, id: "ingredient", slot: "lunch", loggedMealId: "group" },
+      { ...entry, id: "standalone", slot: "dinner", customName: "Estimated food" },
+    ];
+    snapshot.loggedMeals = [{ id: "group", date: entry.date, slot: "lunch", name: "Estimated meal", mealId: "missing-recipe", sourceMode: "ai_assisted", revision: 1, createdAt: entry.createdAt }];
+    const original = structuredClone(snapshot);
+    const html = renderToStaticMarkup(<NutritionPage />);
+    const planned = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
+    expect(planned).toContain("80–140 kcal range · includes AI estimate");
+    expect(planned).toContain("estimate (low)");
+    expect(planned).toContain("Servings not recorded");
+    expect(planned).toContain('aria-label="Eaten meal: Estimated meal"');
+    expect(planned).toContain('aria-label="Eaten meal: Estimated food"');
+    expect(planned).not.toContain("recorded-source-marker");
+    expect(planned).not.toContain("as_labeled");
+    expect(snapshot).toEqual(original);
   });
   it("shows ordinary empty slots for missing references and unresolved recipes without changing the plan", () => {
     snapshot.foods = [FOODS[0]];
@@ -113,7 +177,7 @@ describe("Nutrition day slots", () => {
     const planned = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
     expect(planned).not.toContain("Nothing planned or logged.");
     for (const text of ["Choose a meal", "Missing food", "Missing recipe", "Incomplete recipe", "Recipe without ingredients", "Nutrition unavailable"]) expect(planned).toContain(text);
-    expect(planned).toContain("Edit this planned meal before logging");
+    expect(planned).toContain("Remove and re-add this meal with available nutrition before logging");
     for (const slot of ["breakfast", "lunch", "dinner", "snack"]) expect(planned).toContain(`id="add-meal-${slot}"`);
     expect(snapshot).toEqual(original);
   });
@@ -133,6 +197,15 @@ describe("Nutrition day slots", () => {
     const html = renderToStaticMarkup(<NutritionPage />);
     const planned = html.slice(html.indexOf('aria-labelledby="planned-meals-heading"'), html.indexOf('aria-labelledby="saved-meals-heading"'));
     for (const text of ["Available recipe", "Skipped food", "Restore planned Skipped food", "Recorded food", "Recorded meal", "100 kcal", "log-planned-valid", "Remove planned Skipped food"]) expect(planned).toContain(text);
+    for (const name of ["Recorded food", "Recorded meal"]) {
+      const undo = planned.indexOf(`aria-label="Undo logged ${name}"`);
+      const remove = planned.indexOf(`aria-label="Delete ${name}"`);
+      expect(planned).not.toContain(`aria-label="Edit ${name}"`);
+      expect(undo).toBeGreaterThan(-1); expect(remove).toBeGreaterThan(undo);
+    }
+    expect(planned).not.toContain("mixed sources");
+    expect(planned).not.toContain("lucide-trash");
+    expect(planned).toContain("lucide-x");
     expect(planned).toContain("Unresolved meal");
     expect(planned).not.toContain("Nothing planned or logged.");
     expect(snapshot).toEqual(original);
@@ -159,7 +232,7 @@ describe("Nutrition day slots", () => {
     expect(html.indexOf('aria-label="Next week"')).toBeLessThan(html.indexOf('aria-label="Nutrition summary view"'));
     expect(html.indexOf(">Today</button>")).toBeLessThan(html.indexOf('aria-label="Choose a day"'));
     expect(html).not.toContain("Log again");
-    expect(html).toContain(`aria-label="Edit ${food.name}"`);
+    expect(html).not.toContain(`aria-label="Edit ${food.name}"`);
     expect(html).toContain("1 meal eaten");
     snapshot.nutritionLogs.push({ ...snapshot.nutritionLogs[0], id: "another", servings: 2 });
     expect(renderToStaticMarkup(<NutritionPage />)).toContain("2 meals eaten");

@@ -7,8 +7,8 @@ import { IconButton } from "@/components/ui/IconButton";
 import { clientId } from "@/utility/mealLogging";
 import type { DailyMealRow } from "@/utility/dailyMealRows";
 
-export function LoggedMealAction({ row, disabled, onUndone }: {
-  row: DailyMealRow; disabled: boolean; onUndone: () => void;
+export function LoggedMealAction({ row, disabled, onUndone, appearance = "home" }: {
+  row: DailyMealRow; disabled: boolean; onUndone: () => void; appearance?: "home" | "meal-entry";
 }) {
   const { actions, pendingMutation } = useApp();
   const [busy, setBusy] = useState(false);
@@ -32,8 +32,8 @@ export function LoggedMealAction({ row, disabled, onUndone }: {
     }
   }
   return <>
-    <IconButton variant="ghost" size="compact" label={`Undo logged ${row.name}`} tooltip="Undo meal log" disabled={locked} aria-busy={busy} onClick={() => void undo()}>
-      <span className="grid h-[32px] w-[32px] shrink-0 place-items-center rounded-full bg-mint-100"><Check className="h-4 w-4 text-ink" aria-hidden /></span>
+    <IconButton variant={appearance === "meal-entry" ? "mint" : "ghost"} size="compact" label={`Undo logged ${row.name}`} tooltip="Undo meal log" disabled={locked} aria-busy={busy} onClick={() => void undo()}>
+      {appearance === "meal-entry" ? <Check className="h-4 w-4 text-ink" aria-hidden /> : <span className="grid h-[32px] w-[32px] shrink-0 place-items-center rounded-full bg-mint-100"><Check className="h-4 w-4 text-ink" aria-hidden /></span>}
     </IconButton>
     {failed ? <p role="alert" className="basis-full text-xs text-danger-900">The meal log could not be undone. Your saved log is retained; retry or refresh this day.</p> : null}
   </>;

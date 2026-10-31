@@ -57,13 +57,13 @@ export function HomeWorkoutsCard() {
       <ProgressRing value={data.progress} size={116} label="Workouts completed this week" unavailableLabel="No weekly workout plan is set" centerLabel={data.progress === null ? "—" : `${Math.round(Math.min(1, data.progress) * 100)}%`} centerSub="This week" barClassName="text-lav-500" />
       <dl className="grid min-w-0 gap-1" aria-label="Weekly workout metrics"><Metric label="Completed">{data.completed}</Metric><Metric label="Scheduled">{data.scheduled}</Metric><Metric label="Est. kcal" description={data.energyStatus ?? undefined}>{data.energyStatus ? "—" : `≈${data.energy}`}</Metric></dl>
     </div>
-    <section className="mt-4 min-w-0 rounded-2xl bg-white/50 px-2 py-1" aria-label="Today's workout">
-      <div className="flex min-w-0 items-center justify-between gap-2"><h3 className="text-sm font-extrabold">Today&apos;s workout</h3><ActionLink href="/workouts" label="View weekly workouts"><CalendarDays className="h-4 w-4" aria-hidden /></ActionLink></div>
-      {data.workout ? <div className="flex min-w-0 items-center gap-2 rounded-xl bg-white/70 p-2"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-lav-100"><Dumbbell className="h-5 w-5" aria-hidden /></span>
+    <section className="mt-4 min-w-0 rounded-2xl bg-white/50 py-1" aria-label="Today's workout">
+      <div className="mx-2 flex min-w-0 items-center justify-between gap-2"><h3 className="text-sm font-extrabold">Today&apos;s workout</h3><ActionLink href="/workouts" label="View weekly workouts"><CalendarDays className="h-4 w-4" aria-hidden /></ActionLink></div>
+      {data.workout ? <div className="-mx-5 flex min-w-0 items-center gap-2 bg-white/70 px-5 py-2 md:-mx-[23px] md:px-[23px]"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-lav-100"><Dumbbell className="h-5 w-5" aria-hidden /></span>
         <div className="min-w-0 flex-1 break-words"><p className="text-sm font-bold">{data.workout.title}</p><p className="text-xs text-ink-soft">{data.workout.focus} · {data.workout.exercises.length} exercises · ~{data.workout.estimatedMinutes} min</p>{data.finished ? <p className="text-xs font-semibold">Completed today</p> : null}</div>
         <ActionLink href={data.href} label={data.action}>{data.action === "View workouts" ? <Check className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}</ActionLink></div>
-        : <p className="pb-3 text-sm font-semibold text-ink-soft">Rest day — no workout scheduled.</p>}
-      {data.suggestion ? <p className={`mt-2 rounded-xl px-3 py-2 text-xs font-semibold ${data.suggestion.action === "progress" ? "bg-mint-100" : data.suggestion.action === "regress" ? "bg-blush-100" : "bg-peach-100"}`}>{data.suggestion.reason}</p> : null}
+        : <p className="px-2 pb-3 text-sm font-semibold text-ink-soft">Rest day — no workout scheduled.</p>}
+      {data.suggestion ? <p className={`mx-2 mt-2 rounded-xl px-3 py-2 text-xs font-semibold ${data.suggestion.action === "progress" ? "bg-mint-100" : data.suggestion.action === "regress" ? "bg-blush-100" : "bg-peach-100"}`}>{data.suggestion.reason}</p> : null}
     </section>
   </Card>;
 }

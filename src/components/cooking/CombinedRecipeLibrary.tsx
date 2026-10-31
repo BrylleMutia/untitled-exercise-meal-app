@@ -12,9 +12,10 @@ import { useCookingSurface } from "./CookingGroupSurface";
 import type { Meal } from "@/types/domain";
 import type { GroupRecipe, GroupRecipeDetails } from "@/types/cookingGroup";
 
-export function CombinedRecipeLibrary({ owned, renderOwned, filters, favoriteIds, favoritesAvailable, onClearFilters }: {
+export function CombinedRecipeLibrary({ owned, renderOwned, filters, favoriteIds, favoritesAvailable, onClearFilters, mobileFlatPanels = false }: {
   owned: Meal[]; renderOwned: (meal: Meal, displayName: string) => ReactNode;
   filters: RecipeFilters; favoriteIds: ReadonlySet<string>; favoritesAvailable: boolean; onClearFilters: () => void;
+  mobileFlatPanels?: boolean;
 }) {
   const { snapshot, actions, pendingMutation } = useApp();
   const cooking = useCookingSurface();
@@ -46,7 +47,7 @@ export function CombinedRecipeLibrary({ owned, renderOwned, filters, favoriteIds
       <p className="text-sm text-ink-soft" role="status">{favoritesBlocked ? "Favorites filtering is unavailable. Wait for card metadata or use Refresh cards to retry." : `${filtered.length} ${filtered.length === 1 ? "recipe matches" : "recipes match"} your filters.`}</p>
       <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={onClearFilters}>Clear filters</Button>
     </div> : null}
-    <ul className="mt-3 grid min-w-0 gap-3 md:grid-cols-2" aria-label="Recipe collection">
+    <ul className={`mt-3 grid min-w-0 gap-3 md:grid-cols-2 ${mobileFlatPanels ? "max-sm:-mx-5 max-sm:[&>li:not(:has(.recipe-card))]:px-5" : ""}`} aria-label="Recipe collection">
     {cooking?.loading ? <li className="md:col-span-2" role="status">Loading shared recipes…</li> : null}
     {cooking?.error ? <li className="md:col-span-2 text-danger-900" role="alert"><p>Shared recipes could not be refreshed. Your recipes remain available.</p><Button variant="soft" onClick={cooking.refresh}>Retry shared recipes</Button></li> : null}
     {reading ? <li className="md:col-span-2" role="status">Loading shared recipe…</li> : null}
@@ -55,7 +56,7 @@ export function CombinedRecipeLibrary({ owned, renderOwned, filters, favoriteIds
     {(favoritesBlocked ? [] : filtered).map(meal => {
       const shared = recipes.find(recipe => recipe.id === meal.id);
       if (!shared || meal.isSystem || shared.isSystem || shared.ownerId === snapshot.userId) return renderOwned(meal, recipeDisplayName(meal, editedIds));
-      return <li key={meal.id} className="min-w-0"><RecipeCard mobileCompactResources name={recipeDisplayName(shared, editedIds)} image={shared.image} calories={shared.caloriesPerServing} recipeServings={shared.servings} totalTimeMinutes={shared.totalTimeMinutes} complexity={shared.complexity}
+      return <li key={meal.id} className="min-w-0"><RecipeCard mobileCompactResources mobileFlatPanels={mobileFlatPanels} name={recipeDisplayName(shared, editedIds)} image={shared.image} calories={shared.caloriesPerServing} recipeServings={shared.servings} totalTimeMinutes={shared.totalTimeMinutes} complexity={shared.complexity}
         context={`Shared by: ${shared.ownerName}`} onOpen={event => void open(shared, event.currentTarget)} /></li>;
     })}
     </ul>

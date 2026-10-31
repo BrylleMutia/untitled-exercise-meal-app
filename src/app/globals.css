@@ -25,6 +25,7 @@
   --color-blush-100: #f9dde0;
   --color-blush-200: #f4c6cc;
   --color-blush-300: #eda9b2;
+  --color-home-meal: color-mix(in srgb, white 85%, var(--color-blush-100));
   --color-lav-50: #f1effb;
   --color-lav-100: #e2def6;
   --color-lav-200: #cbc3ee;

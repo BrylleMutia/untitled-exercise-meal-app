@@ -12,9 +12,10 @@ import { mealSlotLabels } from "@/utility/dailyMealRows";
 import type { AppSnapshot, PlannedMeal } from "@/types/domain";
 import type { NutritionWeekReadModel } from "@/types/backend";
 
-export function PlannedMealActions({ meal, snapshot, week, disabled = false, onChanged, focusAfterChange }: {
+export function PlannedMealActions({ meal, snapshot, week, disabled = false, onChanged, focusAfterChange, unavailableGuidance = "edit" }: {
   meal: PlannedMeal; snapshot: AppSnapshot; week: NutritionWeekReadModel; disabled?: boolean;
   onChanged: () => void; focusAfterChange?: () => void;
+  unavailableGuidance?: "edit" | "remove-and-add";
 }) {
   const { actions, pendingMutation } = useApp();
   const [busy, setBusy] = useState(false);
@@ -52,9 +53,9 @@ export function PlannedMealActions({ meal, snapshot, week, disabled = false, onC
   }
   return <>
     {meal.skipped ? <IconButton size="compact" label={`Restore planned ${meal.label}`} tooltip="Restore planned meal" disabled={locked} onClick={() => void actions.skipPlannedMeal(meal.id, week).then(onChanged)}><RotateCcw className="h-4 w-4" aria-hidden /></IconButton>
-      : <IconButton id={`log-planned-${meal.id}`} size="compact" variant="primary" label={`Log planned ${meal.label}`} tooltip={available ? "Log planned portion" : "Edit this meal to resolve its nutrition before logging"} disabled={locked || !available} onClick={() => void log()}><Check className="h-4 w-4" aria-hidden /></IconButton>}
+      : <IconButton id={`log-planned-${meal.id}`} size="compact" variant="primary" label={`Log planned ${meal.label}`} tooltip={available ? "Log planned portion" : unavailableGuidance === "remove-and-add" ? "Remove and re-add this meal with available nutrition before logging" : "Edit this meal to resolve its nutrition before logging"} disabled={locked || !available} onClick={() => void log()}><Check className="h-4 w-4" aria-hidden /></IconButton>}
     <IconButton buttonRef={removeTrigger} size="compact" label={`Remove planned ${meal.label}`} tooltip="Remove planned meal" disabled={locked} onClick={() => { setMessage(""); setConfirming(true); }}><X className="h-4 w-4" aria-hidden /></IconButton>
-    {!available && !meal.skipped ? <p className="basis-full text-xs text-danger-900">Nutrition unavailable. Edit this planned meal before logging.</p> : null}
+    {!available && !meal.skipped ? <p className="basis-full text-xs text-danger-900">{unavailableGuidance === "remove-and-add" ? "Nutrition unavailable. Remove and re-add this meal with available nutrition before logging." : "Nutrition unavailable. Edit this planned meal before logging."}</p> : null}
     {message && !confirming ? <p role="alert" className="basis-full text-xs text-danger-900">{message}</p> : null}
     {confirming ? <Modal open title="Remove planned meal?" initialFocus={cancel} returnFocus={removeTrigger} dismissalDisabled={busy || Boolean(pendingMutation)} onClose={() => setConfirming(false)}
       footer={<div className="flex flex-wrap justify-end gap-2"><Button ref={cancel} variant="soft" disabled={locked} onClick={() => setConfirming(false)}>Cancel</Button><Button variant="danger" disabled={locked} onClick={() => void remove()}>{busy ? "Removing…" : "Remove meal"}</Button></div>}>

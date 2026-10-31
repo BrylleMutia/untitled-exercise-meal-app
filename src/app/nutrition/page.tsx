@@ -1,29 +1,29 @@
 "use client";
 
 import { createUuid } from "@/utility/uuid";
-
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Sparkles, Trash2, TriangleAlert, WandSparkles, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Sparkles, X, TriangleAlert, WandSparkles, SlidersHorizontal } from "lucide-react";
 import { useApp, type AppActions } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { DailyNutritionSummary } from "@/components/nutrition/DailyNutritionSummary";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { DayStrip } from "@/components/DayStrip";
-import { NutritionPills, NutritionFieldLabel } from "@/components/ui/NutritionPills";
-import { type NutritionMetric } from "@/components/ui/nutritionMetrics";
-import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
+import { NutritionPills } from "@/components/ui/NutritionPills";
+import { HelpPopover } from "@/components/ui/HelpPopover";
 import { RecipeEditor } from "@/components/nutrition/RecipeEditor";
 import { ConnectedGenerateDialog as GenerateWeekDialog } from "@/components/cooking/ConnectedGenerateDialog";
 import { CookingGroupSurface, CookingOverviewButton, GenerationAttribution } from "@/components/cooking/CookingGroupSurface";
 import { CombinedRecipeLibrary } from "@/components/cooking/CombinedRecipeLibrary";
 import { RecipeOverview } from "@/components/nutrition/RecipeOverview";
+import { RecordedMealDetails, type RecordedMealDetailsInput } from "@/components/nutrition/RecordedMealDetails";
 import { RecipeCard } from "@/components/nutrition/RecipeCard";
 import { RecipeFilterDialog } from "@/components/nutrition/RecipeFilterDialog";
 import { activeRecipeFilterCount, emptyRecipeFilters } from "@/utility/recipeFilters";
-import { LoggedRecipeServingsEditor } from "@/components/nutrition/LoggedRecipeServingsEditor";
+import { RecipeCover } from "@/components/nutrition/RecipeCover";
 import { AddMealDialog } from "@/components/nutrition/AddMealDialog";
 import { PlannedMealActions } from "@/components/nutrition/PlannedMealActions";
+import { LoggedMealAction } from "@/components/nutrition/LoggedMealAction";
 import { MealRow } from "@/components/nutrition/MealRow";
 import { useRecipeCardMetadata } from "@/components/nutrition/useRecipeCardMetadata";
 import { useNutritionWeek } from "@/components/nutrition/useNutritionWeek";
@@ -35,12 +35,13 @@ import { needsRecipeMeasurementRefresh } from "@/utility/cookingMeasurement";
 import { searchFoods } from "@/utility/foodSearch";
 import { FOODS } from "@/constants/foods";
 import { parseMealText, servingPlanForCandidate, type ParsedCandidate } from "@/utility/textMeal";
-import { dayStatus, entriesForDate, totalsForDate, foodMacros, mealNutrition } from "@/utility/nutrition";
+import { dayStatus, entriesForDate, totalsForDate } from "@/utility/nutrition";
 import { addDays, formatFullDate, startOfWeek, todayKey } from "@/utility/dates";
 import { eatenMealCount } from "@/utility/eatenMealCount";
+import { dailyMealRows, type DailyMealRow } from "@/utility/dailyMealRows";
 import { totalCarbLimit } from "@/utility/health";
 import { targetForDate } from "@/utility/targetHistory";
-import type { Confidence, Food, LoggedMeal, Meal, MealSlot, NutritionLog, PlannedMeal } from "@/types/domain";
+import type { Confidence, Food, Meal, MealSlot } from "@/types/domain";
 import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } from "@/services/draftStore";
 import { createClient } from "@/lib/supabase/client";
 import { parseNutritionTextWithProvider, searchNutritionProvider } from "@/services/nutritionProvider";
@@ -59,6 +60,12 @@ const confidenceClasses: Record<Confidence, string> = {
   low: "bg-coral-100 text-ink",
 };
 
+function servingLabel(servings?: number) {
+  return typeof servings === "number" && Number.isFinite(servings) && servings > 0
+    ? `${servings} ${servings === 1 ? "serving" : "servings"}`
+    : "Servings not recorded";
+}
+
 import { addFood } from "@/utility/mealLogging";
 export default function NutritionPage() {
   const { snapshot: appSnapshot, actions: appActions, pendingMutation } = useApp();
@@ -72,6 +79,8 @@ export default function NutritionPage() {
   const snapshot = useMemo(() => nutritionWeekSnapshot(appSnapshot, week.data ?? {
     weekOf, mealPlan: null, targets: [], nutritionLogs: [], loggedMeals: [], grocery: null, recipes: [], foods: [],
   }), [appSnapshot, week.data, weekOf]);
+  const loggedActionRows = useMemo(() => new Map(dailyMealRows(snapshot, selected).flatMap(row =>
+    row.log ? [[`${row.log.kind}:${row.log.id}`, row] as const] : [])), [snapshot, selected]);
   const actions: AppActions = {
     ...appActions,
     logNutrition: (input, key) => appActions.logNutrition(input, key, week.data),
@@ -87,9 +96,25 @@ export default function NutritionPage() {
 
   const entryModalFocus = useRef<HTMLElement | null>(null);
   const entryReturnFocus = useRef<MealSlot | null>(null);
+  const retainedEntryFocus = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (!loggingOpen && !entrySaving && !pendingMutation && !week.loading && !week.error && entryReturnFocus.current) {
-      document.getElementById(`add-meal-${entryReturnFocus.current}`)?.focus();
+    const releaseFocus = (event: Event) => {
+      if (event.type !== "focusin" || event.target !== retainedEntryFocus.current) retainedEntryFocus.current = null;
+    };
+    document.addEventListener("pointerdown", releaseFocus, true);
+    document.addEventListener("focusin", releaseFocus, true);
+    return () => {
+      document.removeEventListener("pointerdown", releaseFocus, true);
+      document.removeEventListener("focusin", releaseFocus, true);
+    };
+  }, []);
+  useEffect(() => {
+    if (loggingOpen || entrySaving || pendingMutation || week.loading || week.error) return;
+    const target = entryReturnFocus.current ? document.getElementById(`add-meal-${entryReturnFocus.current}`) : retainedEntryFocus.current;
+    // A follow-up refresh can disable the restored control; retain it until the user moves focus.
+    if (target?.isConnected && !target.matches(":disabled") && (entryReturnFocus.current || document.activeElement === document.body)) {
+      target.focus();
+      retainedEntryFocus.current = target;
       entryReturnFocus.current = null;
     }
   }, [loggingOpen, entrySaving, pendingMutation, week.loading, week.error]);
@@ -99,32 +124,13 @@ export default function NutritionPage() {
   const [recipeFiltersOpen, setRecipeFiltersOpen] = useState(false);
   const recipeFilterTrigger = useRef<HTMLButtonElement>(null);
   const filterCount = activeRecipeFilterCount(recipeFilters);
-  const [editingPlannedMealId, setEditingPlannedMealId] = useState<string | null>(null);
-  const plannedEditReturnFocus = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (editingPlannedMealId === null && !week.loading && !pendingMutation) {
-      plannedEditReturnFocus.current?.focus();
-      plannedEditReturnFocus.current = null;
-    }
-  }, [editingPlannedMealId, week.loading, pendingMutation]);
   const savingPlannedLog = false;
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
-  const [editingNutritionId, setEditingNutritionId] = useState<string | null>(null);
-  const [editingLoggedMealId, setEditingLoggedMealId] = useState<string | null>(null);
-  const loggedEditFocusRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (editingLoggedMealId !== null || week.loading || pendingMutation || !loggedEditFocusRef.current) return;
-    document.getElementById(`edit-logged-${loggedEditFocusRef.current}`)?.focus();
-    loggedEditFocusRef.current = null;
-  }, [editingLoggedMealId, week.loading, pendingMutation, snapshot.loggedMeals]);
-  function closeLoggedMealEditor(id: string) {
-    loggedEditFocusRef.current = id;
-    setEditingLoggedMealId(null);
-  }
-  const [expandedLoggedMealId, setExpandedLoggedMealId] = useState<string | null>(null);
+  const [recordedDetails, setRecordedDetails] = useState<RecordedMealDetailsInput | null>(null);
   const [showNewRecipe, setShowNewRecipe] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [viewingRecipeId, setViewingRecipeId] = useState<string | null>(null);
+  const [recipeReadOnly, setRecipeReadOnly] = useState(false);
   const [returnToRecipeOverview, setReturnToRecipeOverview] = useState<string | null>(null);
   const recipeReturnFocus = useRef<HTMLElement | null>(null);
   const createRecipeButton = useRef<HTMLButtonElement>(null);
@@ -133,10 +139,10 @@ export default function NutritionPage() {
   const recipeReadAccount = useRef(appSnapshot.userId);
   useEffect(() => { recipeReadAccount.current = appSnapshot.userId; }, [appSnapshot.userId]);
   const [recipeRead, setRecipeRead] = useState<{ id: string; account?: string; status: "loading" | "error" | "ready" } | null>(null);
-  async function openRecipe(meal: Meal, trigger: HTMLElement) {
+  async function openRecipe(meal: Meal, trigger: HTMLElement, readOnly = false) {
     const request = ++recipeReadRequest.current;
     const account = appSnapshot.userId;
-    recipeReturnFocus.current = trigger; setRecipeModalOpen(false); setViewingRecipeId(null);
+    recipeReturnFocus.current = trigger; setRecipeModalOpen(false); setViewingRecipeId(null); setRecordedDetails(null); setRecipeReadOnly(readOnly);
     if (!needsRecipeMeasurementRefresh(meal)) { setRecipeRead(null); setViewingRecipeId(meal.id); return; }
     setRecipeRead({ id: meal.id, account, status: "loading" });
     const success = await appActions.refreshSnapshot({ silent: true });
@@ -147,6 +153,11 @@ export default function NutritionPage() {
   const viewingRecipe = viewingRecipeId ? snapshot.savedMeals.find(meal => meal.id === viewingRecipeId) : undefined;
   const recipeReadCurrent = recipeRead?.account === appSnapshot.userId ? recipeRead : null;
   const recipeReadFailed = recipeReadCurrent?.status === "error" || recipeReadCurrent?.status === "ready" && (!viewingRecipe || needsRecipeMeasurementRefresh(viewingRecipe));
+  function openRecordedDetails(details: RecordedMealDetailsInput, trigger: HTMLElement) {
+    recipeReadRequest.current += 1;
+    recipeReturnFocus.current = trigger;
+    setViewingRecipeId(null); setRecipeRead(null); setRecipeModalOpen(false); setRecordedDetails(details);
+  }
 
   const isToday = selected === todayKey();
   const totals = totalsForDate(snapshot.nutritionLogs, selected);
@@ -178,24 +189,11 @@ export default function NutritionPage() {
   // editor; new entries always use GuidedSearchPicker above.
   void [SearchPicker, TextParser];
 
-  async function savePlannedMeal(nextMeal: PlannedMeal) {
-    if (!snapshot.mealPlan) return false;
-    const meals = snapshot.mealPlan.meals.some((meal) => meal.id === nextMeal.id)
-      ? snapshot.mealPlan.meals.map((meal) => meal.id === nextMeal.id ? nextMeal : meal)
-      : [...snapshot.mealPlan.meals, nextMeal];
-    const saved = await actions.editMealPlan({ ...snapshot.mealPlan, meals });
-    if (saved) setEditingPlannedMealId(null);
-    return saved;
-  }
-
   function selectDay(date: string) {
     if (date === selected || savingPlannedLog || entrySaving || pendingMutation) return;
     setSelected(date);
     setLoggingOpen(false);
     setLogSlot(null);
-    setEditingPlannedMealId(null);
-    setEditingLoggedMealId(null);
-    setEditingNutritionId(null);
   }
 
   function closeLogEditor() {
@@ -212,75 +210,67 @@ export default function NutritionPage() {
     } catch (reason) { appActions.notify(reason instanceof Error ? reason.message : "Copy failed. Retry when connected.", "error"); }
   }
 
+  function refreshAfterUndo(row: DailyMealRow) {
+    entryReturnFocus.current = row.slot;
+    week.refresh();
+  }
+
+  async function removeLoggedRow(row: DailyMealRow) {
+    if (!row.log || week.loading || week.error || pendingMutation) return;
+    const saved = row.log.kind === "meal" ? await actions.deleteLoggedMeal(row.log.id) : await actions.deleteNutrition(row.log.id);
+    if (saved) refreshAfterUndo(row);
+  }
+
   function loggedRows(slot: MealSlot) {
     const list = entries[slot];
     const grouped = snapshot.loggedMeals.filter((meal) => meal.date === selected && meal.slot === slot);
     const groupedIds = new Set(grouped.map((meal) => meal.id));
     const standalone = list.filter((entry) => !entry.loggedMealId || !groupedIds.has(entry.loggedMealId));
+    const locked = week.loading || Boolean(week.error) || Boolean(pendingMutation);
     return <>
       {grouped.map((meal) => {
+        const undoRow = loggedActionRows.get(`meal:${meal.id}`)!;
         const childEntries = list.filter((entry) => entry.loggedMealId === meal.id).sort((a, b) => (a.ingredientOrder ?? 0) - (b.ingredientOrder ?? 0));
         const mealTotals = childEntries.reduce((sum, entry) => ({ calories: sum.calories + entry.calories, proteinG: sum.proteinG + entry.proteinG, carbsG: sum.carbsG + entry.carbsG, fatG: sum.fatG + entry.fatG }), { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
         const hasRange = childEntries.some((entry) => entry.valueSource === "ai_estimate" && entry.estimateRange);
         const low = childEntries.reduce((sum, entry) => sum + (entry.estimateRange?.calories.low ?? entry.calories), 0);
         const high = childEntries.reduce((sum, entry) => sum + (entry.estimateRange?.calories.high ?? entry.calories), 0);
-        const expanded = expandedLoggedMealId === meal.id;
-        return <MealRow key={meal.id} summary={
-            <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left" aria-expanded={expanded} onClick={() => setExpandedLoggedMealId(expanded ? null : meal.id)}>
-              <span className="text-[11px] font-bold text-ink-soft">Eaten</span>
-              <p className="break-words text-sm font-extrabold">{meal.name} <span className="text-xs font-semibold text-muted">{expanded ? "▴" : "▾"}</span></p>
-              <NutritionPills className="mt-1" values={mealTotals} approximate={hasRange} precision={0} />
-              <p className="mt-1 break-words text-[11px] font-semibold text-ink-soft">{hasRange ? `${Math.round(low)}–${Math.round(high)} kcal range · includes AI estimate` : "mixed sources"}</p>
+        const recipe = snapshot.savedMeals.find(item => item.id === meal.mealId);
+        return <MealRow tone="home-meal" mobileFlatPanels inline edgeToEdgeThumbnail inlineActionAlign="center" ariaLabel={`Eaten meal: ${meal.name}`} key={meal.id} thumbnail={<RecipeCover image={recipe?.image} name={meal.name} fill />} summary={<>
+            <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left [overflow-wrap:anywhere]" aria-label={recipe ? `View recipe: ${meal.name}` : `View recorded details: ${meal.name}`} onClick={event => recipe
+              ? void openRecipe(recipe, event.currentTarget, true)
+              : openRecordedDetails({ name: meal.name, date: meal.date, slot, meal, entries: childEntries }, event.currentTarget)}>
+              <p className="text-sm font-extrabold">{meal.name}</p>
+              <span data-meal-serving className="block text-[11px] font-semibold text-ink-soft">{servingLabel(meal.recipeServings)}</span>
             </button>
-          } actions={<>
-              <button id={`edit-logged-${meal.id}`} type="button" disabled={Boolean(pendingMutation)} data-planned-meal-id={meal.plannedMealId} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink disabled:opacity-50" aria-label={`Edit ${meal.name}`} onClick={() => setEditingLoggedMealId(meal.id)}><Pencil className="h-4 w-4" aria-hidden /></button>
-              <button type="button" disabled={Boolean(pendingMutation)} className="grid h-11 w-11 place-items-center rounded-full bg-danger-200 text-danger-900 hover:bg-danger-300 disabled:opacity-50" aria-label={`Delete ${meal.name}`} onClick={() => void actions.deleteLoggedMeal(meal.id)}><Trash2 className="h-4 w-4" aria-hidden /></button>
-          </>}>
-          {expanded ? <div className="grid gap-1 border-t border-white pt-2">{childEntries.map((entry) => <div key={entry.id} className="grid min-w-0 gap-1 rounded-lg bg-white px-2 py-2 text-xs"><span className="break-words">{entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName} ×{entry.servings} · {entry.preparationBasis ?? "basis unknown"}</span><NutritionPills values={entry} precision={0} /><span className="font-semibold text-ink-soft">{entry.valueSource === "ai_estimate" ? "AI estimate" : entry.valueSource === "trusted_catalog" ? "USDA/catalog" : "user value"}</span></div>)}<p className="text-[11px] font-semibold text-muted">Historical corrections affect this logged meal only. The reusable recipe remains unchanged.</p></div> : null}
-          {editingLoggedMealId === meal.id ? meal.sourceMode === "saved_meal" ? (
-            <LoggedRecipeServingsEditor
-              meal={meal} entries={childEntries} recipe={snapshot.savedMeals.find(recipe => recipe.id === meal.mealId)} foods={foods}
-              onSave={async (servings, previousServings, retryKey, expectedRevision) => {
-                const saved = await actions.updateLoggedMeal({ ...meal, revision: expectedRevision }, [], { servings, previousServings, retryKey });
-                if (saved) closeLoggedMealEditor(meal.id);
-                return saved;
-              }}
-              onCancel={() => closeLoggedMealEditor(meal.id)}
-            />
-          ) : (
-            <LoggedMealEditor meal={meal} entries={childEntries} foods={foods}
-              onSave={async (nextMeal, nextIngredients) => {
-                const saved = await actions.updateLoggedMeal(nextMeal, nextIngredients);
-                if (saved) closeLoggedMealEditor(meal.id);
-                return saved;
-              }}
-              onCancel={() => closeLoggedMealEditor(meal.id)}
-            />
-          ) : null}
-        </MealRow>;
+            <NutritionPills scrollable abbreviateOnMobile compactOnMobile className="mt-1" values={mealTotals} approximate={hasRange} precision={0} />
+            {hasRange ? <p className="mt-1 break-words text-[11px] font-semibold text-ink-soft">{Math.round(low)}–{Math.round(high)} kcal range · includes AI estimate</p> : null}
+          </>} actions={<>
+            <LoggedMealAction appearance="meal-entry" key={`${meal.id}:${meal.revision}`} row={undoRow} disabled={locked} onUndone={() => refreshAfterUndo(undoRow)} />
+            <IconButton size="compact" label={`Delete ${meal.name}`} tooltip="Delete meal log" disabled={locked} onClick={() => void removeLoggedRow(undoRow)}><X className="h-4 w-4" aria-hidden /></IconButton>
+          </>} />;
       })}
       {standalone.map((entry) => {
+        const undoRow = loggedActionRows.get(`nutrition:${entry.id}`)!;
         const name = entry.foodId ? foods.find((food) => food.id === entry.foodId)?.name ?? entry.foodId : entry.customName;
-        return <MealRow key={entry.id} summary={
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold text-ink-soft">Eaten</p>
-            <p className="break-words text-sm font-bold">{name} <span className="font-semibold text-muted">×{entry.servings}</span></p>
-            <NutritionPills className="my-1" values={entry} precision={0} />
-            <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${confidenceClasses[entry.confidence]}`}>{entry.estimated ? `estimate (${entry.confidence})` : "your entry"}</span>
-            <p className="text-[10px] font-semibold text-muted">{entry.source} · {entry.preparationBasis ?? "preparation unknown"}</p>
-          </div>
-        } actions={<>
-            <button type="button" data-planned-meal-id={entry.plannedMealId} onClick={() => setEditingNutritionId(entry.id)} aria-label={`Edit ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink"><Pencil className="h-4 w-4" aria-hidden /></button>
-            <button type="button" onClick={() => actions.deleteNutrition(entry.id)} aria-label={`Delete ${name}`} className="grid h-11 w-11 place-items-center rounded-full bg-danger-200 text-danger-900 hover:bg-danger-300"><Trash2 className="h-4 w-4" aria-hidden /></button>
-        </>}>
-          {editingNutritionId === entry.id ? <NutritionEditForm entry={entry} foods={foods} onSave={async (next) => { const saved = await actions.updateNutrition(next); if (saved) setEditingNutritionId(null); return saved; }} onCancel={() => setEditingNutritionId(null)} /> : null}
-        </MealRow>;
+        return <MealRow tone="home-meal" mobileFlatPanels inline edgeToEdgeThumbnail inlineActionAlign="center" ariaLabel={`Eaten meal: ${name ?? undoRow.name}`} key={entry.id} thumbnail={<RecipeCover name={name ?? undoRow.name} fill />} summary={<>
+          <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left [overflow-wrap:anywhere]" aria-label={`View recorded details: ${name ?? undoRow.name}`} onClick={event => openRecordedDetails({ name: name ?? undoRow.name, date: entry.date, slot, entries: [entry] }, event.currentTarget)}>
+            <p className="text-sm font-bold">{name}</p>
+            <span data-meal-serving className="block text-[11px] font-semibold text-ink-soft">{servingLabel(entry.servings)}</span>
+          </button>
+          <NutritionPills scrollable abbreviateOnMobile compactOnMobile className="my-1" values={entry} precision={0} />
+          {entry.estimated ? <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${confidenceClasses[entry.confidence]}`}>estimate ({entry.confidence})</span> : null}
+        </>} actions={<>
+          <LoggedMealAction appearance="meal-entry" key={`${entry.id}:${entry.revision}`} row={{ ...undoRow, name: name ?? undoRow.name }} disabled={locked} onUndone={() => refreshAfterUndo(undoRow)} />
+          <IconButton size="compact" label={`Delete ${name ?? undoRow.name}`} tooltip="Delete food log" disabled={locked} onClick={() => void removeLoggedRow(undoRow)}><X className="h-4 w-4" aria-hidden /></IconButton>
+        </>} />;
       })}
     </>;
   }
 
   return (
     <CookingGroupSurface weekOf={weekOf} onWeekChange={selectDay} kind="nutrition"><div className="grid min-w-0 gap-4 pb-4">
+      {recordedDetails ? <RecordedMealDetails details={recordedDetails} foods={foods} returnFocus={recipeReturnFocus} onClose={() => setRecordedDetails(null)} /> : null}
       {generationOpen && week.data ? <GenerateWeekDialog key={`${snapshot.userId}:${weekOf}`} snapshot={snapshot} weekOf={weekOf}
         returnFocus={generationReturnFocus} pending={Boolean(pendingMutation)} unavailable={week.loading || Boolean(week.error)}
         onClose={() => setGenerationOpen(false)} onRefresh={() => { void appActions.refreshSnapshot({ silent: true }); week.refresh(); }}
@@ -323,7 +313,7 @@ export default function NutritionPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><div className="flex items-center gap-1">
             <h2 id="planned-meals-heading" className="font-extrabold">Planned</h2>
-            <HelpPopover title="Planned meals"><p>Planned and eaten meals appear together by slot. Editing or skipping a plan does not change food already logged.</p><p>Planned nutrition describes the shown planned portion. Eaten nutrition is the amount saved in your food log. Recipe cards in Recipes show nutrition per serving.</p></HelpPopover>
+            <HelpPopover title="Planned meals"><p>Planned and eaten meals appear together by slot. To change an entry, remove it and add the intended portion again. Removing a planned entry does not change food already logged.</p><p>Planned nutrition describes the shown planned portion. Eaten nutrition is the amount saved in your food log. Recipe cards in Recipes show nutrition per serving.</p></HelpPopover>
           </div><GenerationAttribution /></div>
           <div className="flex min-w-0 flex-wrap items-center gap-2"><CookingOverviewButton disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} />
           <IconButton variant="primary" size="compact" label="Generate" tooltip="Generate"
@@ -345,31 +335,26 @@ export default function NutritionPage() {
                   else { setLoggingOpen(true); setLogSlot(slot); }
                 }}><Plus className="h-5 w-5" aria-hidden /></IconButton>
               </div>
-              {planned.length > 0 ? <ul className="mt-2 grid min-w-0 gap-1.5">
+              {planned.length > 0 ? <ul className="mt-2 grid min-w-0 gap-1.5 max-sm:-mx-5">
                 {planned.map((pm) => {
                   const recipe = pm.mealId ? snapshot.savedMeals.find(meal => meal.id === pm.mealId) : undefined;
                   const savedNutrition = plannedDayNutrition([pm], selected);
                   const nutrition = Object.values(savedNutrition.metrics).some(metric => metric.value !== null)
                     ? Object.fromEntries(Object.entries(savedNutrition.metrics).map(([metric, value]) => [metric, value.value])) : null;
-                  const summary = <>
-                      <span className="block text-[11px] font-bold text-ink-soft">Planned{pm.skipped ? " · skipped" : ""}</span>
-                      <span className="block break-words text-sm font-extrabold">{pm.label}</span>
-                      <span className="block text-[11px] font-semibold text-ink-soft">{slotLabels[slot]} · {pm.servings} {pm.servings === 1 ? "serving" : "servings"}</span>
-                      {nutrition ? <><NutritionPills className="mt-1" values={nutrition} nullLabel="unavailable" approximate precision={1} label="Planned portion nutrition" />{savedNutrition.affectedMeals ? <span className="mt-1 block text-xs font-semibold text-ink-soft">Partial total</span> : null}</>
-                        : <span className="mt-1 block text-xs font-semibold text-ink-soft">Nutrition unavailable</span>}
-                      {pm.source ? <span className="mt-1 block break-words text-[11px] font-semibold text-ink-soft">{pm.source}</span> : null}
-                    </>;
-                  return <MealRow key={pm.id} summary={recipe
-                    ? <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left" aria-label={`View recipe: ${pm.label}`} onClick={event => openRecipe(recipe, event.currentTarget)}>{summary}</button>
-                    : <div className="min-w-0">{summary}</div>} actions={<>
-                        <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink" aria-label="Edit" title={`Edit planned ${pm.label}`} aria-expanded={editingPlannedMealId === pm.id} onClick={event => { if (pm.sharedGrocery) { window.dispatchEvent(new CustomEvent("cali:open-cooking-group", { detail: { assignmentId: pm.id } })); } else { plannedEditReturnFocus.current = event.currentTarget; setEditingPlannedMealId(pm.id); } }}><Pencil className="h-4 w-4" aria-hidden /></button>
-                        <PlannedMealActions meal={pm} snapshot={snapshot} week={week.data!} disabled={entrySaving || Boolean(pendingMutation)} onChanged={week.refresh} focusAfterChange={() => { entryReturnFocus.current = slot; }} />
-                      </>}>
-                      {editingPlannedMealId === pm.id ? <PlannedMealEditor key={pm.id} plannedMeal={pm} date={selected} savedMeals={snapshot.savedMeals} foods={foods} onSave={savePlannedMeal} onCancel={() => setEditingPlannedMealId(null)} /> : null}
-                    </MealRow>;
+                  const title = <>
+                    <span className="block text-sm font-extrabold">{pm.label}</span>
+                    <span data-meal-serving className="block text-[11px] font-semibold text-ink-soft">{servingLabel(pm.servings)}</span>
+                  </>;
+                  return <MealRow tone="home-meal" mobileFlatPanels inline edgeToEdgeThumbnail inlineActionAlign="center" ariaLabel={`${pm.skipped ? "Skipped planned meal" : "Planned meal"}: ${pm.label}`} key={pm.id} thumbnail={<RecipeCover image={recipe?.image} name={pm.label} fill />} summary={<>
+                    {recipe ? <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left [overflow-wrap:anywhere]" aria-label={`View recipe: ${pm.label}`} onClick={event => openRecipe(recipe, event.currentTarget, true)}>{title}</button>
+                      : <div className="min-w-0 [overflow-wrap:anywhere]">{title}</div>}
+                    {nutrition ? <><NutritionPills scrollable abbreviateOnMobile compactOnMobile className="mt-1" values={nutrition} nullLabel="unavailable" precision={0} label="Planned portion nutrition" />{savedNutrition.affectedMeals ? <span className="mt-1 block text-xs font-semibold text-ink-soft">Partial total</span> : null}</>
+                      : <span className="mt-1 block text-xs font-semibold text-ink-soft">Nutrition unavailable</span>}
+                  </>} actions={<PlannedMealActions meal={pm} snapshot={snapshot} week={week.data!} unavailableGuidance="remove-and-add" disabled={entrySaving || Boolean(pendingMutation)} onChanged={week.refresh} focusAfterChange={() => { entryReturnFocus.current = slot; }} />} />;
+
                 })}
               </ul> : null}
-              {eaten ? <ul className="mt-2 grid min-w-0 gap-1.5">{loggedRows(slot)}</ul> : null}
+              {eaten ? <ul className="mt-2 grid min-w-0 gap-1.5 max-sm:-mx-5">{loggedRows(slot)}</ul> : null}
             </section>;
           })}
         </div>
@@ -415,24 +400,24 @@ export default function NutritionPage() {
         ) : null}
         {recipeReadCurrent && (recipeReadCurrent.status === "loading" || recipeReadFailed) ? <div className={`mt-3 grid min-w-0 gap-2 ${recipeReadFailed ? "text-danger-900" : ""}`} role={recipeReadFailed ? "alert" : "status"}>
           <p className={`text-sm ${recipeReadFailed ? "text-danger-900" : "text-ink-soft"}`}>{recipeReadFailed ? "Original recipe measurements could not be loaded. Your drafts are retained. Retry to view the latest recipe." : "Loading original recipe measurements…"}</p>
-          <div className="flex flex-wrap gap-2">{recipeReadFailed ? <Button variant="soft" className="!px-3 text-xs" onClick={() => { const meal = snapshot.savedMeals.find(meal => meal.id === recipeReadCurrent.id); if (meal && recipeReturnFocus.current) void openRecipe(meal, recipeReturnFocus.current); }}>Retry recipe</Button> : null}
+          <div className="flex flex-wrap gap-2">{recipeReadFailed ? <Button variant="soft" className="!px-3 text-xs" onClick={() => { const meal = snapshot.savedMeals.find(meal => meal.id === recipeReadCurrent.id); if (meal && recipeReturnFocus.current) void openRecipe(meal, recipeReturnFocus.current, recipeReadOnly); }}>Retry recipe</Button> : null}
             <Button variant="ghost" className="!px-3 text-xs" onClick={() => { recipeReadRequest.current += 1; setRecipeRead(null); setViewingRecipeId(null); recipeReturnFocus.current?.focus(); }}>Cancel</Button></div>
         </div> : null}
         {viewingRecipe && !recipeReadFailed ? <RecipeOverview
-          sharedBy={viewingRecipe.id.startsWith("group-copy-") ? undefined : snapshot.profile?.name} key={`recipe-overview:${viewingRecipeId}`} meal={viewingRecipe} foods={foods} returnFocus={recipeReturnFocus}
+          sharedBy={viewingRecipe.id.startsWith("group-copy-") ? undefined : snapshot.profile?.name} key={`recipe-overview:${viewingRecipeId}:${recipeReadOnly}`} meal={viewingRecipe} foods={foods} returnFocus={recipeReturnFocus}
           onClose={() => { setRecipeRead(null); setViewingRecipeId(null); }}
           editLabel={viewingRecipe.id.startsWith("group-copy-") ? "Save personal copy" : "Edit"}
-          onEdit={() => { if (viewingRecipe.id.startsWith("group-copy-")) { void saveEditableGroupRecipe(viewingRecipe.id); return; } setRecipeRead(null); setReturnToRecipeOverview(viewingRecipeId); setEditingRecipeId(snapshot.savedMeals.find(meal => meal.id === viewingRecipeId)?.catalogReplacementId ?? viewingRecipeId); setShowNewRecipe(false); setViewingRecipeId(null); setRecipeModalOpen(true); }}
+          onEdit={recipeReadOnly ? undefined : () => { if (viewingRecipe.id.startsWith("group-copy-")) { void saveEditableGroupRecipe(viewingRecipe.id); return; } setRecipeRead(null); setReturnToRecipeOverview(viewingRecipeId); setEditingRecipeId(snapshot.savedMeals.find(meal => meal.id === viewingRecipeId)?.catalogReplacementId ?? viewingRecipeId); setShowNewRecipe(false); setViewingRecipeId(null); setRecipeModalOpen(true); }}
         /> : null}
         {recipeMetadata.loading ? <p className="mt-3 text-xs text-ink-soft" role="status">Loading favorites and Popular…</p> : null}
         {recipeMetadata.error ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-danger-100 p-3 text-xs text-danger-900" role="status"><span>{recipeMetadata.error}</span><Button variant="ghost" className="!px-2 text-xs underline" disabled={recipeMetadata.loading || recipeMetadata.pendingMeal !== null} onClick={recipeMetadata.refresh}>Refresh cards</Button></div> : null}
         {recipeFiltersOpen ? <RecipeFilterDialog applied={recipeFilters} favoritesAvailable={recipeMetadata.available} returnFocus={recipeFilterTrigger}
           onApply={filters => { setRecipeFilters(filters); setRecipeFiltersOpen(false); }} onClose={() => setRecipeFiltersOpen(false)} /> : null}
-          <CombinedRecipeLibrary owned={snapshot.savedMeals} filters={recipeFilters} favoritesAvailable={recipeMetadata.available}
+          <CombinedRecipeLibrary mobileFlatPanels owned={snapshot.savedMeals} filters={recipeFilters} favoritesAvailable={recipeMetadata.available}
             favoriteIds={new Set([...recipeMetadata.recipes.values()].filter(recipe => recipe.favorite).map(recipe => recipe.mealId))}
             onClearFilters={() => setRecipeFilters(emptyRecipeFilters())} renderOwned={(meal, displayName) => (
             <li key={meal.id} className="min-w-0">
-              <RecipeCard mobileCompactResources name={displayName} image={meal.image} calories={recipeCardCalories(meal, foods)}
+              <RecipeCard mobileCompactResources mobileFlatPanels name={displayName} image={meal.image} calories={recipeCardCalories(meal, foods)}
                 recipeServings={meal.servings} totalTimeMinutes={meal.totalTimeMinutes} complexity={meal.complexity}
                 onOpen={event => openRecipe(meal, event.currentTarget)} metadata={recipeMetadata.recipes.get(meal.id)}
                 favoriteAvailable={recipeMetadata.available} favoritePending={recipeMetadata.pendingMeal !== null}
@@ -728,331 +713,6 @@ export default function NutritionPage() {
     );
   }
 }
-
-function clientId(prefix: string) {
-  return `${prefix}-${typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? createUuid()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
-}
-
-function LoggedMealEditor({
-  meal,
-  entries,
-  foods,
-  onSave,
-  onCancel,
-}: {
-  meal: LoggedMeal;
-  entries: NutritionLog[];
-  foods: Food[];
-  onSave: (meal: LoggedMeal, ingredients: Array<Omit<NutritionLog, "id" | "createdAt">>) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState(meal.name);
-  const [items, setItems] = useState(() => entries.map((entry) => ({
-    id: entry.id,
-    foodId: entry.foodId ?? "",
-    servings: String(entry.servings),
-  })));
-  const [saving, setSaving] = useState(false);
-
-  async function submit() {
-    const drafts = items
-      .map((item) => ({ ...item, servings: Number(item.servings) }))
-      .filter((item) => item.foodId && Number.isFinite(item.servings) && item.servings > 0);
-    if (!name.trim() || drafts.length === 0 || drafts.length !== items.length || drafts.some(item => !foods.some(food => food.id === item.foodId))) return;
-    const ingredients = drafts.map((item) => {
-      const food = foods.find((candidate) => candidate.id === item.foodId)!;
-      const macros = foodMacros(food, item.servings);
-      return {
-        date: meal.date,
-        slot: meal.slot,
-        foodId: food.id,
-        servings: item.servings,
-        servingQuantity: food.unit === "piece" ? item.servings : food.servingGrams * item.servings,
-        servingUnit: food.unit,
-        calories: macros.calories,
-        proteinG: macros.proteinG,
-        carbsG: macros.carbsG,
-        fatG: macros.fatG,
-        ...(food.fiberG === undefined ? {} : { fiberG: Math.round(food.fiberG * item.servings * 10) / 10 }),
-        estimated: food.estimated,
-        confidence: food.confidence,
-        source: food.source,
-        sourceVersion: food.sourceVersion,
-        preparationBasis: food.preparationBasis ?? "as_labeled",
-        valueSource: food.valueSource,
-        ...(food.estimateRange ? { estimateRange: food.estimateRange } : {}),
-      };
-    });
-    setSaving(true);
-    try {
-      await onSave({ ...meal, name: name.trim() }, ingredients);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="grid gap-2 rounded-xl bg-white p-3" role="group" aria-label="Edit logged meal history">
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-        <input className="input" value={name} onChange={(event) => setName(event.target.value)} aria-label="Historical meal name" />
-        <span className="text-[11px] font-semibold text-muted">Historical snapshot only</span>
-      </div>
-      <HelpHeading title="Edit logged meal" as="h3" className="text-sm font-extrabold"><p>Change ingredients or quantities for this logged meal. These are food-record servings, so an ingredient&apos;s quantity can differ from the number of recipe servings eaten. The reusable recipe and plan stay unchanged.</p></HelpHeading>
-      <fieldset className="grid min-w-0 gap-2" disabled={saving}>
-      {items.map((item, index) => (
-        <div key={item.id} className="grid gap-2 rounded-xl bg-cream p-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-          <select className="input !min-h-11 text-xs" value={item.foodId} onChange={(event) => setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, foodId: event.target.value } : candidate))} aria-label={`Historical ingredient ${index + 1}`}>
-            <option value="">Choose a catalog record</option>
-            {foods.map((food) => <option key={food.id} value={food.id}>{food.name} · {food.valueSource === "trusted_catalog" ? "trusted" : food.valueSource === "ai_estimate" ? "AI estimate" : food.valueSource}</option>)}
-          </select>
-          <label className="grid min-w-0 gap-1 text-[11px] font-semibold text-ink-soft sm:max-w-40">
-            <span>Food servings{foods.find(food => food.id === item.foodId)?.servingLabel ? ` · ${foods.find(food => food.id === item.foodId)!.servingLabel}` : ""}</span>
-            <input className="input !min-h-11 text-xs" type="number" min="0" step="any" value={item.servings} onChange={(event) => setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, servings: event.target.value } : candidate))} aria-label={`Historical ingredient ${index + 1} quantity`} />
-          </label>
-          <button type="button" className="min-h-11 px-2 text-xs font-bold underline" onClick={() => setItems((current) => current.filter((candidate) => candidate.id !== item.id))}>Remove</button>
-        </div>
-      ))}
-      </fieldset>
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={saving} onClick={onCancel}>Discard changes</Button>
-        <Button className="!min-h-11 !px-3 text-xs" disabled={saving || items.length === 0} onClick={() => void submit()}>{saving ? "Saving…" : "Save historical correction"}</Button>
-      </div>
-    </div>
-  );
-}
-
-function NutritionEditForm({
-  entry,
-  foods,
-  onSave,
-  onCancel,
-}: {
-  entry: NutritionLog;
-  foods: Food[];
-  onSave: (entry: NutritionLog) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const food = entry.foodId ? foods.find((candidate) => candidate.id === entry.foodId) : undefined;
-  const [servings, setServings] = useState(String(entry.servings));
-  const [calories, setCalories] = useState(String(entry.calories));
-  const [protein, setProtein] = useState(String(entry.proteinG));
-  const [carbs, setCarbs] = useState(String(entry.carbsG));
-  const [fat, setFat] = useState(String(entry.fatG));
-  const [fiber, setFiber] = useState(entry.fiberG === undefined ? "" : String(entry.fiberG));
-  const [saving, setSaving] = useState(false);
-
-  function valuesFor(nextServings: number) {
-    if (!food) return null;
-    const macros = foodMacros(food, nextServings);
-    return {
-      calories: macros.calories,
-      proteinG: macros.proteinG,
-      carbsG: macros.carbsG,
-      fatG: macros.fatG,
-      ...(food.fiberG === undefined ? {} : { fiberG: Math.round(food.fiberG * nextServings * 10) / 10 }),
-    };
-  }
-
-  const previewAmount = Number(servings);
-  const previewValues = servings.trim() !== "" && Number.isFinite(previewAmount) && previewAmount > 0
-    ? food ? valuesFor(previewAmount) : [calories, protein, carbs, fat].every((value) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0)
-      ? { calories: Number(calories), proteinG: Number(protein), carbsG: Number(carbs), fatG: Number(fat) } : null
-    : null;
-
-  const submit = async () => {
-    const nextServings = Number(servings);
-    if (!Number.isFinite(nextServings) || nextServings <= 0) return;
-    const catalogValues = valuesFor(nextServings);
-    const next: NutritionLog = {
-      ...entry,
-      servings: nextServings,
-      ...(catalogValues ?? {
-        calories: Number(calories),
-        proteinG: Number(protein),
-        carbsG: Number(carbs),
-        fatG: Number(fat),
-        ...(fiber === "" ? {} : { fiberG: Number(fiber) }),
-      }),
-    };
-    setSaving(true);
-    try { await onSave(next); } finally { setSaving(false); }
-  };
-
-  return (
-    <div className="grid gap-2 rounded-xl bg-lav-50 p-3 sm:col-span-2" role="group" aria-label="Edit nutrition entry">
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <div className="flex items-center justify-between gap-2"><p className="text-xs font-extrabold">Edit saved entry{food ? ` · ${food.name}` : ""}</p><HelpPopover title="Saved entry corrections"><p>Catalog values are recalculated from the stored food record. Custom values remain explicitly user-provided. Corrections apply to this saved entry only.</p></HelpPopover></div>
-        <input className="input !min-h-11" type="number" min="0" step="any" disabled={saving} value={servings} onChange={(event) => setServings(event.target.value)} aria-label="Servings" />
-      </div>
-      {!food ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {[
-            { label: "Calories", metric: "calories", value: calories, set: setCalories },
-            { label: "Protein", metric: "proteinG", value: protein, set: setProtein },
-            { label: "Carbs", metric: "carbsG", value: carbs, set: setCarbs },
-            { label: "Fat", metric: "fatG", value: fat, set: setFat },
-            { label: "Fiber", metric: "fiberG", value: fiber, set: setFiber },
-          ].map((field) => (
-            <NutritionFieldLabel key={field.metric} metric={field.metric as NutritionMetric | "fiberG"}><input className="input !min-h-11 text-xs" type="number" min="0" step="0.1" value={field.value} onChange={(event) => field.set(event.target.value)} aria-label={field.label} /></NutritionFieldLabel>
-          ))}
-        </div>
-      ) : null}
-      {previewValues ? <NutritionPills label="Correction nutrition preview" values={previewValues} /> : null}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={onCancel}>Cancel</Button>
-        <Button className="!min-h-11 !px-3 text-xs" disabled={saving} onClick={() => void submit()}>{saving ? "Saving…" : "Save correction"}</Button>
-      </div>
-    </div>
-  );
-}
-
-function PlannedMealEditor({
-  plannedMeal,
-  date,
-  savedMeals,
-  foods,
-  onSave,
-  onCancel,
-}: {
-  plannedMeal?: PlannedMeal;
-  date: string;
-  savedMeals: Meal[];
-  foods: Food[];
-  onSave: (meal: PlannedMeal) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const { snapshot: draftSnapshot } = useApp();
-  const availableMeals = savedMeals.filter((meal) => !meal.archivedAt);
-  const initialReference = plannedMeal?.mealId
-    ? `meal:${plannedMeal.mealId}`
-    : plannedMeal?.foodId
-      ? `food:${plannedMeal.foodId}`
-      : availableMeals[0]
-        ? `meal:${availableMeals[0].id}`
-        : `food:${foods[0]?.id ?? ""}`;
-  const [reference, setReference] = useState(initialReference);
-  const [slot, setSlot] = useState<MealSlot>(plannedMeal?.slot ?? "snack");
-  const [servings, setServings] = useState(String(plannedMeal?.servings ?? 1));
-  const [saving, setSaving] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
-  const [draftWasRestored, setDraftWasRestored] = useState(false);
-  const [draftWriteUnavailable, setDraftWriteUnavailable] = useState(false);
-  const draftType = `planned-meal:${date}:${plannedMeal?.id ?? "new"}`;
-  const choiceInput = useRef<HTMLSelectElement>(null);
-  useEffect(() => {
-    if (draftReady) choiceInput.current?.focus();
-  }, [draftReady]);
-  useEffect(() => {
-    if (!draftSnapshot.userId) return;
-    let active = true;
-    void readDraft<{ reference: string; slot: MealSlot; servings: string }>(draftSnapshot.userId, draftType).then((saved) => {
-      if (!active) return;
-      if (saved) {
-        setReference(saved.payload.reference);
-        setSlot(saved.payload.slot);
-        setServings(saved.payload.servings);
-        setDraftWasRestored(true);
-      }
-      setDraftReady(true);
-    });
-    return () => { active = false; };
-  }, [draftSnapshot.userId, draftType]);
-  useEffect(() => {
-    if (!draftReady || !draftSnapshot.userId) return;
-    void writeDraft(createDraftEnvelope({
-      userId: draftSnapshot.userId,
-      draftType,
-      payload: { reference, slot, servings },
-      baseVersions: { mealPlanVersion: draftSnapshot.mealPlan?.version },
-      ttlMs: draftTtlMs(draftType),
-    })).then((saved) => setDraftWriteUnavailable(!saved));
-  }, [draftReady, draftSnapshot.mealPlan?.version, draftSnapshot.userId, draftType, reference, servings, slot]);
-  const selectedMeal = reference.startsWith("meal:")
-    ? availableMeals.find((meal) => meal.id === reference.slice(5))
-    : undefined;
-  const selectedFood = reference.startsWith("food:")
-    ? foods.find((food) => food.id === reference.slice(5))
-    : undefined;
-  const amount = Number(servings);
-
-  async function submit() {
-    if (!Number.isFinite(amount) || amount <= 0 || (!selectedMeal && !selectedFood)) return;
-    const next: PlannedMeal = {
-      id: plannedMeal?.id ?? clientId("pm"),
-      date,
-      slot,
-      label: selectedMeal?.name ?? selectedFood?.name ?? "Choose a meal that fits",
-      servings: amount,
-      ...(plannedMeal?.skipped ? { skipped: true } : {}),
-      ...(selectedMeal ? { mealId: selectedMeal.id } : { foodId: selectedFood!.id }),
-      ...(selectedMeal
-        ? (() => {
-            const nutrition = mealNutrition(selectedMeal, foods).perServing;
-            return {
-              expectedCalories: Math.round(nutrition.calories * amount),
-              expectedProteinG: Math.round(nutrition.proteinG * amount * 10) / 10,
-              expectedCarbsG: Math.round(nutrition.carbsG * amount * 10) / 10,
-              expectedFatG: Math.round(nutrition.fatG * amount * 10) / 10,
-              source: selectedMeal.providedNutrition ? "source-provided" : "saved-meal",
-              sourceVersion: selectedMeal.providedNutrition ? `recipe:${selectedMeal.id}:revision:${selectedMeal.revision ?? 1}` : "user-editable",
-              assumptions: selectedMeal.providedNutrition ? "Source-provided nutrition per serving; not independently verified or recalculated from ingredients." : "Estimated from the saved recipe and catalog serving sizes.",
-              confidence: "medium" as const,
-              preparationBasis: "as_labeled" as const,
-            };
-          })()
-        : {
-            expectedCalories: Math.round(selectedFood!.calories * amount),
-            expectedProteinG: Math.round(selectedFood!.proteinG * amount * 10) / 10,
-            expectedCarbsG: Math.round(selectedFood!.carbsG * amount * 10) / 10,
-            expectedFatG: Math.round(selectedFood!.fatG * amount * 10) / 10,
-            ...(selectedFood!.fiberG === undefined ? {} : { expectedFiberG: Math.round(selectedFood!.fiberG * amount * 10) / 10 }),
-            source: selectedFood!.source,
-            sourceVersion: selectedFood!.sourceVersion,
-            assumptions: "Estimated from the catalog serving size.",
-            confidence: selectedFood!.confidence,
-            preparationBasis: selectedFood!.preparationBasis ?? "as_labeled",
-          }),
-    };
-    setSaving(true);
-    try {
-      const saved = await onSave(next);
-      if (saved && draftSnapshot.userId) await clearDraft(draftSnapshot.userId, draftType);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mt-3 grid gap-2 rounded-2xl bg-lav-50 p-3" role="group" aria-label="Planned meal editor">
-      {draftWasRestored ? <div className="flex items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-[11px] font-bold" role="status"><span>Meal draft restored.</span><button type="button" className="underline" onClick={() => { if (draftSnapshot.userId) void clearDraft(draftSnapshot.userId, draftType); setDraftWasRestored(false); }}>Discard draft</button></div> : null}
-      {draftWriteUnavailable ? <p className="rounded-xl bg-peach-100 px-3 py-2 text-[11px] font-bold" role="status">Draft recovery is unavailable on this device.</p> : null}
-      <HelpHeading title="Edit planned meal" as="h3" className="text-sm font-extrabold"><p>This creates a new version for this week. Logged nutrition history stays unchanged.</p></HelpHeading>
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <select ref={choiceInput} className="input" value={reference} onChange={(event) => setReference(event.target.value)} aria-label="Planned meal choice">
-          <optgroup label="Saved meals">
-            {availableMeals.map((meal) => <option key={`meal:${meal.id}`} value={`meal:${meal.id}`}>{meal.name}</option>)}
-          </optgroup>
-          <optgroup label="Catalog foods">
-            {foods.map((food) => <option key={`food:${food.id}`} value={`food:${food.id}`}>{food.name}</option>)}
-          </optgroup>
-        </select>
-        <select className="input" value={slot} onChange={(event) => setSlot(event.target.value as MealSlot)} aria-label="Planned meal slot">
-          {SLOTS.map((candidate) => <option key={candidate} value={candidate}>{slotLabels[candidate]}</option>)}
-        </select>
-        <input className="input" type="number" min="0.25" step="0.25" value={servings} onChange={(event) => setServings(event.target.value)} aria-label="Planned meal servings" />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" className="!min-h-11 !px-3 text-xs" onClick={onCancel}>Cancel</Button>
-        <Button className="!min-h-11 !px-3 text-xs" disabled={saving || !Number.isFinite(amount) || amount <= 0 || (!selectedMeal && !selectedFood)} onClick={() => void submit()}>
-          {saving ? "Saving…" : "Save meal"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 
 function withAuthoredServingOptions(food: Food): Food {
   const authored = FOODS.find((candidate) => candidate.id === food.id);
