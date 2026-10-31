@@ -1,4 +1,4 @@
-import type { Food, Meal, RecipeIngredient } from "@/types/domain";
+import type { CookingIngredient, Food, Meal, RecipeIngredient } from "@/types/domain";
 import { foodMacros, type DayTotals } from "./nutrition";
 import { parseProvidedRecipeNutrition } from "./providedRecipeNutrition";
 
@@ -18,12 +18,12 @@ export function foodReviewToken(food: Food): string {
     })]);
 }
 
-export type RecipePortion = { ingredients: RecipeIngredient[]; nutrition: DayTotals; source: string; sourceDetails?: string[] };
+export type RecipePortion = { ingredients: RecipeIngredient[]; cookingIngredients?: CookingIngredient[]; nutrition: DayTotals; source: string; sourceDetails?: string[] };
 
 export function recipePortion(recipe: Meal | undefined, foods: Food[], servingsText: string): RecipePortion | null {
   const amount = Number(servingsText);
   if (!recipe || recipe.archivedAt || !servingsText.trim() || !Number.isFinite(amount) || amount < 0.0001 || amount > 10000 ||
-    !Number.isFinite(recipe.servings) || recipe.servings <= 0 || !recipe.ingredients.length) return null;
+    !Number.isFinite(recipe.servings) || recipe.servings <= 0 || !recipe.providedNutrition && !recipe.ingredients.length) return null;
   const ingredients = recipe.ingredients.map(ingredient => ({ ...ingredient, servings: ingredient.servings * amount / recipe.servings }));
   const matched = ingredients.map(ingredient => foods.find(food => food.id === ingredient.foodId));
   if (ingredients.some(ingredient => !Number.isFinite(ingredient.servings) || ingredient.servings <= 0) || matched.some(food => !food)) return null;
@@ -39,6 +39,10 @@ export function recipePortion(recipe: Meal | undefined, foods: Food[], servingsT
   if (Object.values(nutrition).some(value => !Number.isFinite(value) || value < 0)) return null;
   return {
     ingredients, nutrition,
+    ...(recipe.cookingIngredients ? { cookingIngredients: recipe.cookingIngredients.map(item => ({
+      ...item, ...(item.nutritionServings === undefined ? {} : { nutritionServings: item.nutritionServings * amount / recipe.servings }),
+      cookingMeasurement: { ...item.cookingMeasurement, ...(item.cookingMeasurement.kind === "unmeasured" ? {} : { text: undefined, quantity: item.cookingMeasurement.quantity! * amount / recipe.servings, ...(item.cookingMeasurement.kind === "range" ? { upperQuantity: item.cookingMeasurement.upperQuantity! * amount / recipe.servings } : {}) }) },
+    })) } : {}),
     source: provided ? "Source-provided recipe macros · approximate; not recalculated from ingredients."
       : "Ingredient-based nutrition · approximate.",
     sourceDetails: provided ? ["Original per-serving macros, not independently verified.", recipe.reference ?? "User-provided recipe nutrition"]

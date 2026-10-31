@@ -16,7 +16,7 @@ function convert(item: RecipeIngredientDraft, unit: string) {
 }
 describe("quantity-preserving cooking conversions", () => {
   it("restricts authoring units while converting saved count, volume, weight and serving units", () => {
-    expect(recipeAuthoringUnits).toEqual(["g", "kg", "mg", "oz", "ml", "tsp", "tbsp", "cup", "piece"]);
+    expect(recipeAuthoringUnits).toEqual(["g", "kg", "mg", "oz", "lb", "ml", "l", "tsp", "tbsp", "cup", "piece"]);
     for (const index of [5, 7, 8]) {
       const original = draft(index), prepared = prepareRecipeIngredient(original);
       expect(prepared.unit).toBe("piece");
@@ -27,7 +27,7 @@ describe("quantity-preserving cooking conversions", () => {
     const cup = convert(draft(3), "cup"), preparedCup = prepareRecipeIngredient(cup);
     expect(preparedCup).toMatchObject({ unit: "cup", quantity: String(1 / 16) });
     expect(ingredientDraftServing(preparedCup, preparedCup.food!)?.servings).toBeCloseTo(0.21, 12);
-    expect(Number(prepareRecipeIngredient(convert(draft(0), "lb")).quantity)).toBeCloseTo(600 / 28.349523125, 10);
+    expect(Number(prepareRecipeIngredient(convert(draft(0), "lb")).quantity)).toBeCloseTo(600 / 453.59237, 10);
     expect(prepareRecipeIngredient({ ...draft(0), unit: "serving", quantity: "2", gramsPerUnit: undefined })).toMatchObject({ unit: "g", quantity: "200" });
   });
   it("converts volume suggestions without a food or an invented density", () => {
@@ -49,8 +49,8 @@ describe("quantity-preserving cooking conversions", () => {
   });
   it("recovers excluded pending target units and entered factors without losing provisional bases", () => {
     const prepared = prepareRecipeIngredient({ ...draft(0), pendingConversion: { unit: "l", gramsPerUnit: "1000", bases: [{ unit: "bucket", gramsPerUnit: 10 }] } });
-    expect(prepared.pendingConversion).toEqual({ unit: "ml", gramsPerUnit: "1", bases: [{ unit: "bucket", gramsPerUnit: 10 }] });
-    expect(recipeUnitConversion(prepared, prepared.food, "ml", { unit: "ml", gramsPerUnit: Number(prepared.pendingConversion!.gramsPerUnit) })).toMatchObject({ status: "converted", patch: { quantity: "600", unit: "ml" } });
+    expect(prepared.pendingConversion).toEqual({ unit: "l", gramsPerUnit: "1000", bases: [{ unit: "bucket", gramsPerUnit: 10 }] });
+    expect(recipeUnitConversion(prepared, prepared.food, "l", { unit: "l", gramsPerUnit: Number(prepared.pendingConversion!.gramsPerUnit) })).toMatchObject({ status: "converted", patch: { quantity: "0.6", unit: "l" } });
     expect(prepareRecipeIngredient(prepared)).toEqual(prepared);
     const known = prepareRecipeIngredient({ ...convert(draft(3), "cup"), pendingConversion: { unit: "cup", gramsPerUnit: "21" } });
     expect(known.unit).toBe("cup"); expect(known.pendingConversion).toBeUndefined();

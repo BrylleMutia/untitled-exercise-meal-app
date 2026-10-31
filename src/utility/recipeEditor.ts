@@ -3,13 +3,14 @@ import { cookingGramsPerUnit, cookingVolumeMl, normalizeCookingUnit, parseCookin
 import type { NutritionProviderCandidate } from "@/services/nutritionProvider";
 import { mealNutrition } from "./nutrition";
 import { normalizeNutritionUnit, servingPlanForCandidate } from "./textMeal";
+import { cookingUnits } from "./cookingUnits";
 
-export type RecipeIngredientDraft = { id: string; name: string; food: Food | null; quantity: string; unit: string; included: boolean; assumptions: string[]; measurementKind?: CookingMeasurement["kind"]; upperQuantity?: string; cookingText?: string; gramsPerUnit?: string; nutritionServings?: number; optional?: boolean; preparationNote?: string; conversionBases?: CookingConversionBasis[]; pendingConversion?: { unit: string; gramsPerUnit: string; bases?: CookingConversionBasis[] } };
+export type RecipeIngredientDraft = { id: string; name: string; food: Food | null; quantity: string; unit: string; included: boolean; assumptions: string[]; measurementKind?: CookingMeasurement["kind"]; upperQuantity?: string; cookingText?: string; gramsPerUnit?: string; nutritionServings?: number; optional?: boolean; preparationNote?: string; conversionBases?: CookingConversionBasis[]; pendingConversion?: { unit: string; gramsPerUnit: string; bases?: CookingConversionBasis[]; factorUnit?: string } };
 
 export function ingredientConversionBases(item: RecipeIngredientDraft): CookingConversionBasis[] {
   return [...(item.gramsPerUnit?.trim() ? [{ unit: item.unit, gramsPerUnit: Number(item.gramsPerUnit) }] : []), ...(Array.isArray(item.conversionBases) ? item.conversionBases.filter(basis => basis && typeof basis.unit === "string" && Number.isFinite(basis.gramsPerUnit)) : [])];
 }
-export const recipeAuthoringUnits = ["g", "kg", "mg", "oz", "ml", "tsp", "tbsp", "cup", "piece"] as const;
+export const recipeAuthoringUnits = cookingUnits;
 export function recipeAuthoringUnit(unit: string, food: Food | null): typeof recipeAuthoringUnits[number] {
   const normalized = normalizeCookingUnit(unit);
   if (recipeAuthoringUnits.includes(normalized as typeof recipeAuthoringUnits[number])) return normalized as typeof recipeAuthoringUnits[number];
@@ -20,8 +21,10 @@ export function recipeAuthoringUnit(unit: string, food: Food | null): typeof rec
 }
 export function recipeUnitConversion(item: RecipeIngredientDraft, food: Food | null, target: string, extra?: CookingConversionBasis) {
   const unit = normalizeCookingUnit(target);
-  const bases = [...(extra ? [extra] : []), ...ingredientConversionBases(item)];
-  const sourceFactor = cookingGramsPerUnit(item.unit, food, bases);
+  const existingBases = ingredientConversionBases(item);
+  const bases = [...(extra ? [extra] : []), ...existingBases];
+  // Replacing a known factor changes the displayed amount, never the original weight.
+  const sourceFactor = cookingGramsPerUnit(item.unit, null, existingBases) ?? cookingGramsPerUnit(item.unit, food, bases);
   const targetFactor = cookingGramsPerUnit(unit, food, bases);
   const sourceMl = cookingVolumeMl(item.unit), targetMl = cookingVolumeMl(unit);
   const volumeOnly = sourceMl !== null && targetMl !== null && (!sourceFactor || !targetFactor);
@@ -55,7 +58,7 @@ export function prepareRecipeIngredient(item: RecipeIngredientDraft, food: Food 
     const resolved = recipeUnitConversion(working, food, unit);
     // A refreshed source may already resolve an older pending conversion.
     // Never reinterpret its old factor as a new density for the normalized unit.
-    if (resolved.status === "converted") return { ...current, ...resolved.patch };
+    if (resolved.status === "converted" && !pending.factorUnit) return { ...current, ...resolved.patch };
     let gramsPerUnit = pending.gramsPerUnit;
     if (unit !== normalizeCookingUnit(pending.unit) && gramsPerUnit.trim()) {
       const required = recipeUnitConversion(working, food, pending.unit);
@@ -77,13 +80,13 @@ export function recipeIngredientDraft(item: RecipeIngredient, food: Food | null,
     id, name: measurement?.name ?? food?.name ?? item.foodId, food,
     quantity: measurement?.kind === "unmeasured" ? "" : measurement ? String(measurement.quantity) : String(Number((food?.unit === "piece" ? item.servings : item.servings * (food?.servingGrams ?? 1)).toPrecision(12))),
     unit: measurement?.unit ?? (food?.unit === "piece" ? "piece" : "g"), included: true, assumptions: [],
-    ...(measurement ? { measurementKind: measurement.kind, upperQuantity: measurement.upperQuantity === undefined ? undefined : String(measurement.upperQuantity), cookingText: measurement.text, gramsPerUnit: measurement.gramsPerUnit === undefined ? undefined : String(measurement.gramsPerUnit), optional: measurement.optional, preparationNote: measurement.note, ...(measurement.kind === "unmeasured" ? { nutritionServings: item.servings } : {}) } : {}),
+    ...(measurement ? { conversionBases: measurement.conversionBases, measurementKind: measurement.kind, upperQuantity: measurement.upperQuantity === undefined ? undefined : String(measurement.upperQuantity), cookingText: measurement.text, gramsPerUnit: measurement.gramsPerUnit === undefined ? undefined : String(measurement.gramsPerUnit), optional: measurement.optional, preparationNote: measurement.note, ...(measurement.kind === "unmeasured" ? { nutritionServings: item.servings } : {}) } : {}),
   };
 }
 
 export function ingredientDraftMeasurement(item: RecipeIngredientDraft): CookingMeasurement | null {
   const kind = item.measurementKind ?? "amount";
-  const value = { kind, name: item.name.trim(), ...(item.cookingText?.trim() ? { text: item.cookingText.trim() } : {}), ...(item.optional ? { optional: true } : {}), ...(item.preparationNote?.trim() ? { note: item.preparationNote.trim() } : {}),
+  const value = { kind, ...(item.conversionBases?.length ? { conversionBases: item.conversionBases } : {}), name: item.name.trim(), ...(item.cookingText?.trim() ? { text: item.cookingText.trim() } : {}), ...(item.optional ? { optional: true } : {}), ...(item.preparationNote?.trim() ? { note: item.preparationNote.trim() } : {}),
     ...(kind === "unmeasured" ? {} : { quantity: item.quantity.trim() ? Number(item.quantity) : NaN, unit: normalizeCookingUnit(item.unit), ...(kind === "range" ? { upperQuantity: item.upperQuantity?.trim() ? Number(item.upperQuantity) : NaN } : {}), ...(item.gramsPerUnit?.trim() ? { gramsPerUnit: Number(item.gramsPerUnit) } : {}) }) };
   return parseCookingMeasurement(value);
 }
@@ -157,13 +160,18 @@ export function recipeServingPlan(food: Food, quantity: number, requestedUnit: s
   return servingPlanForCandidate({ ...food, servingLabel: "", servingOptions: option ? [option] : [] }, quantity, unit);
 }
 
-export function recipePreview(ingredients: RecipeIngredientDraft[], servings: string, foods: Food[]) {
+export function recipePreview(ingredients: RecipeIngredientDraft[], servings: string, foods: Food[], cookingOnly = false) {
   if (!servings.trim() || !Number.isInteger(Number(servings)) || Number(servings) < 1 || Number(servings) > 10000 || !ingredients.length) return null;
   const refs: Meal["ingredients"] = [];
   const sources = [...foods];
   for (const item of ingredients) {
     const food = foods.find((candidate) => candidate.id === item.food?.id) ?? item.food;
     const serving = food ? ingredientDraftServing(item, food) : null;
+    if (cookingOnly) {
+      if (!item.name.trim() || !ingredientDraftMeasurement(item)) return null;
+      if (food && serving && serving.servings >= 0.0001 && serving.servings <= 10000) refs.push({ foodId: food.id, servings: serving.servings, cookingMeasurement: ingredientDraftMeasurement(item)! });
+      continue;
+    }
     if (!food || !serving || serving.servings < 0.0001 || serving.servings > 10000 || food.valueSource === "ai_estimate") return null;
     sources.push(food);
     const measurement = ingredientDraftMeasurement(item)!;

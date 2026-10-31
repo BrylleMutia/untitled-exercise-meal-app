@@ -1,3 +1,4 @@
+import type { IngredientConversionCandidate } from "@/types/backend";
 import type { AppSnapshot } from "@/types/domain";
 import type {
   AbandonSessionInput,
@@ -56,6 +57,9 @@ import type {
 
 export interface SnapshotRepository {
   loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel>;
+  loadGroceryNameSuggestions(query: string, groupId?: string): Promise<import("@/types/grocerySuggestions").GroceryNameHistoryCandidate[]>;
+  loadGroceryCategoryPreferences(groupId?: string): Promise<import("@/utility/groceryCategory").GroceryCategoryPreference[]>;
+  loadIngredientConversions(foodIds: string[]): Promise<IngredientConversionCandidate[]>;
   setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel>;
   saveCustomWorkout(input: SaveCustomWorkoutInput): Promise<MutationOutcome>;
   startCustomWorkout(input: StartCustomWorkoutInput): Promise<MutationOutcome>;

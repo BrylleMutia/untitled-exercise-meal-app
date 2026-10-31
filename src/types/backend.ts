@@ -1,3 +1,4 @@
+import type { GroceryCategoryChoice } from "@/utility/groceryCategory";
 import type {
   AppSnapshot,
   MealPlan,
@@ -57,6 +58,8 @@ export type RepositoryError = {
 };
 
 export type MutationOutcome = {
+  groceryItem?: import("./domain").GroceryItem;
+  previousCategory?: string;
   snapshot: AppSnapshot;
   events: SemanticEvent[];
   resultRefs?: Record<string, string>;
@@ -98,6 +101,7 @@ export interface SetRecipeFavoriteInput {
 
 /** The exact scalar and entity collections returned by export_account_data. */
 export type AccountExport = {
+  ingredientConversions?: AccountExportRow[];
   cookingGroup?: AccountExportRow | null;
   cookingGroupWeeks?: AccountExportRow[];
   cookingGenerations?: AccountExportRow[];
@@ -123,6 +127,7 @@ export type AccountExport = {
   groceryItems: AccountExportRow[];
   savedMeals: AccountExportRow[];
   calendarTransitions?: AccountExportRow[];
+  groceryCategoryPreferences?: AccountExportRow[];
   recipeFavorites?: AccountExportRow[];
   recipeCatalogPreferences?: AccountExportRow[];
   savedMealIngredients: AccountExportRow[];
@@ -231,10 +236,12 @@ export type WeightInput = IdempotentInput & {
 
 export type GroceryMutationInput =
   | (IdempotentInput & { type: "toggle"; itemId: string; expectedVersions?: ExpectedVersions })
-  | (IdempotentInput & { type: "quantity"; itemId: string; quantity: number; calendarRevision?: number; expectedVersions?: ExpectedVersions })
+  | (IdempotentInput & { type: "quantity"; itemId: string; quantity: number; categoryChoice?: GroceryCategoryChoice; calendarRevision?: number; expectedVersions?: ExpectedVersions })
   | (IdempotentInput & { type: "remove"; itemId: string; expectedVersions?: ExpectedVersions });
 
 export type AddCustomGroceryInput = IdempotentInput & {
+  calendarRevision?: number;
+  categoryChoice?: GroceryCategoryChoice;
   name: string;
   quantity: number;
   unit: string;
@@ -406,6 +413,13 @@ export type SaveMealInput = IdempotentInput & {
 
 export type CatalogRecipeEdit = { mealId: string; recordRevision: number; preferenceRevision: number };
 export type SaveRecipeInput = SaveMealInput & { newFoods: Food[]; catalog?: CatalogRecipeEdit };
+
+export type IngredientConversionCandidate = {
+  foodId: string;
+  unit: string;
+  gramsPerUnit: number;
+  source: { kind: "personal" | "default" | "group"; recipeName: string };
+};
 
 export type ArchiveMealInput = IdempotentInput & {
   mealId: string;

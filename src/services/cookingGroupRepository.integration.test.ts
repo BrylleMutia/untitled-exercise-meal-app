@@ -17,7 +17,17 @@ async function account(name: string) {
   if (error || !data.user || !data.session) throw error ?? new Error("No local session");
   clients.push(client); const repository = createSupabaseRepository(client);
   const profile: UserProfile = { id: data.user.id, name, age: 30, sex: "female", heightCm: 165, weightKg: 65, units: "metric", weekStartsOn: 0, experience: "beginner", equipment: ["none"], daysPerWeek: 3, sessionMinutes: 30, goal: "maintain", dietaryPattern: "No restrictions", allergies: [], notificationsEnabled: false, targetEligibility: "eligible", createdAt: new Date().toISOString() };
-  await repository.completeOnboarding({ profile, currentSnapshot: (await repository.load())!, idempotencyKey: randomUUID() });
+  // The local PostgREST time cache can briefly reject a freshly issued JWT.
+  // Retry only the initial read, never a durable onboarding mutation.
+  let initial: Awaited<ReturnType<typeof repository.load>> = null;
+  for (let attempt = 0; ; attempt++) {
+    try { initial = await repository.load(); break; }
+    catch (reason) {
+      if (attempt >= 2 || !(reason instanceof Error) || !reason.message.includes("JWT issued at future")) throw reason;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  await repository.completeOnboarding({ profile, currentSnapshot: initial!, idempotencyKey: randomUUID() });
   return { client, group: cookingGroupRepository(client), repository, id: data.user.id };
 }
 afterAll(async () => { for (const client of clients.reverse()) { const result = await client.rpc("delete_account", { p_payload: { idempotencyKey: randomUUID() } }); if (result.error) throw result.error; } });
@@ -33,16 +43,16 @@ describe("connected planning repository", () => {
     const authored = (await a.repository.load())!; const source = authored.savedMeals.find(r => r.id === "meal-korean-beef-bowl")!; const privateRecipeId = `private-${randomUUID()}`;
     await a.repository.saveRecipe({ meal: { ...source, id: privateRecipeId, revision: undefined, isSystem: false, name: "Alice private recipe", image: { kind: "upload", path: coverPath } }, newFoods: [], currentSnapshot: authored, idempotencyKey: randomUUID() });
     const weekOf = addDays(startOfWeek(todayKey(), 0), 14);
-    const invite = await a.group.command({ action: "invite", idempotencyKey: randomUUID() });
+    const invite = await a.group.command({ action: "invite", grocerySharingAcknowledgment: "all-weeks-v1", idempotencyKey: randomUUID() });
     expect(invite.pin).toMatch(/^[A-Z0-9]{6}$/);
     const review = await b.group.command({ action: "inspect-pin", pin: invite.pin! });
     expect((await b.group.load(weekOf)).group).toBeNull();
-    await b.group.command({ action: "join", pin: invite.pin!, groupRevision: review.group!.revision, idempotencyKey: randomUUID() });
+    await b.group.command({ action: "join", grocerySharingAcknowledgment: "all-weeks-v1", pin: invite.pin!, groupRevision: review.group!.revision, idempotencyKey: randomUUID() });
     const connected = await a.group.load(weekOf); expect(connected.group?.members).toHaveLength(2);
     expect((await b.group.recipe(privateRecipeId)).meal.name).toBe("Alice private recipe");
     expect((await b.client.storage.from("recipe-covers").download(coverPath)).error).toBeNull();
     expect((await outsider.client.storage.from("recipe-covers").download(coverPath)).error).not.toBeNull();
-    const input = { groupId: connected.group!.id, weekOf, memberIds: [a.id, b.id], selectedDates: [weekOf], mode: "fill" as const, recipes: connected.recipes.filter(r => r.id === privateRecipeId).map(r => ({ id: r.id, revision: r.revision!, maxBatches: 2 })), seed: "group-integration", overrides: {} };
+    const input = { reviewPolicyVersion: "advisory_v1" as const, groupId: connected.group!.id, weekOf, memberIds: [a.id, b.id], selectedDates: [weekOf], mode: "fill" as const, recipes: connected.recipes.filter(r => r.id === privateRecipeId).map(r => ({ id: r.id, revision: r.revision!, maxBatches: 2 })), seed: "group-integration", overrides: {} };
     const preview = await a.group.preview(input);
     expect(preview.assignments.length).toBeGreaterThan(0); expect(JSON.stringify(preview)).not.toMatch(/"(?:remainingCalories|remainingCarbs|allergies|dietaryPattern|targets)":/);
     expect((await outsider.group.load(weekOf)).group).toBeNull();

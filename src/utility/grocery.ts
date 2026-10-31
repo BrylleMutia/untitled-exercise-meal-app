@@ -6,6 +6,12 @@ import type {
   Meal,
   MealPlan,
 } from "@/types/domain";
+import { cookingAmount, normalizeCookingUnit } from "./cookingMeasurement";
+
+export function cookingGroceryId(mealId: string, ingredientId: string, foodId: string | undefined, unit: string): string {
+  const part = (value: string) => `${Array.from(value).length}:${value}`;
+  return `gi-cook-${foodId ? `f${part(foodId)}` : `r${part(mealId)}${part(ingredientId)}`}-${normalizeCookingUnit(unit)}`;
+}
 
 /**
  * Grocery generation combines duplicate ingredients across planned meals and
@@ -20,6 +26,7 @@ export function generateGroceryList(
   weekOf: string,
 ): GroceryList {
   const totals = new Map<string, { food: Food; grams: number; pieces: number }>();
+  const cooking = new Map<string, GroceryItem>();
 
   for (const planned of mealPlan.meals) {
     // Group allocations are bought once in the shared list, never per personal projection.
@@ -28,6 +35,20 @@ export function generateGroceryList(
     if (planned.mealId) {
       const meal = meals.find((m) => m.id === planned.mealId);
       if (!meal) continue;
+      if (meal.cookingIngredients) {
+        for (const ingredient of meal.cookingIngredients) {
+          const measurement = ingredient.cookingMeasurement;
+          const amount = cookingAmount(measurement);
+          if (amount === null || !measurement.unit) continue;
+          const unit = normalizeCookingUnit(measurement.unit);
+          const id = cookingGroceryId(meal.id, ingredient.id, ingredient.foodId, unit);
+          const quantity = amount * planned.servings / meal.servings;
+          const previous = cooking.get(id);
+          if (previous) { previous.quantity += quantity; previous.generatedQuantity += quantity; }
+          else cooking.set(id, { id, name: measurement.name ?? "Ingredient", category: foods.find(food => food.id === ingredient.foodId)?.category ?? "Other", unit, quantity, generatedQuantity: quantity, checked: false });
+        }
+        continue;
+      }
       for (const ing of meal.ingredients) {
         const food = foods.find((f) => f.id === ing.foodId);
         if (!food) continue;
@@ -51,7 +72,8 @@ export function generateGroceryList(
       checked: false,
     }));
 
-  return { id: `gl-${weekOf}`, weekOf, items };
+  for (const item of cooking.values()) if (item.unit === "piece") item.quantity = item.generatedQuantity = Math.ceil(item.quantity);
+  return { id: `gl-${weekOf}`, weekOf, items: [...items, ...cooking.values()] };
 }
 
 function addTo(

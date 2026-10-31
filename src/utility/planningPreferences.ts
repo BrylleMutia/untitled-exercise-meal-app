@@ -24,6 +24,7 @@ export function recipePreferenceWarnings(recipes: Meal[], foods: Food[], profile
     if (profile) {
       const ingredients = [
         ...recipe.ingredients.flatMap(i => { const food = foods.find(f => f.id === i.foodId); return food ? [food] : []; }),
+        ...(recipe.cookingIngredients ?? []).map(i => ({ name: i.cookingMeasurement.name ?? "Ingredient", category: foods.find(f => f.id === i.foodId)?.category ?? "Other" as const })),
         ...(recipe.unmeasuredIngredients ?? []).map(i => ({ name: i.name, category: "Other" as const })),
       ];
       const pattern = profile.dietaryPattern.toLowerCase();

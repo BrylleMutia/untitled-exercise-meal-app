@@ -1,3 +1,8 @@
+import { loadGroceryNameSuggestions } from "./grocerySuggestions";
+import { loadGroceryCategoryPreferences } from "./groceryCategories";
+import { classifyGroceryName, formatGroceryItemName } from "@/utility/groceryCategory";
+import { loadIngredientConversions } from "./ingredientConversions";
+import { normalizedRecipeNutrition, parseCookingIngredients, parseRecipeNutritionInput } from "@/utility/recipeCooking";
 import { parseProvidedRecipeNutrition } from "@/utility/providedRecipeNutrition";
 import { parseCookingMeasurement, parseUnmeasuredIngredients } from "@/utility/cookingMeasurement";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -464,6 +469,14 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     }
   }
 
+  loadGroceryNameSuggestions(query: string, groupId?: string) { return loadGroceryNameSuggestions(this.client, query, groupId); }
+
+  loadGroceryCategoryPreferences(groupId?: string) { return loadGroceryCategoryPreferences(this.client, groupId); }
+
+  loadIngredientConversions(foodIds: string[]) {
+    return loadIngredientConversions(this.client, foodIds);
+  }
+
   loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel> {
     return loadRecipeCardMetadata(this.client, asOfDate);
   }
@@ -498,6 +511,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       snapshot,
       events,
       resultRefs: asRefs(result.result_refs),
+      groceryItem: isObject(result.result_refs) ? result.result_refs.groceryItem as unknown as import("@/types/domain").GroceryItem | undefined : undefined,
+      previousCategory: isObject(result.result_refs) && typeof result.result_refs.previousCategory === "string" ? result.result_refs.previousCategory : undefined,
     };
   }
 
@@ -777,6 +792,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         throw Object.assign(new Error("Quantity must be between 0 and 1,000,000."), { repositoryError: { code: "validation_failed", message: "Quantity must be between 0 and 1,000,000.", retryable: false } satisfies RepositoryError });
       }
       payload.quantity = input.quantity;
+      if (input.categoryChoice) { payload.category = input.categoryChoice.category; if (input.categoryChoice.preference) payload.categoryPreference = input.categoryChoice.preference; }
       // Only identity belongs in a retry payload; refreshed item content must not change its hash.
       payload.grocery = currentSnapshot.grocery ? { id: currentSnapshot.grocery.id, weekOf: currentSnapshot.grocery.weekOf } : null;
       if (input.calendarRevision !== undefined) payload.calendarRevision = input.calendarRevision;
@@ -790,8 +806,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const mutationKey = input.idempotencyKey ?? idempotencyKey();
     const item = {
       id: newId("gi-custom", input.idempotencyKey),
-      name: input.name,
-      category: "Other",
+      name: formatGroceryItemName(input.name),
+      category: input.categoryChoice?.category ?? classifyGroceryName(input.name),
       unit: input.unit,
       generatedQuantity: input.quantity,
       quantity: input.quantity,
@@ -801,10 +817,12 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     return this.mutate(
       "add_custom_grocery_item",
       {
-        grocery: input.currentSnapshot.grocery,
+        grocery: input.currentSnapshot.grocery ? { id: input.currentSnapshot.grocery.id, weekOf: input.currentSnapshot.grocery.weekOf } : null,
         expectedVersions: input.expectedVersions ?? { groceryRevision: input.currentSnapshot.grocery?.revision ?? 0 },
+        ...(input.calendarRevision === undefined ? {} : { calendarRevision: input.calendarRevision }),
         weekOf: input.currentSnapshot.grocery?.weekOf,
         item,
+        ...(input.categoryChoice?.preference ? { categoryPreference: input.categoryChoice.preference } : {}),
         idempotencyKey: mutationKey,
       },
       [
@@ -1182,6 +1200,9 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   private async persistMeal(input: SaveMealInput | SaveRecipeInput, operation: "save_recipe" | "save_saved_meal", newFoods: Food[] = []): Promise<MutationOutcome> {
+    if (input.meal.cookingIngredients !== undefined && !parseCookingIngredients(input.meal.cookingIngredients) || input.meal.nutritionInput !== undefined && !parseRecipeNutritionInput(input.meal.nutritionInput) || input.meal.nutritionInput?.method === "provided" && !normalizedRecipeNutrition(input.meal.nutritionInput, input.meal.servings)) {
+      throw repositoryException(toRepositoryError("validation_failed: Check cooking ingredients and recipe nutrition."));
+    }
     if (!validRecipeYield(input.meal.servings) || input.meal.mealSlots !== undefined &&
       (!input.meal.mealSlots.length || parseMealSlots(input.meal.mealSlots).length !== input.meal.mealSlots.length)) {
       throw repositoryException(toRepositoryError("validation_failed: Use a whole recipe yield from 1 to 10,000 and select at least one meal."));
@@ -1226,6 +1247,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const previousMeal = input.currentSnapshot.savedMeals.find(meal => meal.id === input.meal.id);
     // Cooking-unit metadata alone must not rewrite grocery rows or revisions.
     const unchangedGroceryBasis = previousMeal && newFoods.length === 0 && previousMeal.servings === input.meal.servings
+      && JSON.stringify(previousMeal.cookingIngredients) === JSON.stringify(input.meal.cookingIngredients)
       && previousMeal.ingredients.length === input.meal.ingredients.length && previousMeal.ingredients.every((item, index) => {
         const next = input.meal.ingredients[index];
         return item.foodId === next.foodId && Math.round(item.servings * 1000) === Math.round(next.servings * 1000);

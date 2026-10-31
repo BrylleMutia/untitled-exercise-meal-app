@@ -306,6 +306,7 @@ export interface RecipeIngredient {
 }
 
 export interface CookingMeasurement {
+  conversionBases?: Array<{ unit: string; gramsPerUnit: number }>;
   kind: "amount" | "range" | "unmeasured";
   name?: string;
   text?: string;
@@ -323,6 +324,14 @@ export type RecipeImage = { kind: "url"; url: string } | { kind: "upload"; path:
 
 export type RecipeComplexity = "easy" | "medium" | "hard";
 export type ProvidedRecipeNutrition = { calories: number; proteinG: number; carbsG: number; fatG: number };
+export type RecipeNutritionInput = { method: "provided" | "ingredients"; basis: "per-serving" | "whole-recipe"; values?: ProvidedRecipeNutrition };
+/** Authored cooking rows do not require a nutrition record or an invented weight. */
+export interface CookingIngredient {
+  id: string;
+  foodId?: string;
+  nutritionServings?: number;
+  cookingMeasurement: CookingMeasurement;
+}
 
 export interface Meal {
   id: string;
@@ -336,6 +345,8 @@ export interface Meal {
   complexity?: RecipeComplexity;
   image?: RecipeImage | null;
   providedNutrition?: ProvidedRecipeNutrition | null;
+  nutritionInput?: RecipeNutritionInput;
+  cookingIngredients?: CookingIngredient[];
   ingredients: RecipeIngredient[];
   unmeasuredIngredients?: UnmeasuredIngredient[];
   nutritionNotes?: string;
@@ -404,6 +415,10 @@ export interface WeightEntry {
 }
 
 export interface GroceryItem {
+  personalGenerated?: boolean;
+  sourceOwner?: string;
+  sourceItemId?: string;
+  sourceWeek?: string;
   carriedFromWeek?: string;
   id: string;
   name: string;

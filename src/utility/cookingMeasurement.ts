@@ -1,11 +1,16 @@
 import type { CookingMeasurement, Food, RecipeIngredient, UnmeasuredIngredient } from "@/types/domain";
+import { cookingUnitLabel } from "./cookingUnits";
 
 const stringFields = { name: 256, text: 256, unit: 40, note: 1000 } as const;
 export function parseCookingMeasurement(value: unknown): CookingMeasurement | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
   if (!["amount", "range", "unmeasured"].includes(String(item.kind))) return null;
-  if (Object.keys(item).some(key => !["kind", "quantity", "upperQuantity", "gramsPerUnit", "optional", ...Object.keys(stringFields)].includes(key))) return null;
+  if (Object.keys(item).some(key => !["kind", "quantity", "upperQuantity", "gramsPerUnit", "conversionBases", "optional", ...Object.keys(stringFields)].includes(key))) return null;
+  if (item.conversionBases !== undefined && (!Array.isArray(item.conversionBases) || item.conversionBases.length > 32 || item.conversionBases.some(basis =>
+    !basis || typeof basis !== "object" || Array.isArray(basis) || Object.keys(basis).some(key => !["unit", "gramsPerUnit"].includes(key)) ||
+    typeof basis.unit !== "string" || !["g", "kg", "mg", "oz", "lb", "ml", "l", "tsp", "tbsp", "cup", "piece", "clove", "lemon", "carrot", "cucumber", "serving"].includes(normalizeCookingUnit(basis.unit)) ||
+    typeof basis.gramsPerUnit !== "number" || !Number.isFinite(basis.gramsPerUnit) || basis.gramsPerUnit <= 0 || basis.gramsPerUnit > 1000000))) return null;
   for (const [key, max] of Object.entries(stringFields)) if (item[key] !== undefined && (typeof item[key] !== "string" || !(item[key] as string).trim() || (item[key] as string).length > max)) return null;
   if (item.optional !== undefined && typeof item.optional !== "boolean") return null;
   for (const key of ["quantity", "upperQuantity", "gramsPerUnit"]) if (item[key] !== undefined && (typeof item[key] !== "number" || !Number.isFinite(item[key]) || item[key] <= 0 || item[key] > 1000000)) return null;
@@ -29,7 +34,7 @@ export function needsRecipeMeasurementRefresh(meal: import("@/types/domain").Mea
 export function formatCookingMeasurement(item: RecipeIngredient, food?: Food): string {
   const measurement = parseCookingMeasurement(item.cookingMeasurement);
   if (measurement) {
-    const amount = measurement.text ?? (measurement.kind === "range" ? `${measurement.quantity}–${measurement.upperQuantity} ${measurement.unit}` : `${measurement.quantity} ${measurement.unit}`);
+    const amount = measurement.text ?? (measurement.kind === "range" ? `${measurement.quantity}–${measurement.upperQuantity} ${cookingUnitLabel(measurement.unit!, measurement.upperQuantity)}` : `${measurement.quantity} ${cookingUnitLabel(measurement.unit!, measurement.quantity)}`);
     return amount;
   }
   if (!food) return "Measurement unavailable";
@@ -42,7 +47,7 @@ export function cookingVolumeMl(unit: string): number | null { return volumeMl[n
 export function normalizeCookingUnit(unit: string): string {
   const value = unit.trim().toLowerCase().replace(/\.$/, "");
   const aliases: Record<string, string> = { grams: "g", gram: "g", kilograms: "kg", kilogram: "kg", milligrams: "mg", milligram: "mg", ounces: "oz", ounce: "oz", pounds: "lb", pound: "lb", millilitres: "ml", milliliters: "ml", milliliter: "ml", millilitre: "ml", litres: "l", liters: "l", litre: "l", liter: "l", teaspoons: "tsp", teaspoon: "tsp", tsps: "tsp", tablespoons: "tbsp", tablespoon: "tbsp", tbsps: "tbsp", cups: "cup", servings: "serving", pieces: "piece", cloves: "clove", lemons: "lemon", carrots: "carrot", cucumbers: "cucumber" };
-  return value === "piece/s" ? "piece" : aliases[value] ?? value;
+  return ["piece/s", "pc", "pcs"].includes(value) ? "piece" : aliases[value] ?? value;
 }
 function optionBasis(option: NonNullable<Food["servingOptions"]>[number]): CookingConversionBasis | null {
   const match = option.label.match(/^\s*(\d+\/\d+|\d+(?:\.\d+)?|[¼½¾])\s*([^\s()]+)/);
@@ -56,11 +61,11 @@ export function cookingGramsPerUnit(unit: string, food: Food | null, saved: Cook
   unit = normalizeCookingUnit(unit);
   const weight: Record<string, number> = { g: 1, kg: 1000, mg: 0.001, oz: 28.349523125, lb: 453.59237 };
   if (weight[unit]) return weight[unit];
-  if (food && (unit === "serving" || unit === "piece" && food.unit === "piece")) return food.servingGrams;
   const bases = [...saved, ...(food?.servingOptions ?? []).flatMap(option => { const basis = optionBasis(option); return basis ? [basis] : []; })]
     .filter(basis => Number.isFinite(basis.gramsPerUnit) && basis.gramsPerUnit > 0 && basis.gramsPerUnit <= 1000000);
   const exact = bases.find(basis => normalizeCookingUnit(basis.unit) === unit);
   if (exact) return exact.gramsPerUnit;
+  if (food && (unit === "serving" || unit === "piece" && food.unit === "piece")) return food.servingGrams;
   if (volumeMl[unit]) {
     const source = bases.find(basis => volumeMl[normalizeCookingUnit(basis.unit)]);
     if (source) return source.gramsPerUnit * volumeMl[unit] / volumeMl[normalizeCookingUnit(source.unit)];

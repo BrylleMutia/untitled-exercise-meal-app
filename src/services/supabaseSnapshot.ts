@@ -1,4 +1,5 @@
 import { parseMealSlots } from "@/utility/recipeMealSlots";
+import { parseCookingIngredients, parseRecipeNutritionInput } from "@/utility/recipeCooking";
 import { parseProvidedRecipeNutrition } from "@/utility/providedRecipeNutrition";
 import { parseCookingMeasurement, parseUnmeasuredIngredients } from "@/utility/cookingMeasurement";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -412,6 +413,8 @@ function mapMeal(
   const image = parseRecipeImage((row as MealRow & { image?: unknown }).image);
   const complexity = (row as MealRow & { complexity?: string | null }).complexity;
   const providedNutrition = parseProvidedRecipeNutrition(row.provided_nutrition);
+    const cookingIngredients = parseCookingIngredients((row as MealRow & { cooking_ingredients?: unknown }).cooking_ingredients);
+    const nutritionInput = parseRecipeNutritionInput((row as MealRow & { nutrition_input?: unknown }).nutrition_input);
   return {
     id: row.app_id,
     name: row.name,
@@ -423,6 +426,8 @@ function mapMeal(
     ...(row.total_time_minutes != null ? { totalTimeMinutes: row.total_time_minutes } : {}),
     ...(image ? { image } : {}),
     ...(providedNutrition ? { providedNutrition } : {}),
+      ...(cookingIngredients ? { cookingIngredients } : {}),
+      ...(nutritionInput ? { nutritionInput } : {}),
     ...(row.unmeasured_ingredients == null ? {} : { unmeasuredIngredients: parseUnmeasuredIngredients(row.unmeasured_ingredients) ?? [] }),
     ...(row.nutrition_notes ? { nutritionNotes: row.nutrition_notes } : {}),
     ...(complexity === "easy" || complexity === "medium" || complexity === "hard" ? { complexity } : {}),

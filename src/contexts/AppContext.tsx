@@ -1,4 +1,5 @@
 "use client";
+import { groceryCategoryMessage, type GroceryCategoryChoice, type GroceryCategoryPreference, type GroceryExtraSubmission } from "@/utility/groceryCategory";
 
 import {
   createContext,
@@ -11,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import type { IngredientConversionCandidate } from "@/types/backend";
 import { createClient } from "@/lib/supabase/client";
 import { createSupabaseRepository } from "@/services/supabaseRepository";
 import { reviewedMealValidationError } from "@/utility/reviewedMealValidation";
@@ -67,6 +69,9 @@ export interface AppActions {
   previewCookingGroup(input: GroupPlanningInput): Promise<GroupPreview>;
   loadNutritionWeek(weekOf: string): Promise<NutritionWeekReadModel>;
   loadRecipeCardMetadata(asOfDate: string): Promise<RecipeCardReadModel>;
+  loadGroceryNameSuggestions(query: string, groupId?: string): Promise<import("@/types/grocerySuggestions").GroceryNameHistoryCandidate[]>;
+  loadGroceryCategoryPreferences(groupId?: string): Promise<GroceryCategoryPreference[]>;
+  loadIngredientConversions(foodIds: string[]): Promise<IngredientConversionCandidate[]>;
   setRecipeFavorite(input: SetRecipeFavoriteInput): Promise<RecipeCardReadModel>;
   saveCustomWorkout(id: string, expectedVersion: number, definition: CustomWorkoutDefinition): Promise<boolean>;
   startCustomWorkout(workoutId: string, expectedVersion: number): Promise<boolean>;
@@ -114,9 +119,9 @@ export interface AppActions {
   deleteNutrition(id: string, expectedRevision?: number, fixedKey?: string): Promise<boolean>;
   logWeight(weightKg: number, date: string): Promise<void>;
   toggleGrocery(id: string, week?: NutritionWeekReadModel): Promise<void>;
-  setGroceryQuantity(id: string, quantity: number, week: NutritionWeekReadModel, options: { calendarRevision: number; groceryRevision: number; idempotencyKey: string }): Promise<boolean>;
+  setGroceryQuantity(id: string, quantity: number, week: NutritionWeekReadModel, options: { calendarRevision: number; groceryRevision: number; idempotencyKey: string; categoryChoice?: GroceryCategoryChoice }): Promise<boolean>;
   removeGroceryItem(id: string, week?: NutritionWeekReadModel): Promise<boolean>;
-  addCustomGrocery(name: string, quantity: number, unit: string, week?: NutritionWeekReadModel): Promise<boolean>;
+  addCustomGrocery(name: string, quantity: number, unit: string, week?: NutritionWeekReadModel, categoryChoice?: GroceryCategoryChoice, submission?: GroceryExtraSubmission): Promise<boolean>;
   regenerateGrocery(week?: NutritionWeekReadModel): Promise<void>;
   setGroceryTotalAmount(input: Omit<SetGroceryTotalAmountInput, "currentSnapshot">, week: NutritionWeekReadModel): Promise<boolean>;
   skipPlannedMeal(id: string, week?: NutritionWeekReadModel): Promise<void>;
@@ -460,6 +465,10 @@ export function AppProvider({
             if (refreshed) setSnapshot(refreshed);
           }
           setError(null);
+          if (input.action === "grocery" && result.groceryItem) {
+            if (input.operation === "add") notify(groceryCategoryMessage(result.groceryItem, "added"));
+            else if (result.previousCategory !== result.groceryItem.category) notify(groceryCategoryMessage(result.groceryItem, "moved"));
+          }
           return result;
         } catch (reason) {
           const message = reason instanceof Error ? reason.message : "Shared changes could not be saved.";
@@ -470,6 +479,18 @@ export function AppProvider({
       async loadNutritionWeek(weekOf) {
         if (!repository) throw new Error("Sign in to load weekly nutrition.");
         return repository.loadNutritionWeek(weekOf);
+      },
+      async loadGroceryNameSuggestions(query, groupId) {
+        if (!repository) throw new Error("Sign in to read past grocery names.");
+        return repository.loadGroceryNameSuggestions(query, groupId);
+      },
+      async loadGroceryCategoryPreferences(groupId) {
+        if (!repository) throw new Error("Sign in to load saved categories.");
+        return repository.loadGroceryCategoryPreferences(groupId);
+      },
+      async loadIngredientConversions(foodIds) {
+        if (!repository) throw new Error("Sign in to load saved conversions.");
+        return repository.loadIngredientConversions(foodIds);
       },
       async loadRecipeCardMetadata(asOfDate) {
         if (!repository) throw new Error("Sign in to load favorites.");
@@ -788,9 +809,10 @@ export function AppProvider({
           return false;
         }
         const outcome = await execute("set_grocery_quantity", (current, idempotencyKey) =>
-          repository!.updateGrocery({ type: "quantity", itemId: id, quantity, calendarRevision: options.calendarRevision, expectedVersions: { groceryRevision: options.groceryRevision }, idempotencyKey }, nutritionWeekSnapshot(current, week)),
+          repository!.updateGrocery({ type: "quantity", itemId: id, quantity, categoryChoice: options.categoryChoice, calendarRevision: options.calendarRevision, expectedVersions: { groceryRevision: options.groceryRevision }, idempotencyKey }, nutritionWeekSnapshot(current, week)),
           options.idempotencyKey,
         );
+        if (outcome?.groceryItem && outcome.previousCategory !== outcome.groceryItem.category) notify(groceryCategoryMessage(outcome.groceryItem, "moved"));
         return Boolean(outcome);
       },
 
@@ -801,10 +823,12 @@ export function AppProvider({
         return Boolean(outcome);
       },
 
-      async addCustomGrocery(name, quantity, unit, week) {
+      async addCustomGrocery(name, quantity, unit, week, categoryChoice, submission) {
         const outcome = await execute("add_custom_grocery_item", (current, idempotencyKey) =>
-          repository!.addCustomGrocery({ name, quantity, unit, currentSnapshot: week ? { ...nutritionWeekSnapshot(current, week), grocery: week.grocery ?? { id: `gl-${week.weekOf}`, weekOf: week.weekOf, items: [] } } : current, idempotencyKey }),
+          repository!.addCustomGrocery({ name, quantity, unit, categoryChoice, ...(submission ? { expectedVersions: { groceryRevision: submission.groceryRevision }, calendarRevision: submission.calendarRevision } : {}), currentSnapshot: week ? { ...nutritionWeekSnapshot(current, week), grocery: week.grocery ?? { id: `gl-${week.weekOf}`, weekOf: week.weekOf, items: [] } } : current, idempotencyKey }),
+          submission?.idempotencyKey,
         );
+        if (outcome?.groceryItem) notify(groceryCategoryMessage(outcome.groceryItem, "added"));
         return Boolean(outcome);
       },
 
