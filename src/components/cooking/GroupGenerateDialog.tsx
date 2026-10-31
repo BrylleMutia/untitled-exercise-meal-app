@@ -1,4 +1,6 @@
 "use client";
+
+import { createUuid } from "@/utility/uuid";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { ListChecks, ListX, Minus, Plus, Shuffle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -22,12 +24,12 @@ const validBatchLimit = (value: number) => Number.isInteger(value) && value >= 1
 export function GroupGenerateDialog({ week: sourceWeek, returnFocus, onClose }: { week: GroupWeek; returnFocus?: RefObject<HTMLElement | null>; onClose: () => void }) {
   const week = { ...sourceWeek, recipes: uniqueGroupRecipes(sourceWeek.recipes) };
   const { snapshot, actions, pendingMutation } = useApp(); const group = week.group!;
-  const [input, setInput] = useState<GroupPlanningInput>(() => ({ reviewPolicyVersion: PLANNING_REVIEW_POLICY, groupId: group.id, weekOf: week.weekOf, memberIds: group.members.map(m => m.id), selectedDates: defaultPlanningDates(week.weekOf), mode: "fill", recipes: week.recipes.filter(r => r.mealSlots?.length).map(r => ({ id: r.id, revision: r.revision ?? 1, maxBatches: group.members.length })), seed: crypto.randomUUID(), overrides: {} }));
+  const [input, setInput] = useState<GroupPlanningInput>(() => ({ reviewPolicyVersion: PLANNING_REVIEW_POLICY, groupId: group.id, weekOf: week.weekOf, memberIds: group.members.map(m => m.id), selectedDates: defaultPlanningDates(week.weekOf), mode: "fill", recipes: week.recipes.filter(r => r.mealSlots?.length).map(r => ({ id: r.id, revision: r.revision ?? 1, maxBatches: group.members.length })), seed: createUuid(), overrides: {} }));
   const [ready, setReady] = useState(false); const [restored, setRestored] = useState(false); const [preview, setPreview] = useState<{ value: GroupPreview; tag: string } | null>(null);
   const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [acknowledged, setAcknowledged] = useState(false); const [retry, setRetry] = useState(0);
   const [batchText, setBatchText] = useState<Record<string, string>>({});
   const invalidBatches = input.recipes.some(recipe => !validBatchLimit(recipe.maxBatches) || batchText[recipe.id] !== undefined);
-  const retryKey = useRef(crypto.randomUUID()); const saving = useRef(false); const draftQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const retryKey = useRef(createUuid()); const saving = useRef(false); const draftQueue = useRef<Promise<unknown>>(Promise.resolve());
   const editedIds = editedDefaultRecipeIds(snapshot.savedMeals, week.recipes);
   const draftType = `nutrition-group-generation:${group.id}:${week.weekOf}`;
   const basis = JSON.stringify({ policyVersion: PLANNING_REVIEW_POLICY, profile: snapshot.profile, targets: snapshot.nutritionWeekTargets, plan: snapshot.mealPlan, logs: snapshot.nutritionLogs, group: group.revision, revision: week.revision, recipes: week.recipes.map(r => [r.id, r.revision]) });
@@ -48,7 +50,7 @@ export function GroupGenerateDialog({ week: sourceWeek, returnFocus, onClose }: 
     if (!ready) return;
     let active = true;
     const timer = setTimeout(() => {
-      setAcknowledged(false); retryKey.current = crypto.randomUUID(); setError("");
+      setAcknowledged(false); retryKey.current = createUuid(); setError("");
       if (invalidBatches || !input.memberIds.length || !input.selectedDates.length || !input.recipes.length) { setLoading(false); return; }
       setLoading(true);
       void actions.previewCookingGroup(input).then(value => { if (active) setPreview({ value, tag }); }).catch(reason => { if (active) setError(reason.message); }).finally(() => { if (active) setLoading(false); });
@@ -128,7 +130,7 @@ export function GroupGenerateDialog({ week: sourceWeek, returnFocus, onClose }: 
         })}</ul>
       </fieldset>
       {current && !loading && !error && shown?.preferenceReview ? <RecipeWarningReview review={shown.preferenceReview} disabled={disabled} onRemove={id => change({ ...input, recipes: input.recipes.filter(r => r.id !== id) })} /> : null}
-      <section className="grid min-w-0 gap-3" aria-label="Group generation preview"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-extrabold">Preview · {shown?.assignments.length ?? 0} {shown?.assignments.length === 1 ? "new meal assignment" : "new meal assignments"}</h3><Button variant="soft" disabled={disabled || loading} onClick={() => change({ ...input, seed: crypto.randomUUID(), overrides: {} })}><Shuffle className="h-4 w-4" aria-hidden />Shuffle</Button></div>
+      <section className="grid min-w-0 gap-3" aria-label="Group generation preview"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-extrabold">Preview · {shown?.assignments.length ?? 0} {shown?.assignments.length === 1 ? "new meal assignment" : "new meal assignments"}</h3><Button variant="soft" disabled={disabled || loading} onClick={() => change({ ...input, seed: createUuid(), overrides: {} })}><Shuffle className="h-4 w-4" aria-hidden />Shuffle</Button></div>
       <p className="text-xs text-ink-soft">Each assignment is one person’s meal on a selected date and meal time. Meals already kept in the plan are not counted here.</p>
       {invalidBatches ? <p role="status" className="text-sm text-danger-900">Correct the batch limits to refresh and review this preview.</p> : null}
       {loading && !invalidBatches ? <p role="status" className="text-sm">Checking portions and planning limits privately…</p> : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Food, LoggedMeal, Meal, NutritionLog } from "@/types/domain";
 import { loggedRecipePortion, loggedRecipeServings, positiveRecipeServings } from "@/utility/loggedRecipeServings";
@@ -29,7 +30,7 @@ export function LoggedRecipeServingsEditor({ meal, entries, recipe, foods, onSav
   function change(set: (value: string) => void, value: string) { set(value); setRetryKey(null); setError(""); }
   async function submit() {
     if (!preview || previous === null || next === null || saving || (changed && !retryKey)) return;
-    const key = retryKey ?? crypto.randomUUID();
+    const key = retryKey ?? createUuid();
     setRetryKey(key);
     setSaving(true); setError("");
     try {

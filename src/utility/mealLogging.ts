@@ -1,9 +1,10 @@
+import { createUuid } from "@/utility/uuid";
 import type { AppActions } from "@/contexts/AppContext";
 import type { AppSnapshot, Food, Meal, MealSlot, PlannedMeal } from "@/types/domain";
 import type { CandidateServingPlan } from "./textMeal";
 import { foodMacros } from "./nutrition";
 import { parseProvidedRecipeNutrition, providedRecipeLogEntry } from "./providedRecipeNutrition";
-export function clientId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
+export function clientId(prefix: string) { return `${prefix}-${createUuid()}`; }
 export function plannedLogAvailable(meal: PlannedMeal, snapshot: AppSnapshot) {
   if (!Number.isFinite(meal.servings) || meal.servings <= 0 || meal.skipped) return false;
   const usableFood = (id: string) => {

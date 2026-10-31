@@ -1,4 +1,6 @@
 "use client";
+
+import { createUuid } from "@/utility/uuid";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/Button";
@@ -35,7 +37,7 @@ export function CombinedRecipeLibrary({ owned, renderOwned, filters, favoriteIds
     const groupId = currentGroup.current, id = ++request.current;
     try {
       const data = await actions.loadCookingRecipe(recipe.id);
-      if (id === request.current && groupId && groupId === currentGroup.current) { setDetails({ recipe, data, groupId }); copyKey.current = { id: recipe.id, key: crypto.randomUUID() }; }
+      if (id === request.current && groupId && groupId === currentGroup.current) { setDetails({ recipe, data, groupId }); copyKey.current = { id: recipe.id, key: createUuid() }; }
     } catch (reason) { if (id === request.current) setError(reason instanceof Error ? reason.message : "Recipe unavailable. Open it again to retry."); }
     finally { if (id === request.current) setReading(null); }
   }

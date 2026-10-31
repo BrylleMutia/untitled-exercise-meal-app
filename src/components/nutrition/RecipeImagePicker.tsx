@@ -1,5 +1,6 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
 import { useId, useRef, useState } from "react";
 import { ImagePlus, Link, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -22,7 +23,7 @@ export function RecipeImagePicker({ image, onChange, disabled, onBusy }: {
   const panelId = useId();
   async function upload(file?: File) {
     if (!file || busy) return;
-    if (uploadIdentity.current?.file !== file) uploadIdentity.current = { file, id: crypto.randomUUID() };
+    if (uploadIdentity.current?.file !== file) uploadIdentity.current = { file, id: createUuid() };
     setBusy(true); onBusy(true); setMessage(""); setUploadFailed(false);
     try { onChange(await uploadRecipeImage(file, uploadIdentity.current.id)); setMessage("Image uploaded for this draft. Save the recipe to attach it."); }
     catch (error) { setUploadFailed(true); setMessage(error instanceof Error ? error.message : "Image upload failed. Retry or use the default image."); }

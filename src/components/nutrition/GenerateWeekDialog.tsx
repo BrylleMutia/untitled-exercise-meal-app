@@ -1,5 +1,6 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { ListChecks, ListX, Shuffle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -50,9 +51,9 @@ export function GenerateWeekDialog({ snapshot, weekOf, returnFocus, pending, una
   const selectionDisabled = busy || unavailable || !draft || changed;
 
   function create(selected: string[], source = snapshot, selectedDates = defaultPlanningDates(weekOf)): GenerationDraft {
-    const seed = crypto.randomUUID();
+    const seed = createUuid();
     return { basis: generationBasis(source, weekOf), selectedDates, selected, seed, preview: generateWeeklyMeals(source, weekOf, selected, seed, selectedDates),
-      key: `generate-week-${crypto.randomUUID()}`, acknowledged: false,
+      key: `generate-week-${createUuid()}`, acknowledged: false,
       recipes: source.savedMeals.filter(recipe => selected.includes(recipe.id)).map(recipe => ({ id: recipe.id, revision: recipe.revision ?? 1 })),
       expectedVersions: { profileRevision: source.profile?.revision, mealPlanVersion: source.mealPlan?.version ?? 0, groceryRevision: source.grocery?.revision ?? 0 } };
   }

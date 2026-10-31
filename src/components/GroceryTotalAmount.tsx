@@ -1,5 +1,7 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
@@ -10,7 +12,7 @@ import { formatFullDate } from "@/utility/dates";
 import type { NutritionWeekReadModel } from "@/types/backend";
 
 type AmountDraft = { value: string; revision: number; calendarRevision: number; saveKey: string };
-const saveKey = () => crypto.randomUUID();
+const saveKey = () => createUuid();
 
 export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange, groupId }: { week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void; groupId?: string }) {
   const { snapshot, actions, error } = useApp();

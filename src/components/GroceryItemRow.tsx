@@ -1,5 +1,7 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
@@ -9,7 +11,7 @@ import type { GroceryItem } from "@/types/domain";
 import type { NutritionWeekReadModel } from "@/types/backend";
 
 type QuantityDraft = { value: string; revision: number; calendarRevision: number; listId: string; saveKey: string };
-const newKey = () => crypto.randomUUID();
+const newKey = () => createUuid();
 const controlClass = "grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lav-500";
 const iconClass = `${controlClass} bg-white text-ink`;
 

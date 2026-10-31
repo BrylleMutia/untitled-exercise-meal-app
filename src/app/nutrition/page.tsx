@@ -1,5 +1,7 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Sparkles, Trash2, TriangleAlert, WandSparkles, SlidersHorizontal } from "lucide-react";
 import { useApp, type AppActions } from "@/contexts/AppContext";
@@ -204,7 +206,7 @@ export default function NutritionPage() {
 
   async function saveEditableGroupRecipe(id: string) {
     try {
-      await appActions.cookingGroupCommand({ action: "copy-recipe", recipeId: id, idempotencyKey: crypto.randomUUID() });
+      await appActions.cookingGroupCommand({ action: "copy-recipe", recipeId: id, idempotencyKey: createUuid() });
       setRecipeRead(null); setViewingRecipeId(null); week.refresh();
       appActions.notify("Personal recipe copy saved. Open its Edit control to change it.");
     } catch (reason) { appActions.notify(reason instanceof Error ? reason.message : "Copy failed. Retry when connected.", "error"); }
@@ -729,7 +731,7 @@ export default function NutritionPage() {
 
 function clientId(prefix: string) {
   return `${prefix}-${typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
+    ? createUuid()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import Link from "next/link";
@@ -13,7 +14,7 @@ import { clearDraft, createDraftEnvelope, readDraft, writeDraft } from "@/servic
 import { customWorkoutMinutes, validateCustomWorkout } from "@/utility/customWorkouts";
 import type { CustomMovement, CustomMovementLog, CustomWorkout, CustomWorkoutDefinition, CustomWorkoutSession } from "@/types/domain";
 
-const newId = () => crypto.randomUUID();
+const newId = () => createUuid();
 type RoutineDraft = { id: string; version: number; definition: CustomWorkoutDefinition };
 const movementDraftSchema = z.object({ id: z.string(), name: z.string(), exerciseId: z.string().optional(), sets: z.number(), reps: z.number().optional(), holdSeconds: z.number().optional(), restSeconds: z.number() });
 const routineDraftSchema = z.object({ id: z.string(), version: z.number().int().nonnegative(), definition: z.object({ name: z.string(), movements: z.array(movementDraftSchema).max(24), estimatedMinutes: z.number().optional(), warmup: z.array(z.string()).optional(), cooldown: z.array(z.string()).optional(), safety: z.string().optional() }) });

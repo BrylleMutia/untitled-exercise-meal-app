@@ -1,5 +1,7 @@
 "use client";
 
+import { createUuid } from "@/utility/uuid";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { todayKey } from "@/utility/dates";
@@ -52,7 +54,7 @@ export function useRecipeCardMetadata() {
     const desired = !metadata.favorite;
     const previous = retry.current;
     const input = previous?.mealId === mealId && previous.favorite === desired && previous.expectedRevision === metadata.favoriteRevision && previous.asOfDate === date
-      ? previous : { mealId, favorite: desired, expectedRevision: metadata.favoriteRevision, asOfDate: date, idempotencyKey: crypto.randomUUID() };
+      ? previous : { mealId, favorite: desired, expectedRevision: metadata.favoriteRevision, asOfDate: date, idempotencyKey: createUuid() };
     retry.current = input;
     try {
       const result = await actions.setRecipeFavorite(input);

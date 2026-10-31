@@ -1,4 +1,6 @@
 "use client";
+
+import { createUuid } from "@/utility/uuid";
 import { recipeMealSlots, mealSlotLabels, parseMealSlots, validRecipeYield } from "@/utility/recipeMealSlots";
 
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
@@ -31,7 +33,7 @@ const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", 
 const metrics = ["calories", "proteinG", "carbsG", "fatG", "fiberG"] as const;
 type CustomDraft = { name: string; servingLabel: string; grams: string; unit: "g" | "piece"; preparation: PreparationBasis; category: GroceryCategory; calories: string; proteinG: string; carbsG: string; fatG: string; fiberG: string };
 type RecipeDraft = { mealSlots: MealSlot[]; mealId: string; name: string; servings: string; totalTimeMinutes: string; complexity: string; instructions: string; reference: string; image: RecipeImage | null; ingredients: RecipeIngredientDraft[]; unmeasuredIngredients: Array<UnmeasuredIngredient & { id: string }>; nutritionNotes: string; query: string; description: string; review: RecipeIngredientDraft[]; questions: string[]; custom: CustomDraft; saveKey: string; baseVersions: ExpectedVersions; catalog?: CatalogRecipeEdit; providedMacros?: Record<"calories" | "proteinG" | "carbsG" | "fatG", string> | null };
-const uid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+const uid = (prefix: string) => `${prefix}-${createUuid()}`;
 const blankCustom = (): CustomDraft => ({ name: "", servingLabel: "", grams: "", unit: "g", preparation: "unknown", category: "Other", calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" });
 const validNumber = (value: string, min: number, max: number) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max;
 
