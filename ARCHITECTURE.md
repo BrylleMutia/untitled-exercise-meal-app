@@ -379,13 +379,32 @@ Rules:
   and upper quantities together, retaining full precision and the same canonical
   food servings within database numeric precision. Quantity edits deliberately
   change the amount; source-provided macros remain independent.
-  Optional draft-only `conversionBases` and `pendingConversion` fields retain
-  reviewed alternate measures and unresolved confirmations. Pending steps do not
+  Optional `CookingMeasurement.conversionBases` stores all completed alternate
+  measures in ingredient metadata; `pendingConversion` remains draft-only.
+  Pending steps do not
   alter the submitted measurement or renew its retry identity; confirmation
   creates the changed save intent. Completed conversions persist through the
-  existing cooking metadata. No schema, RPC or generated-type extension is needed.
-  Recipe authoring uses a shared nine-unit contract: g/kg/mg/oz/ml/tsp/tbsp/cup/piece
-  (cup displays as cups; piece as piece/s). Draft preparation normalizes saved ingredients,
+  existing cooking metadata. The ingredient transaction trigger remembers verified
+  factors in owner-only `ingredient_conversions`, excluding automatic frozen plan
+  snapshots. Explicit personal copies learn normally. Library records retain food
+  identity and source descriptions independently of recipe/food lifetimes; owner
+  deletion cascades and account export includes the library. The initial backfill
+  reads owned recipes including archived ones, without rewriting their prescriptions.
+  `loadIngredientConversions(foodIds)` calls the bounded authenticated
+  `get_ingredient_conversions(text[])` RPC. Its private implementation unions only
+  the caller's library, defaults and currently accessible active group recipes;
+  other members' retained private libraries stay private. Exact provider ID,
+  compatible source version/revision, record type and preparation define provider
+  identity, including snapshot_fdc_id; other foods require their stable owner/app
+  identity and source/preparation basis. Matching never uses ingredient names.
+  Conflicts are reviewed, equivalent factors use relative tolerance 1e-6, and
+  known current-ingredient factors precede library candidates and trusted fallback.
+  Client lookup has a ten-second abort signal and never overwrites a changed draft,
+  account or closed editor. Pending manual confirmation remains usable on failure.
+  Library writes share the recipe transaction and per-owner/food/unit advisory
+  coordination; retries and concurrent equivalent saves cannot duplicate entries.
+  Recipe authoring and groceries share g/kg/mg/oz/lb/ml/l/tsp/tbsp/cup/piece
+  (l displays as L; counts display pc/pcs). Draft preparation normalizes saved ingredients,
   provider review and recovered pending targets by measurement type. Legacy
   conversions remain readable internally, with saved factors and range bounds
   preserved. Exact volume ratios do not establish nutrition density. Unknown
@@ -1382,12 +1401,21 @@ error in its generated cache. Only the agent-started process was stopped; its
 sandbox. A fresh Settings-page HEAD request returned HTTP 200. Browser test
 build output remains separately scoped to `.next-browser-tests`.
 
-Local IPv4 previews explicitly allow `127.0.0.1` through Next.js
-`allowedDevOrigins`. The default `localhost` permission alone does not allow
-that development hostname to use HMR and debugging endpoints. After changing
+Local IPv4 previews explicitly allow `127.0.0.1` and the computer's current
+external IPv4 interface addresses through Next.js `allowedDevOrigins`. Addresses
+are discovered when the server starts so LAN previews continue working after
+DHCP changes. The default `localhost` permission alone does not allow these
+development hostnames to use HMR and debugging endpoints. After changing
 the dev host or restarting/rebuilding the server, reload the page to replace
 stale JavaScript and Server Action references. This allowlist is development-only
 and does not change production authentication or database permissions.
+
+Browser UUIDs for draft retry keys, planning seeds, uploads, and entity IDs use
+`src/utility/uuid.ts`. Prefer native `crypto.randomUUID()` when available; plain
+HTTP LAN previews use `crypto.getRandomValues()` with UUID v4 version/variant
+bits instead. Direct unguarded `randomUUID()` calls can crash client rendering
+on these origins. The helper requires a cryptographic random source and does
+not replace retained idempotency keys when retrying the same intent.
 
 ## Cooking group persistence and privacy
 
@@ -1399,7 +1427,7 @@ Group locks precede sorted member calendar locks and existing profile/week/recei
 
 Group assignments reference canonical personal planned-meal identities across versions. Immutable per-owner recipe and food snapshots retain authored measurements and source nutrition; immutable cover objects use reference-aware cleanup and authorized private access after departure or source deletion. Recipe revisions remain separate cooking requirements. Group groceries reconcile whole batches once, and personal groceries exclude those projections. Departure revokes live access and invalidates proposals without copying shared spending. Account deletion removes owned references before catalog cascades.
 
-Unified route composition does not merge persistence scopes. Connected Nutrition always renders owner-only daily data with the shared cooking Overview modal and combined recipe library; connected generation uses only the group preview/commit contract, even with one selected member. A failed membership read blocks generation instead of falling back to personal writes. Grocery composes group and owner-only read models under one selected week, preserving separate spending, mutation intents, drafts and retry keys. Both scopes coordinate submission/navigation locks, and independent read failures never masquerade as empty lists. Connection changes refetch authorized state; existing departure/cache cleanup rules remain authoritative. No migration or transfer occurs when displaying the unified pages.
+Unified route composition does not merge persistence scopes. Connected Nutrition always renders owner-only daily data with the shared cooking Overview modal and combined recipe library; connected generation uses only the group preview/commit contract, even with one selected member. A failed membership read blocks generation instead of falling back to personal writes. Connected Grocery uses one shared week and spending model, plus caller-only sharing status and device-local draft recovery. Submission/navigation locks and retry identities coordinate shared operations; read failures never masquerade as empty lists. Connection changes refetch authorized state. Displaying a page never grants consent, but already-authorized interrupted grocery transfers resume on entry. Departure/cache cleanup rules remain authoritative.
 
 Group drafts are keyed by account, group, week and operation and retain input through failures. Stale quantities and amounts require explicit review. Export includes membership, shared weeks and generations, owned assignments and notices, and calendar audits, without other members' health facts or actual logs. Forward migrations, generated contracts, database reset/lint/security tests, repository and Edge verification, and isolated multi-account browser flows gate deployment.
 
@@ -1619,3 +1647,179 @@ reads await preceding writes and confirmed save/removal enqueues clearing after 
 writes. Cancellation does not clear drafts. Pending state locks inputs and modal
 dismissal; success applies authoritative state and restores the date action's focus.
 This refactor adds no schema, RPC, nutrition-target or workout-calculation changes.
+
+### Unified shared grocery ownership
+
+Connected Grocery uses the existing Context → cooking-group repository → authorized
+RPC path. `get_grocery_sharing_status` returns only the caller’s consent, progress,
+next source/destination revisions and historical week mappings. `share_cooking_groceries`
+records consent for the current membership incarnation and transfers one source week
+per transaction. Private consent/receipt tables have RLS and no client grants.
+Receipts uniquely identify source headers across groups; retries cannot duplicate
+items or add recorded centavos again. Source headers/items remain owner-readable
+for audit/export and internal Nutrition revision checks, but are not a second
+shopping interface. Direct personal grocery RPCs preserve their existing preflight
+and reject writes once shared ownership is enabled.
+
+Shared reconciliation retains the frozen-recipe/batch calculation and adds consenting
+members’ independent requirements with stable source-item identities. It excludes
+existing cooking assignments, retains shared overrides and purchase state, and
+refreshes after independent planned-meal changes. Original imported records remain
+distinct; no fuzzy matching or automatic quantity conversion combines purchases.
+Recorded amounts add as exact integer centavos, with overflow rolling back the
+whole source week. Missing amounts remain distinct from recorded zero.
+
+Membership deletion archives transferred personal headers and ends consent. Shared
+purchases remain group-owned; active-only personal week/app-ID uniqueness permits
+fresh personal shopping without copying transferred history. Historical source
+identities and transfer receipts remain intact. A new membership requires new
+consent and cannot re-import a previously transferred header.
+Calendar regrouping propagates receipts to replacement personal headers without
+adding spending again and retains shared source-item identities. Group calendar
+changes wait until any consented transfer has finished, preventing mixed baselines.
+
+Local draft recovery remains account-scoped. Historical custom, quantity and amount
+drafts are reviewed against the destination week; recovery itself publishes nothing.
+Saving uses the group revision and a stable request identity, clears the source
+draft only after success, and requires review after a stale baseline. Grocery
+failures retain saved records and draft input rather than presenting local edits
+as persisted group state.
+
+
+### Grocery consent in account connection
+
+Generate PIN and Connect and share require the versioned `all-weeks-v1` grocery-sharing acknowledgment. Consent is recorded in the same transaction as the successful invitation or membership change, before its receipt completes; failed commands record no consent. Historical imports remain per-week operations through the existing transfer RPC and durable receipts. Old invite/join payloads without the disclosure version return an explicit refresh-required conflict.
+
+A private, RLS-protected prompt-dismissal table scopes Not now, close and Escape to the authenticated caller’s current group and membership joined-at value. The existing sharing RPC accepts the typed dismiss-grocery-sharing action with membership and revision checks; sharing status returns promptDismissed only for that caller. Dismissal never creates consent. Membership deletion clears dismissal; existing consent and import receipts remain governed by the established departure policy. Settings provides deliberate reopening, while Groceries prompts only unacknowledged memberships. Authorized interrupted transfers resume on screen entry with compact error/retry feedback and retained request identities. Unsaved drafts still require review.
+
+### Initial account session recovery
+
+Initial account reads recover once from an explicitly expired JWT by forcing a
+Supabase session refresh and retrying the read. This covers a device clock that
+considers a server-expired token current. The retry rechecks the authenticated
+account identity and never publishes a partial snapshot or replays a mutation.
+Network and unrelated database failures retain the normal error/retry behavior;
+another expiry after refresh is surfaced without an authentication loop.
+
+### Remembered recipe conversions: rollout evidence (2026-10-27)
+
+The conversion rollout adds `20261027122222_remembered_recipe_conversions`,
+`20261027122932_conversion_api_boundary`, and
+`20261027123522_conversion_lookup_volatility`. Before deployment, the linked
+baseline through `20261027064923` matched a clean local migration replay across
+all 12 schema fingerprint groups. The deployment dry run contained exactly the
+three conversion migrations, with no seed or role changes. After deployment,
+all 112 local/remote migration versions and all 12 schema fingerprint groups
+matched; the subsequent dry run reported no pending changes. Public database
+types were regenerated from the linked schema.
+
+Verification passed 687 local tests, 33 repository integration tests, and 1,489
+database assertions across 46 files after a clean local reset. The database
+linter reported only the existing unused `p_payload` warning in
+`public.claim_deleted_recipe_images`. Deployed transactional checks confirmed
+authenticated conversion lookup, owner-only library reads, anonymous denial,
+and direct-write denial. TypeScript, ESLint, and the production build passed.
+
+Two focused browser flows passed at mobile (412 × 930) and desktop (1440 × 930)
+viewports, including enlarged text, keyboard interaction, alternate-unit saving,
+reuse, explicit conflict selection, recovered drafts, stale responses, failed
+lookup with manual confirmation, and cancellation. These browser checks used
+disposable local accounts and did not change the user's recipes. They verify
+the conversion flow rather than claiming a run of the entire browser suite.
+
+
+### Independent cooking rows and recipe nutrition
+
+Optional meals.cooking_ingredients JSONB stores the complete ordered, stable-ID
+cooking list; optional meals.nutrition_input stores method, entered macro basis
+and source values. Legacy meals infer their mode from provided_nutrition. Existing
+meal_ingredients remain the nutrition-serving representation. The new cooking
+list wins for display and shopping whenever present, preventing duplicate rows.
+There are no synthetic foods or zero-weight nutrition servings. Source macros
+normalize into the existing provided_nutrition per-serving contract at save time;
+server validation checks agreement with source values and yield atomically.
+
+Existing authorized save/copy RPCs own metadata, validation and retry receipts.
+Cooking rows authorize optional food links against the caller's owned/system foods.
+Learning requires a real authorized identity and completed factors; no unfinished
+conversion or free-text name teaches the library. Focused group reads include
+linked conversion foods. Frozen copies clone food links and insert complete
+metadata before immutable-copy guards apply. Export inherits these meal fields;
+account deletion follows existing owner cascades. New private helpers have no
+client execution grants and table writes remain denied.
+
+Native-unit grocery reconciliation preserves legacy calculation when the new list
+is absent. Otherwise stable source/row identities plus canonical units identify
+requirements, preserving existing revision checks, override/checked/removal merge
+behavior. Personal portions and shared whole-batch requirements remain distinct.
+JSON metadata is bounded to the existing 100-ingredient limit. Client normalization,
+repository payload checks and RPC validation are covered by matching tests.
+
+
+Recipe nutrition rollout verification (2026-10-28): six forward migrations from
+20261027165719 through 20261027172255 were replayed by a clean local reset and
+deployed after the linked baseline matched all 12 schema fingerprint groups.
+The tested and deployed schemas match all 12 groups; all 118 local/remote migration
+versions agree and the final linked dry run is up to date. Generated public types
+were refreshed from that linked schema. A deployed authenticated save of cooking
+rows without foods verified source-basis storage and privilege denial inside a
+transaction that was rolled back, leaving no verification recipe behind.
+
+Verification passed 703 local tests, 35 repository tests, and 1,513 database
+assertions across 47 files. TypeScript, ESLint and production build passed. Focused
+browser coverage passed Create/Edit and remembered-conversion flows on mobile and
+desktop, including 200% text, source basis/yield, mode switching, recovery, explicit
+replacement measurements, stale requests, lookup failure and cancellation. One
+combined desktop run encountered a malformed development chunk; the automation-only
+build cache was cleared and its full desktop flow passed on a fresh server. The
+user's port-3000 server remained separate. Database lint reports only the existing
+unused p_payload warning in claim_deleted_recipe_images.
+
+### Grocery extra category classification and preferences
+
+The pure groceryCategory utility owns a versioned dictionary and normalized full-name keys. Exact aliases and full phrase coverage precede conservative Damerau-Levenshtein matching: one edit for words at least five characters, two for words at least ten, no fuzzy short-word matches. Equal-best cross-category candidates resolve to Other. Categories establish no food identity or conversion/aggregation assumptions.
+
+A focused authenticated get_grocery_category_preferences RPC returns scoped name/category/revision records outside AppSnapshot. Personal and group preference rows use distinct scope keys, RLS, no direct client writes and owner/group foreign keys for cleanup. Group reads verify current membership. Reset tombstones retain a null category and incremented revision to prevent stale preference overwrites. Personal preferences are included in account export.
+
+Existing personal add/quantity and shared grocery transactions accept optional category/preference intents, validate manual provenance and enum values, and save item changes and corrections atomically. Preference writes check captured revisions under scope/name locks; list/calendar revisions, group locks and retry receipts remain authoritative. Receipts retain saved items and prior categories for feedback. Automatic acceptance does not teach preferences. Recovered drafts retain explicit intents; late focused reads cannot replace them. Existing row categories survive refresh and transfer without backfill.
+
+Grocery category rollout verified on 2026-10-31: forward migration
+`20261031010836_grocery_extra_categories.sql` was applied after a clean local
+reset, 1,542 database assertions across 48 files, 37 authenticated repository
+tests, 735 local tests, TypeScript, ESLint, production build and focused personal/
+shared category and quantity browser flows. Mobile checks include 412 x 930 and
+200% text. One desktop geometry run encountered a transient detached DOM node;
+the complete desktop quantity flow passed on a fresh automation server. The local
+Edge Runtime required restarting after reset for existing preview tests. Database
+lint retains only the existing unused parameter warning in
+`claim_deleted_recipe_images`. All 119 local/linked migration versions and all
+12 tested/deployed schema fingerprints match; the final linked dry run contains
+no migrations, seeds or roles. Deployed authenticated personal/group preference
+reads and privilege-denial smoke checks passed without retaining test data.
+
+Personal and shared grocery add repositories apply the shared formatGroceryItemName utility before building the durable RPC payload. Capitalization is deterministic for retries, preserves remaining casing and does not alter normalized category preference keys. No schema migration or existing-row rewrite is required.
+
+### Focused grocery-name history read
+
+The typed loadGroceryNameSuggestions(query, groupId?) read calls get_grocery_name_suggestions, returning at most twelve deduplicated historical candidates with occurrence count and lastSeenWeek. It reads existing grocery rows rather than maintaining another learned-name store, and remains outside AppSnapshot. Personal reads verify auth.uid(), ownership and active calendar headers; group reads verify and lock current membership before reading that group's saved week JSON. Removed rows are excluded and checked/generated/manual rows are eligible. Existing ownership/list/group indexes support scoped scans; no new index or table is required.
+
+The pure grocerySuggestions utility merges the bounded history with canonical dictionary names, ranks match strength before source/frequency/latest list week/name, and limits UI output to six. Prefix checks treat user punctuation literally rather than as SQL wildcards. Recency uses the actual saved list week because shared grocery headers do not store per-item event timestamps. The API bounds queries to 256 characters, requires authenticated access even for short queries, denies anonymous execution and exposes no private helper execution.
+
+GroceryNameInput keeps read state local, waits 150 ms before history lookup and discards stale query/selection responses. Keyed account/group sessions discard cached candidates on scope changes. Only existing add transactions save chosen names, categories or preferences; draft selection has no durable side effects and preserves captured submission invalidation rules.
+
+Grocery-name suggestions rollout verified on 2026-10-31: migration
+`20261031015508_grocery_name_suggestions.sql` passed a clean local reset,
+1,560 database assertions across 49 files, 37 authenticated repository tests,
+742 local tests, TypeScript, ESLint and production build. Personal/shared browser
+flows passed on desktop and 412 x 930 mobile, including 200% text, IME handling,
+keyboard/pointer selection, stale/failed reads, recovered drafts and no-save-on-
+selection behavior. Existing category/capitalization/retry flows passed, and an
+additional lost-response test confirmed that reselecting the unchanged name
+preserves the retry key without duplicating the item. Local initialization and
+JWT timing retries were required before the final passing runs; authentication
+checks were preserved. Database lint retains only the existing unused parameter
+warning in claim_deleted_recipe_images. All 120 local/linked migration versions
+and all 12 tested/deployed schema fingerprints match, the final dry run has no
+pending migrations/seeds/roles, and deployed authenticated personal/group reads
+and privilege checks passed without retaining verification data. The live input
+was checked with the user's existing draft left unchanged.

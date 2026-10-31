@@ -325,7 +325,7 @@ and actual entries appear together. Logged entries use a mint checkmark button
 to undo that recorded meal immediately. A linked planned meal becomes pending
 again; an independent log disappears. Grouped recipes undo all their recorded
 ingredients together. The action keeps its retry identity and retains saved
-intake on failure. Meal names open Nutrition for corrections. Legacy skipped
+intake on failure. Meal names open Nutrition for read-only details and entry actions. Legacy skipped
 entries are excluded from Home.
 
 Home's lavender Workouts card combines weekly progress with today's prescribed
@@ -390,14 +390,44 @@ A linked logged entry cannot be removed through this action. The one-tap log
 intent rejects a second linked log even with a different retry key; deliberately
 reviewed legacy additional portions retain their existing contract. Unresolved
 nutrition explains why logging is disabled rather than disappearing from the
-plan. Nutrition retains Edit and a restore icon for legacy skipped rows. Linked
-Eaten rows retain edit/delete; deleting the last linked log restores its plan row.
+plan. Nutrition offers a restore icon for legacy skipped rows; unresolved entries
+can be removed and re-added with available nutrition. Linked Eaten rows retain
+an undo checkmark followed by an X Delete action; removing
+the last linked log restores its plan row.
 
 Independent logs do not consume a plan item. Older logs are linked only when a
 same-date, same-slot food or meal reference yields one clear pair; ambiguous
 history remains unlinked. Unresolved plans explain why logging is disabled
-until edited. Eaten entries retain expand, edit, and delete controls, including
-grouped meals and entries without a plan.
+until replaced with a valid entry. Eaten entries retain undo and X delete controls,
+including grouped meals and entries without a plan. Planned and Eaten rows show
+a stretched recipe image or the existing generic fallback at the left, a wrapping name
+and single-line horizontally scrolling nutrition strip in the center, and actions
+at the middle right at every viewport. Summary and actions remain vertically
+centered. The image reclaims the entry’s previous left padding without narrowing
+the text or control columns, stretches within fixed 10px left, top and bottom margins with centered cover cropping,
+and retains square mobile edges and the row’s left corner rounding on larger
+screens. Text and controls determine row height; focus and tooltips remain unclipped. A serving-only line beneath the name omits the meal slot:
+planned servings, saved grouped recipeServings, or standalone food servings.
+Missing or invalid grouped counts say “Servings not recorded” without inferring
+a count from the current recipe or ingredients. Main Planned entry pills display
+whole numbers without an approximate prefix; saved values and calculations keep
+their precision. Eaten estimate formatting and uncertainty cues remain unchanged.
+Visible Planned/Eaten/skipped captions and routine source captions are omitted,
+including planned recipe sources and standalone foods’ “your entry” and
+source/preparation captions. Accessible row labels retain status and meal names;
+action names and tooltips stay descriptive. Meaningful estimate ranges,
+estimated-entry confidence and unavailable-nutrition warnings remain visible.
+Source, preparation and assumption data remain saved and available in existing details. Their names open read-only details,
+with no inline ingredient expansion. Planned and Eaten recipe-backed entries
+open the linked recipe overview without an editing action; the Recipes section
+retains recipe editing. Missing-recipe groups and standalone foods show a
+read-only recorded-details modal with saved portions, nutrition, ingredient
+sources, preparation, confidence and assumptions. Missing information is labeled;
+no recipe or cooking instructions are fabricated from a log. Recipe nutrition
+does not replace or recalculate the logged portion. Closing returns focus to
+the triggering summary. Nutrition removes entry Edit controls and inline correction
+access at every viewport, without adding editing to details. Users remove and re-add
+an entry to change it; recipe-library editing remains available.
 Closing or changing days leaves recoverable per-date, per-slot drafts. Meal-entry planning requires a selected meal slot and a positive serving
 quantity, defaulting to one serving. It reviews the selected day's portion before
 adding a prescription without recording intake. A failed save retains that
@@ -418,7 +448,7 @@ For each food or meal, store:
 - Assumptions and confidence for estimated values
 
 Show daily totals compared with the user's targets. Include meals and snacks,
-with an easy way to correct or delete an entry. Missing or partially logged
+with an easy way to remove and re-add an entry when its saved portion needs to change. Missing or partially logged
 meals must be labeled clearly and must not be represented as zero intake.
 
 The Nutrition summary defaults to Eaten and offers a Planned / Eaten switch.
@@ -441,7 +471,14 @@ explicitly incomplete; empty tracks never imply recorded zero intake.
 Both modes share the same date/status, remaining-calorie ring and macro layout.
 Planned remaining calories describe room in the estimated plan target, not food
 already eaten. Incomplete planned calories leave the remaining ring unavailable.
-Eaten rows expose Edit and Delete; there is no Log again action. A correction
+Eaten rows expose a mint Undo meal log checkmark and a soft X Delete button;
+there is no Edit or Log again action. The X reuses Home’s icon and button style
+while retaining immediate eaten deletion; planned X removal still confirms. The checkmark reuses Home's immediate undo behavior for grouped
+meals and standalone foods. Grouped undo removes its recorded ingredients together;
+independent logs disappear and the last linked log restores its pending plan.
+Failures preserve the log and offer retry with the same intent identity. Successful
+undo refreshes the displayed week and returns focus to the slot's Add meal action.
+The existing correction mutation contract, used outside these Nutrition row controls,
 changes the existing entry rather than adding another intake record. Saved-recipe
 history opens a single Recipe servings field (including positive fractions) and
 previews nutrition from that entry's saved snapshots. New logs retain their actual
@@ -619,8 +656,8 @@ Implementation flow:
 5. Show matches, hidden-ingredient questions, assumptions, confidence, source,
    preparation basis, and serving sizes for confirmation.
 6. Let the user correct the food or portion before one atomic confirmation.
-   A confirmed composite meal creates one reusable recipe and one expandable
-   grouped history card; editing history does not edit the reusable recipe.
+   A confirmed composite meal creates one reusable recipe and one grouped
+   history entry with read-only details; later recipe editing does not rewrite history.
 
 The AI endpoint must never contain provider secrets in the Next.js browser
 bundle or any `NEXT_PUBLIC_*` variable. Extraction and estimate endpoints only
@@ -692,7 +729,7 @@ AI analysis action followed by review. Possible hidden ingredients remain
 excluded until selected, and supported units must resolve without guessed
 conversions. Users may add a reusable custom ingredient with a labeled serving,
 gram basis, preparation, category, and user-provided nutrition. Recipe ingredient
-selectors offer g, kg, mg, oz, ml, tsp, tbsp, cups and piece/s. Legacy source units
+selectors offer g, kg, mg, oz, lb, ml, L, tsp, tbsp, cups and pc/pcs. Legacy source units
 remain internal conversion inputs. Piece counts require a canonical piece basis or an explicit serving weight;
 missing conversions remain unresolved in review. Pending foods and the recipe
 save together. AI-only macro estimates cannot be saved through recipe
@@ -716,6 +753,41 @@ adjustment controls; it does not change nutrition or the profile cooking-time
 preference. Closing or a
 failed save retains the full recipe draft; explicit discard resets it.
 
+### Recipe-wide nutrition and optional conversions
+
+Create starts with Recipe-wide macros; existing recipes retain their method.
+Details offers Calculate from ingredients as the alternative. Recipe-wide mode
+requires explicit calories, protein, carbs and fat from a reference (the reference
+itself is optional), entered per serving or for the whole recipe. Source values
+and their basis persist. Whole-recipe values are divided by yield; per-serving
+values stay unchanged when yield changes. Ingredient edits never recalculate
+source-provided estimates. Switching methods retains draft rows, links, factors
+and macro entries; calculation mode requires every ingredient's nutrition basis.
+
+A cooking row has its own stable identity, name, amount/range or unmeasured text,
+unit, preparation note, optional status and optional food link. Recipe-wide rows
+need no nutrition source or gram conversion. They save, share, copy, plan, log and
+export without placeholder foods or invented serving weights. Existing nutritional
+ingredients remain a separate compatibility/calculation representation.
+
+Recipe and personal/shared grocery controls share g, kg, mg, oz, lb, ml, L, tsp,
+tbsp, cup/cups and pc/pcs. Internal aliases normalize; counts display 1 pc or 2 pcs.
+Verified mass/volume relationships convert automatically. Ingredient-specific
+weight conversions preserve explicit/saved/trusted precedence and conflict review.
+No density or piece size is inferred from names. An unknown conversion offers
+confirmation, explicit replacement measurement, or keeping the original. In
+recipe-wide mode an unfinished optional conversion never blocks saving: the last
+committed measurement is saved and the unfinished value is not applied or learned.
+
+Groceries from the new cooking list retain authored units and scale by planned
+recipe portions (shared cooking still purchases whole batches). Ranges use the
+upper bound, fractional mass/volume amounts remain, and counts round up after
+summing. Only identical linked identities and normalized units combine; unlinked
+rows from different recipes remain separate. Unmeasured extras remain descriptive
+and are not assigned invented shopping quantities. Existing history is unchanged.
+
+The following ingredient-nutrition requirements apply to Calculate from ingredients.
+
 Cooking quantities are separate from nutrition-record servings. Ingredients
 edits an amount, range or unmeasured description, unit, optional status and
 preparation note. Ranges use their upper amount for ingredient calculations.
@@ -735,9 +807,8 @@ saving. Addition is explicit, appends each selected row once, retains excluded
 suggestions and confirmed factors, and refreshes per-serving nutrition. Closing,
 reloading or a failed save preserves the full review and its conversion inputs.
 Changing an ingredient unit converts its quantity and both range bounds while
-preserving the ingredient weight. Create and Edit expose only g, kg, mg, oz, ml,
-tsp, tbsp, cups and piece/s, in that order, including suggestions and recovered drafts. Legacy source units remain
-convertible internally. Litres become ml, lb becomes oz, counts become pieces,
+preserving the ingredient weight. Create and Edit share the cooking-unit list above, including suggestions and recovered drafts. Legacy source units remain
+convertible internally. Counts normalize to pieces,
 and canonical servings become source-backed grams or pieces. The read-only
 overview keeps saved units. Exact volume conversion does not establish density;
 nutrition still requires trusted or confirmed weight.
@@ -752,8 +823,24 @@ The original amount remains active until a positive gram weight is confirmed.
 Cancel conversion retains the original amount; an excluded unresolved unit stays
 source context, never an extra picker option. Unresolved conversions block saving; their target, entered factor and known draft conversion bases
 survive closing, reload and reopening. Once confirmed, the target quantity,
-unit and conversion persist with the recipe. Draft-only alternate conversions
-are not added to the shared food catalog. Saved overviews continue displaying
+unit and every completed alternate conversion persist with the recipe. A successful
+recipe save or explicit personal copy also remembers these factors in the owner's
+account conversion library; failed saves, unfinished confirmations, excluded
+review rows and cancelled recipes teach nothing. Existing owned recipes, including
+archived ones, seed the library from their persisted factors. Older discarded
+alternates cannot be recovered. Learned personal conversions survive deletion
+of their original recipe or food and are included in export and account deletion.
+New unit changes reuse matching personal, default and currently accessible group
+recipe conversions. Food identity, source revision and preparation must match;
+names alone never authorize reuse. Explicit ingredient/draft factors take priority.
+One unambiguous saved weight is applied automatically with "Using saved conversion"
+and a Review or replace conversion action. Conflicting weights offer labeled
+source choices or a manually confirmed value, without choosing by recency. Equivalent
+factors use relative tolerance 1e-6 and existing household volume ratios. Group
+lookup access ends on departure; already saved personal copies remain personal.
+Read failures retain manual confirmation and drafts, and late responses never
+replace edited input. Alternate conversions are not written into the shared food catalog.
+Saved overviews continue displaying
 the authored cooking units without a separate unit switch.
 
 Opening a known predefined recipe with missing cooking metadata silently
@@ -969,7 +1056,7 @@ to account and week; older unscoped drafts remain recoverable in the current
 week. Adding an extra item to an empty week creates that week's list.
 Quantity drafts recover per account/week/item. Plus/minus and typing edit only
 the draft; Save confirms through the repository. Nonnegative fractional quantities
-up to 1,000,000 are supported. Cancel discards input. Failures retain drafts;
+up to 1,000,000 are supported. Existing-item steppers appear only during Edit. Minus and Plus sit inside the white quantity field, with the saved unit outside on its right. Both extra-item forms use the same control with their unit selector to its right; the personal form retains its minimum of one, and shared extras allow zero. Blank, invalid or out-of-range input blocks stepping and submission rather than silently replacing the typed value. Cancel discards input. Failures retain drafts;
 stale lists require refreshed-state review before retry. Below 768px, quantity
 and actions fill a second row; wider rows keep controls beside the name.
 
@@ -978,7 +1065,15 @@ week: each recipe ingredient is multiplied by planned servings divided by recipe
 yield; standalone foods are included, skipped entries are excluded, and totals
 are combined before rounding to whole grams or rounding pieces up. Unmeasured
 seasonings remain excluded; explicit quantified garnish assumptions remain
-included. User quantities are shown separately from generated requirements.
+included. The normal row shows the current shopping quantity without a repeated
+generated-quantity line. Items derived from a planned recipe or meal have a
+Generated badge; items added through the extra-item form have no origin badge.
+Transferred rows use their explicit personal-generated provenance before the
+internal custom/preservation flag; changing a quantity does not change origin.
+Carried-week and quantity-adjustment notices appear only when applicable. While
+editing a Generated item, show "Plan quantity: X unit" when the entered quantity
+(or saved quantity if the input is invalid) differs from its generated requirement.
+Generated requirements remain stored separately and never overwrite user corrections.
 
 The first version does not need store-specific pricing, inventory tracking, or
 online ordering.
@@ -1392,7 +1487,7 @@ Personal portions reuse the 25/30/30/15 percent calorie shares, rounded to edita
 
 In connected Generate plan, equal-height recipe cards contain inline minus, Batches and plus controls outside their selection labels. Titles retain a minimum height and wrap fully. Controls remain visible but disabled on unchecked recipes, accept 1–100 whole batches, and describe the selected recipe's maximum weekly servings accessibly. Both selected and unchecked cards show compact approximate-calorie, recipe-yield, total-time and complexity pills matching the main Recipes cards; visible source and batch-helper paragraphs are omitted. Temporarily blank or invalid edits stay local, invalidate acknowledgment and block preview requests and saving until corrected; valid values retain the existing defaults, debounce and recoverable drafts. Selected recipes are candidates with preference warnings and enforced structural planning limits, and retained shared meals count toward their batch allowance. The preview counts new per-person date/meal-time assignments, excluding meals already kept in the plan. Recipes to cook describes whole batches needed and leftover servings. A current incomplete preview shows one unfilled-meal message and an initially collapsed Review unfilled meals section grouped by date and meal slot. Its count represents affected meal times where at least one selected person was unfilled, not missing member assignments or skipped intake. Toggling that disclosure preserves input and acknowledgment. Unknown planning warnings and the no-meals-fit explanation stay visible outside the disclosure. Stale, loading and failed preview warning summaries are hidden; zero assignments still cannot be saved. Existing draft recovery and authoritative preview/commit behavior are unchanged. Recipes and both Generate dialogs append “(edited)” to confirmed customized defaults as display-only names. Owned customization links and the shared read model’s derived isEditedDefault flag identify these versions; same-name personal recipes and retained copies without provenance are not guessed to be edited defaults. Missing calories and time stay explicit, and missing complexity follows the existing Medium default.
 
-Grocery uses one week navigator, showing the shared list and separately labeled shared PHP spending first. Private extras — only you follows on the same page, with personal requirements, custom items and separately recorded personal spending. Existing items, recorded zero spending and recoverable drafts reveal this section; otherwise Add private extras expands it. Shared and private Refresh and editors remain independent; no automatic import, amount merge or privacy change occurs. Group groceries preserve custom items, quantity overrides, checked state, removals and independently recorded PHP spending. Personal groceries exclude group projections already bought in the shared list. Every member may edit group portions, recipes and skipped state through revision-checked saves; recorded intake remains intact.
+Connected Grocery shows one categorized list and one shared PHP spending total with a single week navigator, Refresh action and extra-item form. Private extras and separate private spending are removed. Each member enables sharing of their own historical, current and future saved weeks through the disclosed Generate PIN or Connect and share action; another member cannot give this consent for them. The notice explains all-week sharing, recorded spending added once, group retention after leaving, and separate draft review. Existing connected members receive a one-time Share groceries with your group dialog on Groceries, with Share groceries and Not now. Closing or Escape also saves a caller-only dismissal for that membership without consenting; Enable grocery sharing in Cooking group settings reopens review. New memberships require fresh consent. Transfers preserve separate matching rows, quantities, checked state, overrides and removals, and add each recorded spending amount once, including explicit zero. Unknown spending remains unknown. Each week transfers atomically with revision checks, durable receipts and resumable retries. Archived calendar copies are not imported again. Source weeks map to the group week containing their start date and retain provenance and review notices when regrouped. Future shared groceries include consenting members’ independent meal-plan requirements, shared cooking and manual extras without duplicating group projections. Device-local drafts remain unsaved until explicitly reviewed and saved to the group. A recovered spending draft replaces the final shared amount the member confirms. Leaving retains transferred purchases and spending with the group and archives the original personal source headers; fresh personal lists do not bring transferred history back or send it to another group. Unconnected accounts retain the personal grocery workflow. Nutrition logs, health data and meal history are not shared by grocery consent. Every member may edit group portions, recipes and skipped state through revision-checked saves; recorded intake remains intact.
 
 Replace mode protects linked planned-meal history even if the owner later corrects the actual entry's date or meal slot. A corrected actual entry never makes its original planned basis replaceable.
 
@@ -1504,3 +1599,21 @@ Saved recipes support logging their full set of up to 100 measured ingredients,
 including through a planned portion’s check action. AI-assisted meal reviews
 remain limited to 10 ingredients. An invalid count reports the actual limit;
 valid recipes with more than 10 ingredients do not require another review.
+
+### Automatic categories for extra groceries
+
+Extra-item entry suggests Produce, Protein, Dairy, Grains, Pantry or Other using a versioned deterministic dictionary, specific compound rules and conservative whole-word spelling matches. Explicit draft selections override scoped saved preferences, which override dictionary suggestions. Supported descriptors such as fresh do not prevent a match; unrelated extra words do. Ambiguous names fall back to Other. Matching never renames, links a nutrition food, converts quantities or merges items.
+
+Category is editable before Add and alongside quantity for manually added rows. Successful explicit corrections are remembered for the same normalized full name: personal choices remain private, and group choices remain group-scoped. Use automatic category clears a remembered choice on successful save. Existing rows retain categories until edited, including after regeneration and transfers. Generated rows cannot be recategorized through this control.
+
+After server confirmation, the existing accessible toast reports saved quantity, unit, name and destination: "2 pcs tomatos added to Produce." or "2 pcs tomatos moved to Produce." Manual items retain no origin badge. Drafts retain explicit choices; failed saves and Cancel teach nothing. Failed preference reads retain automatic suggestions with Retry. Late reads cannot overwrite explicit choices or cross account/group boundaries.
+
+New manually added grocery names are trimmed and their first letter is capitalized when saved, for both personal and shared lists. Remaining casing, acronyms and spelling are preserved. Existing saved items are unchanged; category preference keys remain case-insensitive.
+
+### Grocery item name suggestions
+
+Personal and shared extra-item forms offer up to six name suggestions after two non-whitespace characters. Dictionary matches appear immediately; an authenticated history read follows a 150 ms debounce. History includes saved generated ingredients and manual extras, including checked items, but excludes removed rows and inactive personal headers. Personal history stays account-scoped; shared history is limited to the current group.
+
+Exact, phrase-prefix and word-prefix matches rank ahead of dictionary spelling fallback. Within a match tier, historical names take priority, followed by frequency, latest saved list week and alphabetical order. Suggestions are deduplicated by the existing Unicode/case/whitespace key. Dictionary recognition aliases use canonical suggestion spellings, while historical names retain saved spelling and casing with first-letter formatting.
+
+Choosing a suggestion updates only the draft name, preserves quantity/unit and resolves its category through existing rules. Add still saves the item. Arbitrary names remain valid. Escape, Tab and blur never select automatically; Enter selects the active option without submitting while the dropdown is open. Failed reads retain dictionary suggestions and input with Retry past items. Late responses never replace typed or selected text, and selecting a suggestion creates no durable facts.

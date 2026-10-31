@@ -15,6 +15,7 @@
 
 # debug
 npm-debug.log*
+/debug.log
 
 # env files (only .env.example is committed)
 .env

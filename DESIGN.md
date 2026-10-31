@@ -153,7 +153,11 @@ tints and rounded corners; screens are stat-focused and mobile-first.
   plan. Right-hand metrics show completed/scheduled workouts and approximate weekly
   energy; unavailable energy is explicit, never a numeric zero placeholder.
   A soft-white Today's workout section retains title, focus, exercise count,
-  estimated duration and progression explanation. Transparent 44px calendar and
+  estimated duration and progression explanation. Its workout row spans the
+  full outer Workouts card width with square corners at every viewport; interior
+  horizontal padding matches the card's 20px mobile / 23px desktop inset.
+  The section heading, rest-day copy and progression explanation remain inset.
+  Transparent 44px calendar and
   Start/Resume/View actions have hover/focus tooltips. Completed workouts link to
   Workouts rather than entering the auto-start logger. Rest days keep their copy.
 - Steps defaults to today and uses the selected date's confirmed count/target,
@@ -527,6 +531,92 @@ header and the avatar, not from the bottom nav.
 
 ### Nutrition day card
 
+Below 640px, Nutrition uses flat inner panels inside the rounded Planned and
+Recipes containers. Planned and eaten meal lists extend through the outer
+20px horizontal padding; each pale pink entry has square corners, a stretched
+image inset 10px from the left, top and bottom, the existing right inset and vertical gaps. Recipe cards, including
+shared recipes, span the container width without their own rounded corners or
+shadow, with a subtle bottom divider. Their square-corner cover surfaces are
+156px tall and retain the existing image crop; titles, favorites, resource pills
+and supporting content retain a 20px inset. Section and slot headings, toolbar
+controls, dividers, warnings and loading/error/empty messages remain inset.
+Focus outlines and tooltips remain visible. At 640px and wider, the existing
+card spacing, rounding, shadows and recipe grid remain. This treatment is an
+opt-in presentation variant and does not change other shared-component uses.
+
+At every viewport, Planned and Eaten entries use an inline layout: a stretched
+recipe image strip at the left, a flexible name/portion and nutrition column,
+and two 44px controls at the middle right, separated by 8px gaps. Names wrap fully,
+including long words. The summary and action group are vertically centered
+within the row. Nutrition uses MealRow’s centered inline alignment and opt-in
+edgeToEdgeThumbnail presentation. The image column reclaims the original left inset
+plus the 40px thumbnail column: 60px below 640px and 52px at larger widths at the
+base font size. The image has fixed 10px left, top and bottom margins inside that
+column, making its visible width 50px on mobile and 42px on larger screens.
+The reclaimed inset portion scales with enlarged text; the 10px margins do not. Image-to-summary
+spacing stays 8px, and summary/action positions retain their previous space.
+The image stretches between its top and bottom margins; text and controls drive
+row height, with a 40px minimum image height. Vertical padding belongs to the
+summary and action areas. RecipeCover’s opt-in fill mode uses centered object-cover
+cropping without an intrinsic square aspect constraint or distortion. Only the
+image wrapper clips: square on mobile and matching the row’s left corner rounding
+on larger screens. Row focus outlines and tooltips remain visible. Shared defaults,
+Home thumbnails, Recipes covers, loading behavior and fallback imagery remain unchanged.
+Nutrition opts into MealRow’s home-meal tone: the opaque home-meal color token
+mixes 85% white with 15% blush-100 to match the lighter meal rows inside Home’s
+layered Today’s meals card. The whole entry, including image margins, uses this
+surface at every width. Other MealRow uses retain the default lavender tone;
+Home’s existing overlays and recipe-card surfaces remain unchanged.
+Each name is followed by a serving-only line such as “1 serving” or “0.5 servings”;
+meal slots appear only in their section headings. Grouped Eaten rows use saved
+recipeServings; standalone foods use saved food-serving counts rather than an
+inline ×N suffix. Missing or invalid grouped portions say “Servings not recorded”;
+they are never inferred from current recipes, ingredient quantities or nutrition ratios.
+Visible Planned, Eaten and Planned · skipped captions are omitted. Accessible
+row labels identify each entry as planned, eaten or skipped and include its name;
+action names and tooltips retain their existing meanings.
+Recipe-backed entries reuse the saved recipe cover; foods and missing images use
+the existing generic fallback rather than an invented ingredient photo.
+Main nutrition pills form one non-wrapping horizontal strip at every width. Only
+the strip scrolls; names, actions and the page stay within their available width.
+Overflowing strips support touch, trackpad and keyboard scrolling, receive a tab
+stop, visible focus outline and assistive scroll instruction. Non-overflowing
+strips add no tab stop. The strip is separate from the details-opening button.
+Below 640px, known macros use P, C and F labels such as P 35g or P ≈45.5g;
+640px-and-wider layouts retain full visible macro names. Calories retain kcal.
+Main Planned entry pills round their displayed values to whole numbers without
+an approximate prefix, for example 1021 kcal and P 46g. Stored precision and
+calculations remain unchanged. Eaten formatting, including its existing estimate
+markers and ranges, is retained. Metric colors remain; screen readers receive
+full macro names and gram units. Missing or invalid nutrition stays explicit.
+Other shared-component uses retain their default labels and wrapping.
+
+Main Planned and Eaten summary pills below 640px match the compact Recipes pill
+spacing: 8px horizontal and 4px vertical padding, a 16px line height and 4px gap
+at the base font size, scaling with enlarged text. Other pill uses and the
+640px-and-wider sizing remain unchanged. Eaten entries show the shared mint undo
+action followed by a soft X icon button that retains the previous Delete action.
+The X matches Home’s 44px remove control; eaten deletion remains immediate, while
+planned removal retains its confirmation. Nutrition entry Edit controls and inline
+correction entry points are removed at every viewport, with no replacement in details. Nutrition uses a
+full 44px mint circle with a centered checkmark, matching the group’s circular
+controls. Home retains its transparent 44px target and inset 32px mint circle.
+Both are named “Undo logged [meal]” with an “Undo meal log” tooltip. Undo uses
+the saved record's kind, ID, revision and stable retry key;
+pending actions lock and failures retain the log with inline retry feedback.
+Successful undo refreshes the selected week and returns focus to the slot's Add meal button. Linked plans
+become pending when their last log is removed; independent entries disappear.
+
+Meal-entry names open read-only details at every viewport. Planned and Eaten
+recipe-backed entries use Recipe overview without Edit or Save personal copy,
+retaining Details, Ingredients and Instructions tabs and focus return. Recipe
+nutrition remains distinct from the saved logged portion. Eaten entries have no
+disclosure arrow or inline ingredient expansion. Missing-recipe grouped logs
+and standalone foods open Recorded meal details with saved portions, nutrition,
+sources, preparation, assumptions and uncertainty; missing data stays explicit.
+Nutrition entries have no Edit action. Recipe-library openings retain their editor or
+Save personal copy action. Loading and retry preserve the entry’s read-only mode.
+
 The existing pastel summary has Previous week / Today / Next week controls above
 the day strip. The week range is assistive-only text describing this navigation
 group. A wrapping Planned / Eaten segmented control sits in the upper-right action group, with Eaten
@@ -565,15 +655,10 @@ meals once and standalone food rows separately. “No meals eaten” describes n
 entries, while the ring/macros and contextual help continue to distinguish unknown
 intake from recorded zero nutrition.
 
-Editing a saved-recipe Eaten row opens a compact servings review rather than
-ingredient selectors. The recipe name and saved date/slot provide context above
-one Recipe servings input, which receives focus. Nutrition pills preview the
-corrected historical portion (whole calories and at most one macro decimal).
-Save correction and Cancel wrap without clipping at narrow widths or enlarged
-text; both return focus to the row's Edit control after closing. Pending saves
-disable inputs, dismissal and competing row actions. Errors retain the portion.
-Older history with no reliable portion adds a labeled Previously logged recipe
-servings input; it never substitutes a guessed one-serving basis.
+Nutrition meal-entry rows and their details no longer expose correction controls.
+To change an entry, remove it and add the intended portion again. Saved history
+is not recalculated from a later recipe edit. Existing correction domain contracts
+and editors used by other workflows remain unchanged.
 
 Planned and Eaten share one summary layout: date/status/help beside a 96px
 remaining-calorie ring, a calorie/target line, then the three macro progress rows.
@@ -607,20 +692,25 @@ Four Breakfast, Lunch, Dinner, and Snack groups contain multiple planned and
 Eaten rows. These labels distinguish prescription from intake without a
 separate Logged section. Empty groups retain their headers without placeholders. Daily summary and help retain
 the distinction between unknown intake and zero. Planned
-and Eaten entries share compact lavender rows with a status, name, wrapping
-calorie/protein/carbohydrate/fat pills, source context and right-aligned actions.
+and Eaten entries share compact pale pink rows with an inset, stretched image strip, an accessible
+status label, a wrapping name, horizontally scrolling calorie/protein/carbohydrate/fat pills, uncertainty warnings
+and vertically centered right-side actions at every width. The generic “mixed sources” caption is omitted;
+meaningful AI ranges, estimated-entry confidence and missing-nutrition warnings
+remain visible. Planned source captions, standalone “your entry” badges and
+source/preparation captions are omitted from rows. Their underlying data and
+existing recipe/recorded-detail information remain available.
 They have no image banners, recipe yield/time/complexity pills or favorite controls.
 Planned values describe the displayed planned portion; Eaten values come from
-saved history. Planned recipe summaries open the overview. Actions wrap below
-the summary when space is limited; expanded details/editors remain inside the row.
-Planned rows retain Edit and use tooltip-equipped check/X icons. Check immediately
+saved history. Planned and Eaten recipe summaries open the read-only overview.
+Rows have no Edit action or inline correction controls.
+Planned rows use tooltip-equipped check/X icons. Check immediately
 logs the saved planned portion; X opens Remove planned meal? with Cancel initially
 focused, the meal/date/slot and a danger Remove meal action. Legacy skipped rows
 have a restore icon. Pending mutations lock competing actions; failures retain
 the row and retry identity. A successful linked log hides its Planned row to
 avoid repetition while keeping the plan snapshot intact. Linked Eaten rows
-offer Edit and Delete without Log again; deleting the last linked Eaten row
-reveals Planned again. Eaten rows retain expand, edit, and delete.
+offer Undo and an X Delete action without Log again; deleting the last linked Eaten row
+reveals Planned again. Eaten names open a modal rather than expanding inline.
 Meal-entry reviews retain separate Log meal and Add to plan actions with a positive
 portion and the selected meal slot. Actions have 44px or larger touch targets.
 Meal entry focuses its search field after draft recovery, or the portion field
@@ -701,13 +791,12 @@ filters. No matches, empty collection, shared loading/error and unavailable
 favorite metadata have distinct feedback. Filters remain page-session state.
 
 Meal duplication is removed; ordinary Create and Edit draft recovery remains.
-Planned rows retain Edit beside the check/X actions. Expanded editors follow
-the summary; removal uses the shared confirmation modal. Opening Planned Edit focuses its
-choice field
-after draft recovery; cancellation or successful saving returns to Edit.
+Planned rows use the shared check/X actions without Edit. Removal uses the shared
+confirmation modal; logging and successful removal return focus to the slot’s Add meal action.
 Lists preserve slot grouping and ordering. Planned/Eaten rows remain a single
 column; Saved cards use one column on phones and up to two where space permits.
-Pills/actions wrap at enlarged text sizes. Fine-pointer
+Main meal pills scroll horizontally and their two controls stay beside the wrapping
+name at enlarged text sizes. Other pill and action groups retain their wrapping behavior. Fine-pointer
 hover lifts the card slightly, entry fades briefly, and confirmed hearts pulse;
 reduced motion disables these effects.
 
@@ -798,7 +887,7 @@ inactive panel. New recipes use “Save”; editing uses “Save changes”.
 The modal heading wraps within its allocated width at enlarged text sizes;
 its separate 44px close target retains room without overlapping the title.
 
-Clicking a saved-meal name or thumbnail opens a read-only “Recipe overview”
+Clicking a recipe-library name or thumbnail opens “Recipe overview”
 using the same cover and tabs. Its footer offers Close and Edit for owned and
 predefined recipes. The predefined editor explains that saving creates a
 personal version and retains existing planned/logged references. Saved cards offer Edit for predefined and personal recipes; eligible editors
@@ -867,8 +956,8 @@ failure retains visible feedback and Retry. Nutrition pills are confined to
 Details, where they update after ingredient edits. Normal cooking rows omit
 nutrition-record serving/source lines. A range has separate lower/upper fields;
 unknown unit conversions link to Nutrition basis rather than guessing a weight.
-Recipe authoring selectors contain exactly g, kg, mg, oz, ml, tsp, tbsp, cups and
-piece/s, including provider review and recovered drafts. Excluded source units
+Recipe authoring selectors contain g, kg, mg, oz, lb, ml, L, tsp, tbsp, cups and
+pc/pcs, including provider review and recovered drafts. Excluded source units
 convert by measurement type; unresolved amounts remain labeled as original
 quantities beside confirmation controls, without additional picker options.
 The overview keeps saved cooking units.
@@ -881,6 +970,15 @@ confirmations receive focus when Ingredients is opened, while the initial
 Details/name focus stays unchanged. The preview rounds for readability while
 the converted quantities retain calculation precision. Controls wrap within
 the existing ingredient layout at 320px and enlarged text sizes.
+Successful recipe saves remember completed conversions automatically, with no
+remember checkbox. Matching saved values are reused with a small "Using saved
+conversion" status and Review or replace conversion action. If saved weights
+disagree, Confirm conversion presents native radio choices with exact grams per
+unit and personal/default/shared recipe source descriptions, plus the existing
+manual input. Nothing is preselected by recency. Candidate text wraps within the
+ingredient row and choices have at least 44px targets. Lookup progress and failure
+copy keep manual confirmation available; delayed results do not change edited
+input. Source choices are presentation state rather than persisted draft content.
 The overview keeps saved cooking units. A stale predefined recipe shows a
 loading message before opening; failed refresh offers Retry recipe and Cancel
 without adding a success toast or discarding drafts.
@@ -908,19 +1006,26 @@ The weekly list explains that the form adds items outside the meal plan. On
 narrow screens, the item-name input takes a full row so entered text stays
 readable; quantity, unit, and Add form a right-aligned group below it. At 768px
 and above, the controls share one vertically aligned row with Item. The group
-may wrap when enlarged text needs more room. Quantity and unit retain their
-existing widths and action targets stay at least 44px. The item name has a
-descriptive accessible label, and an in-progress item remains a recoverable
-draft until it is saved. Category cards span the available width. At 768px and above, each item keeps
+wraps when enlarged text needs more room. Both add-item forms use an inset white
+quantity control with Minus, a decimal input, and Plus, with the unit selector
+outside on its right. Add remains a separate action. Targets are at least 44px.
+Category cards span the available width. At 768px and above, each item keeps
 its completion checkbox, wrapping name/metadata and quantity controls on one row.
 Below 768px, controls fill a second row. Normal mode shows quantity/unit, Edit
-and Delete. Edit reveals Plus, a growing decimal field with its unit, Minus,
-a primary Save check, Cancel X and Delete. Cancel moves below the main row,
-aligned right, if the control group is too narrow. The quantity unit stacks below
-the number when necessary so it does not squeeze the editable value. Icons retain 44px targets;
-keyboard focus is separate from selection. Enter saves and Escape cancels.
-Only Save persists quantity changes; adjustments remain drafts until confirmed.
-Week controls wrap when their labels need more room.
+and Delete. Edit uses the same inset control followed by the saved unit on its
+right, then Save, Cancel and Delete. Units never stack below the edited number.
+Action buttons wrap below the quantity/unit group before squeezing its input.
+When the white field has less than 160px, its numeric input occupies the first
+row and its inset buttons share the next row; below 88px those buttons stack.
+The outside unit stays aligned with the numeric row. Container widths, rather
+than viewport breakpoints, control these fallbacks, including at 200% text.
+Each control has its own visible keyboard focus. Enter saves and Escape cancels.
+Only Save persists quantity edits; adjustments remain recoverable drafts until
+confirmed. Blank or invalid quantities disable stepping and submission with
+explicit guidance. Row/shared quantities support zero through 1,000,000; the
+personal extra-item form retains a minimum of one. Steps change the quantity by
+one, clamp to the existing limits, and retain decimal values without arithmetic
+artifacts. Week controls wrap when their labels need more room.
 
 The list heading is “Grocery list”; its help explains recipe-yield scaling,
 skipped meals and unmeasured exclusions. Generated quantities and “adjusted by
@@ -1236,8 +1341,8 @@ targets, and show text with icons from 768px. Headers wrap at narrow widths.
 Empty selection has specific guidance and cannot
 be saved.
 
-Generated preview assignments reuse the Planned section's compact lavender meal
-rows. Each read-only row shows the full date, bold meal name, meal slot, and serving
+Generated preview assignments use the shared compact meal rows with their default
+lavender tone. Each read-only row shows the full date, bold meal name, meal slot, and serving
 count, without nutrition pills, source details, or saved-meal actions. The preview
 count uses singular meal for one assignment and plural meals otherwise.
 
@@ -1245,6 +1350,17 @@ Day strips, week navigators, Progress weekday headers and workout cards follow
 the account preference. Existing dates and today indicators remain unchanged.
 Grocery lists show a regrouping review notice and identify carried edits by their
 source week. Loading/error states remain distinct from genuinely empty weeks.
+
+Generated grocery item names have a compact title-case Generated badge. Items
+added manually through the extra-item form have no origin badge. Shared transfers
+use personalGenerated provenance, because their
+custom flag also serves internal preservation and is not a display label.
+Normal rows show only the current quantity and unit, without the repeated
+"generated X unit" line. Carried-week and adjustment notes render only when
+applicable. The quantity editor shows "Plan quantity: X unit" for Generated
+items whose draft quantity differs from the generated requirement, falling back
+to the saved quantity for invalid drafts. Long names and badges wrap naturally;
+checkboxes, quantity controls, focus behavior and 44px actions stay unchanged.
 
 ### Approved shared recipe additions
 
@@ -1265,11 +1381,11 @@ Current preview gaps show Some meal slots are still unfilled once, followed by a
 
 The 2026-10-21 compact-pill/edited-default refinement passed 519 local tests, 1,302 database assertions across 40 files, and desktop/mobile cooking-group flows with local fixture cleanup. Dialog checks cover 320, 390, 469, 570, 594, 760 and 1440px, 200% text, reduced motion, keyboard focus, current-preview acknowledgment, draft recovery and loading/error/empty feedback. TypeScript, ESLint and the webpack production build passed. Browser verification uses an isolated webpack test server.
 
-Settings uses the existing lavender card, member initials and display names, a privately shared one-use PIN, explicit consent and a connected-success modal. Shared access is explained before confirmation; emails and health measurements are omitted. Shared week proposals sit beside member controls, and the ordinary week preference points to this agreement flow.
+Settings uses the existing lavender card, member initials and display names, a privately shared one-use PIN, explicit consent and a connected-success modal. Profile and action groups wrap at enlarged text sizes; target tiles use available-width columns, and Settings help headings may wrap their controls to avoid overflow at 320px with 200% text. Shared access is explained before confirmation; emails and health measurements are omitted. Shared week proposals sit beside member controls, and the ordinary week preference points to this agreement flow.
 
 Nutrition and Grocery have no Personal/Group segmented control. Nutrition retains the daily calendar, targets, Planned/Eaten rows and owned recipes, with one combined Recipes section. A soft Overview button sits immediately left of Generate and opens Cooking overview for the displayed week. Recipe cards lead with saved-version cooking totals; expandable Meal distribution lists contain chronological member assignments and editing controls. Cooking overview marks the signed-in member as “(you)” in recipe participant lists and assignment labels using account IDs, so matching display names do not merge different members. Shared assignment Edit opens the modal, expands the relevant recipe and focuses its matching editor. Modal close restores focus to its entry point. There is no inline cooking schedule or separate Shared recipes gallery. Canonical defaults appear once, customized variants remain distinct, and Recipe overview shows Shared by: display name or Source: Default recipe. One Generate entry opens Generate plan, with People defaulting to all members; the dialog explains that selecting only yourself still contributes to shared groceries and unchecking others preserves their meals. No alternate personal-generation action appears while connected. The planner reuses existing modal, day tiles and recipe-card patterns, with People, Fill/Replace radios, batch limits, editable estimated portions, replacement review, whole-batch cooking and leftovers. Hidden native recipe checkboxes retain keyboard behavior. Bulk controls show icons below 768px and text with icons above that breakpoint.
 
-Grocery shares one week navigator across Shared grocery list and Private extras — only you. Shared spending and Private spending remain separately labeled. The private section opens for existing items, recorded spending (including zero), recovered drafts and loading/error feedback; otherwise Add private extras offers disclosure. Each list retains its own Refresh, add-item controls and feedback. Navigation and conflicting controls lock during either scope's submission. Shared groceries reuse explicit quantity and PHP amount editors with account/group/week/item drafts, captured revisions and review-before-retry. Shared recipe overview reuses ingredient/instruction tabs and offers Save personal copy. Generation attribution uses “Recent: <display name>, <MM/DD/YY>” across Nutrition, Cooking overview and Grocery. Generation success uses the modal title “You're all set!”, followed by generation details, an Overview h3 and the recipe-cover grid with participant names and saved cooking totals. The former general saved-summary explanation is omitted; superseded generations retain their separate notice. Done spans the footer content width below 640px with the standard horizontal padding, and keeps its content-sized appearance and alignment at larger widths. One acknowledgment remains shared by Nutrition and Grocery, with existing dismissal and focus restoration. Full dates remain accessible, controls retain 44px targets and layouts wrap at enlarged text sizes.
+Connected Grocery uses one week navigator, one categorized Grocery list, one Refresh action, one add-item form and one shared PHP spending editor. There is no Private extras disclosure or separate private-spending panel. Shared with names identify the audience. Each member explicitly consents to sharing their own all-week history, future independent meal-plan ingredients and extra items, and adding recorded spending. A concise notice precedes Generate PIN and Connect and share; those actions accept grocery sharing without a separate checkbox. Existing connections receive a one-time Share groceries with your group modal with Share groceries and Not now. Closing or Escape saves dismissal for that membership; Settings retains Enable grocery sharing. Groceries has no large consent card. Authorized transfers resume on opening Groceries or Cooking group settings, with compact progress and retry feedback within the Grocery list or settings; matching items remain separate. Unsaved personal drafts remain device-local and are reviewed before saving to the group. Recovered spending drafts require confirmation of the final shared total rather than automatic addition. Unconnected accounts retain personal groceries. Navigation and conflicting controls lock during submissions. Shared groceries reuse explicit quantity and PHP amount editors with account/group/week/item drafts, captured revisions and review-before-retry. Shared recipe overview reuses ingredient/instruction tabs and offers Save personal copy. Generation attribution uses “Recent: <display name>, <MM/DD/YY>” across Nutrition, Cooking overview and Grocery. Generation success uses the modal title “You're all set!”, followed by generation details, an Overview h3 and the recipe-cover grid with participant names and saved cooking totals. The former general saved-summary explanation is omitted; superseded generations retain their separate notice. Done spans the footer content width below 640px with the standard horizontal padding, and keeps its content-sized appearance and alignment at larger widths. One acknowledgment remains shared by Nutrition and Grocery, with existing dismissal and focus restoration. Full dates remain accessible, controls retain 44px targets and layouts wrap at enlarged text sizes.
 
 ### Advisory preference review in Generate
 
@@ -1304,5 +1420,42 @@ Use the shared scrollable modal, retained per-slot drafts, visible keyboard focu
 check logs its saved portion directly, without opening this review flow. The X
 opens Remove planned meal? with the meal/date/slot, a focused Cancel button and
 pastel-danger Remove meal. Errors remain in the confirmation for retry. Nutrition
-uses these same icon actions, retains Edit and a legacy restore icon, and no
-longer places an inline entry form or empty placeholder beneath slot headings.
+uses these same icon actions and a legacy restore icon, without entry Edit.
+There is no inline correction form or empty placeholder beneath slot headings.
+
+
+### Recipe nutrition method and optional conversion flow
+
+Details begins with the labeled Nutrition method select. New recipes select
+Recipe-wide macros; existing recipes show their saved method. Recipe-wide mode
+shows a Macro basis selector (Per serving / Whole recipe), four explicit source
+values, the derived opposite basis, and concise yield/estimate guidance. Switching
+to ingredient calculations retains entered values and exposes unresolved nutrition
+requirements. Source-wide totals never silently change after cooking-row edits.
+
+Ingredients offers Add cooking ingredient independently of food search. Rows retain
+the existing name/amount/range/unit/note/optional controls; Link food for nutrition
+or conversions is optional in recipe-wide mode. Shared labels include cups, tbsp,
+tsp and pc/pcs alongside mass and volume units. Unknown cross-unit conversion keeps
+the committed measurement while offering Confirm conversion, Enter a new measurement,
+and Keep original. A replacement amount starts blank, includes both range bounds,
+and states that it is not a weight equivalence. Optional unfinished conversions do
+not disable recipe-wide saving, and the explanation states what will be saved.
+
+The same compact grocery quantity controls display authored units and pluralized
+counts. Input labels, native selectors, visible focus, existing 44px touch targets,
+wrapping source descriptions and responsive recipe tabs remain the visual contract.
+
+### Grocery category suggestions and corrections
+
+Both extra-item forms retain name, quantity/unit and Add, with a visible Category selector beneath the entry controls. Reuse existing input tokens, six category sections, full-width mobile wrapping and 44px targets. Suggestions appear before Add without a confirmation step. Remembered choices show "Using your saved category" or "Using the group's saved category." Use automatic category clears the preference only when Add/Save succeeds.
+
+Manual-row Edit includes Category beside the quantity editing flow; Generated rows remain quantity-only. Cancel retains saved values. Category changes move the row between cards and restore focus to its Edit control after refresh. Normal rows gain no category or Manual badge. The existing polite toast host announces saved quantities and units, including pc/pcs and cup/cups: "2 pcs tomatoes added to Produce." or "2 pcs tomatoes moved to Produce." Failed saves do not show success. Failed lookups offer Retry categories while built-in suggestions remain usable. Stale preferences show the latest category and explicit review while retaining input. Long names, large text and keyboard controls wrap within cards.
+
+Grocery extra names remain as typed in recoverable drafts. Add saves the name with its first letter capitalized, preserving remaining casing; the row and success toast use that saved name.
+
+### Grocery name autocomplete
+
+Both extra-item forms reuse GroceryNameInput with existing labels, name drafts and input tokens. A fixed Floating UI portal anchors a wrapping white listbox to the input, flipping/shifting within an eight-pixel viewport margin and scrolling when necessary. Show at most six name-only options after two non-whitespace characters; rows have at least 44px targets. No automatic text replacement occurs while typing, on blur or from read responses.
+
+The combobox retains DOM focus while Arrow Up/Down changes the active descendant. Enter selects the active option and blocks form submission while open; Escape dismisses; Tab leaves without selection. Pointer selection fills the name, closes the popup and preserves focus, quantity and unit. IME composition suppresses suggestions and Enter interception until composition ends. Failed history reads show compact Retry past items guidance while dictionary suggestions remain usable. Recovered names stay unselected until the user opens or types in the field. Category, Add, first-letter capitalization and authoritative save-toasts retain their existing behavior.
