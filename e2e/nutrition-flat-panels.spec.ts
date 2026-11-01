@@ -122,6 +122,108 @@ async function expectPanelGeometry(page: Page, planned: Locator, recipes: Locato
   expect(pageWidth.scroll, JSON.stringify(pageWidth)).toBeLessThanOrEqual(pageWidth.width + 1);
 }
 
+test("Nutrition filter pills preserve selection, modal drafts, keyboard navigation and responsive layouts", async ({ page }, info) => {
+  await page.setViewportSize({ width: info.project.name === "mobile" ? 412 : 1440, height: 930 });
+  await page.goto("/nutrition");
+  const recipes = page.getByRole("region", { name: "Recipes", exact: true });
+  const cards = recipes.locator(".recipe-card");
+  await expect(cards.first()).toBeVisible();
+  const initialCount = await cards.count();
+  const trigger = recipes.getByRole("button", { name: "Filter recipes", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Filter recipes", exact: true });
+  const search = dialog.getByRole("searchbox", { name: "Recipe name", exact: true });
+  const pill = (name: string) => dialog.getByRole("button", { name, exact: true });
+  const time = (name: string) => dialog.getByRole("radio", { name, exact: true });
+  await trigger.click();
+  await expect(search).toBeFocused();
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await expect(dialog.getByRole("combobox")).toHaveCount(0);
+  await expect(time("Any time")).toBeChecked();
+  await pill("Default recipes").focus(); await page.keyboard.press("Space");
+  await expect(pill("Default recipes")).toHaveAttribute("aria-pressed", "true");
+  await pill("My recipes").press("Enter");
+  await expect(pill("My recipes")).toHaveAttribute("aria-pressed", "true");
+  await pill("Lunch").click(); await pill("Dinner").click();
+  await pill("Easy").click(); await pill("Medium").click();
+  await expect(pill("Lunch")).toHaveAttribute("aria-pressed", "true");
+  await expect(pill("Dinner")).toHaveAttribute("aria-pressed", "true");
+  await expect(pill("Easy")).toHaveAttribute("aria-pressed", "true");
+  await expect(pill("Medium")).toHaveAttribute("aria-pressed", "true");
+  await pill("Dinner").click();
+  await expect(pill("Dinner")).toHaveAttribute("aria-pressed", "false");
+  await time("Any time").focus(); await page.keyboard.press("ArrowRight");
+  await expect(time("Up to 15 minutes")).toBeChecked();
+  await expect(time("Up to 15 minutes")).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(time("Up to 30 minutes")).toBeChecked();
+  await expect(dialog.getByRole("radio", { checked: true })).toHaveCount(1);
+  await expect(cards).toHaveCount(initialCount);
+  await pill("Reset").click();
+  await expect(dialog.locator('button[aria-pressed="true"]')).toHaveCount(0);
+  await expect(time("Any time")).toBeChecked();
+  await search.fill("KOREAN BEEF"); await pill("Default recipes").click();
+  await pill("Apply filters").click();
+  await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
+  await expect(cards).toHaveCount(1);
+  await expect(recipes.getByText("2 active filter categories", { exact: true })).toBeVisible();
+  await trigger.click();
+  await expect(search).toHaveValue("KOREAN BEEF");
+  await expect(pill("Default recipes")).toHaveAttribute("aria-pressed", "true");
+  await pill("My recipes").click(); await pill("Cancel").click();
+  await expect(trigger).toBeFocused(); await trigger.click();
+  await expect(pill("My recipes")).toHaveAttribute("aria-pressed", "false");
+  await pill("Reset").click(); await page.keyboard.press("Escape");
+  await trigger.click(); await expect(search).toHaveValue("KOREAN BEEF");
+  await pill("Reset").click(); await search.fill("creamy lemon");
+  await pill("Lunch").click(); await pill("Easy").click(); await time("Up to 30 minutes").check();
+  await pill("Apply filters").click();
+  await expect(cards).toHaveCount(1);
+  await expect(recipes.getByRole("button", { name: "View recipe: Creamy Lemon Chicken", exact: true })).toBeVisible();
+  await trigger.click(); await expect(time("Up to 30 minutes")).toBeChecked();
+  await search.fill("discard close"); await pill("Close filter recipes").click();
+  await expect(trigger).toBeFocused(); await trigger.click(); await expect(search).toHaveValue("creamy lemon");
+  await pill("Reset").click(); await pill("Apply filters").click();
+  await expect(cards).toHaveCount(initialCount);
+  await trigger.click(); await pill("My recipes").click(); await pill("Apply filters").click();
+  await expect(recipes.getByText("No recipes match these filters.", { exact: true })).toBeVisible();
+  await recipes.getByRole("button", { name: "Clear filters", exact: true }).click();
+  const addFavorite = recipes.getByRole("button", { name: "Add to favorites: Korean Beef Bowl", exact: true });
+  if (await addFavorite.count()) { await expect(addFavorite).toBeEnabled(); await addFavorite.click(); }
+  await expect(recipes.getByRole("button", { name: "Remove from favorites: Korean Beef Bowl", exact: true })).toBeEnabled();
+  await trigger.click(); await expect(pill("Favorites only")).toBeEnabled(); await pill("Favorites only").click();
+  await pill("Apply filters").click(); await expect(cards).toHaveCount(1);
+  await recipes.getByRole("button", { name: "Clear filters", exact: true }).click(); await trigger.click();
+  await pill("Default recipes").click(); await time("Up to 30 minutes").check();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const [width, height] of [[426, 944], [412, 930], [1440, 930], [320, 930]]) {
+    await page.setViewportSize({ width, height });
+    for (const scale of [100, 200]) {
+      const style = await page.addStyleTag({ content: `html { font-size: ${scale}% !important }` });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      for (const control of await dialog.locator('button[aria-pressed], input[type="radio"]').all()) {
+        const bounds = await control.boundingBox();
+        expect(bounds!.height).toBeGreaterThanOrEqual(44);
+        expect(bounds!.width).toBeGreaterThanOrEqual(44);
+      }
+      await style.evaluate(element => element.parentNode?.removeChild(element));
+    }
+  }
+  await page.setViewportSize({ width: info.project.name === "mobile" ? 412 : 1440, height: 930 });
+  await dialog.screenshot({ path: `output/nutrition-filter-pills-${info.project.name}.png` });
+  await pill("Cancel").click();
+  await page.route("**/rest/v1/rpc/get_recipe_card_metadata", route => route.fulfill({ status: 503, json: { message: "Favorites unavailable for filter testing" } }));
+  await page.reload();
+  await expect(recipes.getByRole("button", { name: "Refresh cards", exact: true })).toBeVisible();
+  await trigger.click(); await expect(dialog).toBeVisible();
+  await expect(pill("Favorites only")).toBeDisabled();
+  await expect(dialog.getByText("Favorites are unavailable until card metadata loads. Other filters remain available.", { exact: true })).toBeVisible();
+  await pill("Default recipes").click(); await expect(pill("Default recipes")).toHaveAttribute("aria-pressed", "true");
+  await pill("Cancel").click(); await page.unroute("**/rest/v1/rpc/get_recipe_card_metadata");
+  await recipes.getByRole("button", { name: "Refresh cards", exact: true }).click();
+  await trigger.click(); await expect(pill("Favorites only")).toBeEnabled(); await pill("Cancel").click();
+});
+
 test("Nutrition flat panels align on mobile and restore inset cards at 640px", async ({ browser }, info) => {
   test.setTimeout(300_000);
   const accounts: LocalAccount[] = [];

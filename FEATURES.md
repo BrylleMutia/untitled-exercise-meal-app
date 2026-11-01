@@ -951,7 +951,10 @@ The four meal-slot headers use icon-only Add meal controls with slot-specific
 tooltips, the same pending restrictions, recoverable drafts and focus return.
 Other nutrition pills and calorie summaries retain their existing units and behavior.
 The filter dialog supports name search, favorites, default/my/shared source,
-meal time, inclusive 15/30/60-minute limits, and difficulty. Apply commits, Reset
+meal time, inclusive 15/30/60-minute limits, and difficulty. It uses pill
+controls for Favorites, Source, Meal time and Difficulty, with independent
+selections. Cooking-time pills select one inclusive limit or Any time. The name
+search remains a text field. Apply commits the draft; Reset
 clears the draft, and Cancel/close/Escape discard draft changes. Empty selections
 are unrestricted; choices within a group are OR, groups combine with AND. Edited
 labels are searchable; source uses identity and ownership. Missing meal times

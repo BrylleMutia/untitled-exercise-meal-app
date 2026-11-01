@@ -783,8 +783,13 @@ Add meal, with slot-specific tooltips. Existing IDs, expanded state, pending
 restrictions, toggling, drafts and focus return are preserved at all widths.
 
 Filter recipes uses the shared modal with Recipe name, Favorites only, Source,
-Meal time, Total cooking time and Difficulty. Apply filters commits edits;
-Reset clears only the draft; Cancel, close and Escape discard unapplied edits.
+Meal time, Total cooking time and Difficulty.
+Favorites, Source, Meal time and Difficulty use independent rounded toggle pills
+with pressed states. Total cooking time uses mutually exclusive native radios
+styled as pills, defaulting to Any time. Selected pills use navy/white, unselected
+pills use the soft treatment; all wrap with at least 44px targets and visible
+keyboard focus. Time radios retain arrow-key navigation.
+Apply filters commits edits; Reset clears only the draft. Cancel, close and Escape discard unapplied edits.
 Focus returns to the filter icon. Filter groups use OR within and AND between;
 blank groups are unrestricted. Applied filters show a result count and Clear
 filters. No matches, empty collection, shared loading/error and unavailable
