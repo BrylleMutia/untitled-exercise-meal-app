@@ -64,6 +64,8 @@ describe("durable grocery categories", () => {
     let week = await a.group.load(a.weekOf); const groupId = week.group!.id;
     const input = { action: "grocery" as const, groupId, weekOf: a.weekOf, revision: week.revision, operation: "add" as const, name: "coconut milk", quantity: 1.5, unit: "l", categoryChoice: { category: "Pantry" as const, preference: { action: "remember" as const, expectedRevision: 0 } }, idempotencyKey: randomUUID() };
     const first = await a.group.command(input); expect(first.groceryItem).toMatchObject({ name: "Coconut milk", quantity: 1.5, category: "Pantry" });
+    const originalAdder = (await a.context()).userId;
+    expect(first.groceryItem?.addedByUserId).toBe(originalAdder);
     expect(await a.group.command(input)).toEqual(first);
     expect(await b.repository.loadGroceryNameSuggestions("milk", groupId)).toContainEqual({ name: "Coconut milk", occurrences: 1, lastSeenWeek: a.weekOf });
     expect(await b.repository.loadGroceryNameSuggestions("milk")).not.toContainEqual(expect.objectContaining({ name: "Coconut milk" }));
@@ -72,8 +74,16 @@ describe("durable grocery categories", () => {
     week = await b.group.load(b.weekOf);
     const moved = await b.group.command({ action: "grocery", groupId, weekOf: b.weekOf, revision: week.revision, operation: "quantity", itemId: first.groceryItem!.id, quantity: 1.5, categoryChoice: { category: "Other", preference: { action: "remember", expectedRevision: 1 } }, idempotencyKey: randomUUID() });
     expect(moved.previousCategory).toBe("Pantry"); expect(moved.groceryItem?.category).toBe("Other");
+    expect(moved.groceryItem?.addedByUserId).toBe(originalAdder);
     week = await a.group.load(a.weekOf); await a.group.command({ action: "grocery", groupId, weekOf: a.weekOf, revision: week.revision, operation: "refresh", idempotencyKey: randomUUID() });
     expect((await a.group.load(a.weekOf)).grocery!.items.find(row => row.id === first.groceryItem!.id)?.category).toBe("Other");
+    week = await a.group.load(a.weekOf);
+    const actors = [a, b];
+    const concurrent = await Promise.allSettled(actors.map((actor, index) => actor.group.command({ action: "grocery", groupId, weekOf: a.weekOf, revision: week.revision, operation: "add", name: `Concurrent extra ${index}`, quantity: 1, unit: "pcs", idempotencyKey: randomUUID() })));
+    expect(concurrent.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(concurrent.filter(result => result.status === "rejected")).toHaveLength(1);
+    for (const [index, result] of concurrent.entries()) if (result.status === "fulfilled") expect(result.value.groceryItem?.addedByUserId).toBe((await actors[index].context()).userId);
+    expect((await a.group.load(a.weekOf)).grocery!.items.find(row => row.id === first.groceryItem!.id)?.addedByUserId).toBe(originalAdder);
     week = await b.group.load(b.weekOf); await b.group.command({ action: "leave", groupId, groupRevision: week.group!.revision, idempotencyKey: randomUUID() });
     await expect(b.repository.loadGroceryNameSuggestions("milk", groupId)).rejects.toThrow(/Group not found/i);
     await expect(b.repository.loadGroceryCategoryPreferences(groupId)).rejects.toThrow(/Group not found/i);

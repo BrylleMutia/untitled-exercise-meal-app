@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { createLocalAccount, createAuthenticatedContext, deleteLocalAccount, type LocalAccount } from "./local-account";
 import { createSupabaseRepository } from "../src/services/supabaseRepository";
@@ -15,6 +15,27 @@ async function onboard(account: LocalAccount, name: string) {
   return { repository, group: cookingGroupRepository(client) };
 }
 
+async function checkAddAlignment(page: Page, shared: boolean, mobile: boolean) {
+  const quantity = page.getByRole("textbox", { name: shared ? "Extra item quantity" : "Quantity", exact: true });
+  const unit = page.getByRole("combobox", { name: shared ? "Extra item unit" : "Unit", exact: true });
+  const add = page.getByRole("button", { name: shared ? "Add extra item" : "Add custom grocery item", exact: true });
+  for (const [width, height] of [[426, 944], [412, 930], [1440, 930]]) {
+    await page.setViewportSize({ width, height });
+    const boxes = await Promise.all([quantity.boundingBox(), unit.boundingBox(), add.boundingBox()]);
+    for (const box of boxes) {
+      expect(box).not.toBeNull();
+      expect(box!.height).toBe(48);
+      expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThanOrEqual(1);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 320, height: 930 });
+  const enlarged = await page.addStyleTag({ content: "html { font-size: 200% !important }" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await enlarged.evaluate(element => element.parentNode?.removeChild(element));
+  await page.setViewportSize({ width: mobile ? 412 : 1440, height: 930 });
+}
+
 test("category suggestions, remembered corrections, moves, reset and lookup recovery", async ({ browser }, info) => {
   const account = await createLocalAccount("category-personal"); await onboard(account, "Category shopper");
   const context = await createAuthenticatedContext(browser, process.env.PLAYWRIGHT_BASE_URL!, account), page = await context.newPage();
@@ -23,6 +44,7 @@ test("category suggestions, remembered corrections, moves, reset and lookup reco
     await page.goto("/grocery");
     const name = page.getByRole("combobox", { name: "Extra grocery item name", exact: true });
     const category = page.getByRole("combobox", { name: "Category", exact: true });
+    await checkAddAlignment(page, false, info.project.name === "mobile");
     await name.fill("tomtaoes"); await expect(category).toHaveValue("Produce");
     await page.getByRole("textbox", { name: "Quantity", exact: true }).fill("2");
     await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click();
@@ -44,14 +66,26 @@ test("category suggestions, remembered corrections, moves, reset and lookup reco
     await expect(page.getByText("1 pc Tomtaoes added to Produce.", { exact: true })).toBeVisible();
     await expect(page.getByRole("listitem", { name: "Tomtaoes", exact: true })).toHaveCount(2);
     let lostResponse = false;
+    let releaseAdd!: () => void;
+    const addPending = new Promise<void>(resolve => { releaseAdd = resolve; });
     await page.route("**/rest/v1/rpc/add_custom_grocery_item", async route => {
+      await addPending;
       const response = await route.fetch();
       if (!lostResponse && response.ok()) { lostResponse = true; await route.abort(); }
       else await route.fulfill({ response });
     });
     await name.fill("bananna"); await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click();
+    const add = page.getByRole("button", { name: "Add custom grocery item", exact: true });
+    try {
+      await expect(add).toBeDisabled();
+      await expect(add).toHaveAttribute("aria-busy", "true");
+      await expect(add.locator(".lucide-loader-circle")).toBeVisible();
+      await expect(add.locator(".lucide-plus")).toHaveCount(0);
+    } finally { releaseAdd(); }
     await expect(page.getByRole("listitem", { name: "Bananna", exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Add custom grocery item", exact: true })).toBeEnabled();
+    await expect(add).toHaveAttribute("aria-busy", "false");
+    await expect(add.locator(".lucide-plus")).toBeVisible();
     await page.getByRole("button", { name: "Add custom grocery item", exact: true }).click();
     await expect(page.getByText("1 pc Bananna added to Produce.", { exact: true })).toBeVisible();
     await expect(page.getByRole("listitem", { name: "Bananna", exact: true })).toHaveCount(1);
@@ -93,8 +127,12 @@ test("shared category corrections are reused by another member", async ({ browse
     await page.setViewportSize({ width: info.project.name === "mobile" ? 412 : 1440, height: 930 });
     await page.goto("/grocery");
     const name = page.getByRole("combobox", { name: "Extra grocery item", exact: true });
+    await checkAddAlignment(page, true, info.project.name === "mobile");
     let lostResponse = false;
+    let releaseAdd!: () => void;
+    const addPending = new Promise<void>(resolve => { releaseAdd = resolve; });
     await page.route("**/rest/v1/rpc/mutate_cooking_group_week", async route => {
+      await addPending;
       const response = await route.fetch();
       if (!lostResponse && response.ok() && route.request().postDataJSON().p_payload.operation === "add") { lostResponse = true; await route.abort(); }
       else await route.fulfill({ response });
@@ -104,13 +142,26 @@ test("shared category corrections are reused by another member", async ({ browse
     await page.getByRole("textbox", { name: "Extra item quantity", exact: true }).fill("1.5");
     await page.getByRole("combobox", { name: "Extra item unit", exact: true }).selectOption("l");
     await page.getByRole("button", { name: "Add extra item", exact: true }).click();
+    const add = page.getByRole("button", { name: "Add extra item", exact: true });
+    try {
+      await expect(add).toBeDisabled();
+      await expect(add).toHaveAttribute("aria-busy", "true");
+      await expect(add.locator(".lucide-loader-circle")).toBeVisible();
+      await expect(add.locator(".lucide-plus")).toHaveCount(0);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await expect(add.locator(".lucide-loader-circle")).toHaveCSS("animation-name", "none");
+    } finally { releaseAdd(); }
     await expect(page.getByRole("listitem", { name: "Cocount milk", exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Add extra item", exact: true })).toBeEnabled();
+    await expect(add).toHaveAttribute("aria-busy", "false");
+    await expect(add.locator(".lucide-plus")).toBeVisible();
     await page.getByRole("button", { name: "Add extra item", exact: true }).click();
     await expect(page.getByText("1.5 L Cocount milk added to Pantry.", { exact: true })).toBeVisible();
     await expect(page.getByRole("listitem", { name: "Cocount milk", exact: true })).toHaveCount(1);
     await page.unroute("**/rest/v1/rpc/mutate_cooking_group_week");
     const row = page.getByRole("listitem", { name: "Cocount milk", exact: true });
+    await expect(row.getByText("Added by Category Alice", { exact: true })).toBeVisible();
+    await expect(row.getByText("adjusted by you", { exact: true })).toHaveCount(0);
     await row.getByRole("button", { name: "Edit quantity for Cocount milk", exact: true }).click();
     await row.getByRole("combobox", { name: "Category", exact: true }).selectOption("Other");
     const enlarged = await page.addStyleTag({ content: "html { font-size: 200% !important }" });
@@ -123,5 +174,12 @@ test("shared category corrections are reused by another member", async ({ browse
     await otherPage.getByRole("combobox", { name: "Extra grocery item", exact: true }).fill("cocount milk");
     await expect(otherPage.getByRole("combobox", { name: "Category", exact: true })).toHaveValue("Other");
     await expect(otherPage.getByText("Using the group’s saved category", { exact: true })).toBeVisible();
+    const peerRow = otherPage.getByRole("listitem", { name: "Cocount milk", exact: true });
+    await expect(peerRow.getByText("Added by Category Alice", { exact: true })).toBeVisible();
+    await peerRow.getByRole("button", { name: "Edit quantity for Cocount milk", exact: true }).click();
+    await peerRow.getByRole("textbox", { name: "Quantity for Cocount milk", exact: true }).fill("2.5");
+    await peerRow.getByRole("button", { name: "Save quantity for Cocount milk", exact: true }).click();
+    await expect(peerRow.getByRole("textbox", { name: "Quantity for Cocount milk", exact: true })).toHaveCount(0);
+    await expect(peerRow.getByText("Added by Category Alice", { exact: true })).toBeVisible();
   } finally { await context.close(); await otherContext.close(); await deleteLocalAccount(b); await deleteLocalAccount(a); }
 });

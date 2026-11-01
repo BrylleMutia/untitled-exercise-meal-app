@@ -415,6 +415,7 @@ export interface WeightEntry {
 }
 
 export interface GroceryItem {
+  addedByUserId?: string;
   personalGenerated?: boolean;
   sourceOwner?: string;
   sourceItemId?: string;

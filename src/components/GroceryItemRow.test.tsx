@@ -7,12 +7,23 @@ import type { NutritionWeekReadModel } from "@/types/backend";
 vi.mock("@/contexts/AppContext", () => ({ useApp: () => ({ snapshot: { userId: "owner" }, actions: {}, error: null }) }));
 
 const base: GroceryItem = { id: "garlic", name: "Garlic", category: "Produce", unit: "g", quantity: 8, generatedQuantity: 8, checked: false };
-function render(item: GroceryItem, groupId?: string) {
+function render(item: GroceryItem, groupId?: string, addedByName?: string) {
   const week: NutritionWeekReadModel = { weekOf: "2026-10-24", mealPlan: null, targets: [], nutritionLogs: [], loggedMeals: [], recipes: [], foods: [], grocery: { id: "list", weekOf: "2026-10-24", items: [item] } };
-  return renderToStaticMarkup(<GroceryItemRow item={item} week={week} disabled={false} groupId={groupId} onRefresh={vi.fn()} onSavingChange={vi.fn()} />);
+  return renderToStaticMarkup(<GroceryItemRow item={item} week={week} disabled={false} groupId={groupId} addedByName={addedByName} onRefresh={vi.fn()} onSavingChange={vi.fn()} />);
 }
 
 describe("grocery item origin and quantity copy", () => {
+  it("attributes manual shared rows without calling their quantity an adjustment by the viewer", () => {
+    const item = { ...base, custom: true, generatedQuantity: 0, addedByUserId: "alice", carriedFromWeek: "2026-10-18" };
+    expect(render(item, "group", "Alice")).toContain("Carried from 2026-10-18 · Added by Alice");
+    expect(render(item, "group", "Alice")).not.toContain("adjusted by you");
+    const unknown = render({ ...item, carriedFromWeek: undefined }, "group");
+    expect(unknown).not.toContain("Added by");
+    expect(unknown).not.toContain("adjusted by you");
+    expect(unknown.match(/<p\b/g)).toHaveLength(1);
+    expect(render(item, undefined, "Alice")).not.toContain("Added by");
+    expect(render({ ...item, personalGenerated: true }, "group", "Alice")).not.toContain("Added by");
+  });
   it.each([
     { scenario: "personal generated ingredient", fields: {}, groupId: undefined, label: "Generated" },
     { scenario: "personal manual extra", fields: { custom: true }, groupId: undefined, label: null },

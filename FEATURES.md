@@ -1617,3 +1617,7 @@ Personal and shared extra-item forms offer up to six name suggestions after two 
 Exact, phrase-prefix and word-prefix matches rank ahead of dictionary spelling fallback. Within a match tier, historical names take priority, followed by frequency, latest saved list week and alphabetical order. Suggestions are deduplicated by the existing Unicode/case/whitespace key. Dictionary recognition aliases use canonical suggestion spellings, while historical names retain saved spelling and casing with first-letter formatting.
 
 Choosing a suggestion updates only the draft name, preserves quantity/unit and resolves its category through existing rules. Add still saves the item. Arbitrary names remain valid. Escape, Tab and blur never select automatically; Enter selects the active option without submitting while the dropdown is open. Failed reads retain dictionary suggestions and input with Retry past items. Late responses never replace typed or selected text, and selecting a suggestion creates no durable facts.
+
+### Shared grocery original-adder attribution
+
+Manually added shared groceries show Added by followed by the original adder's current group profile name, including for the current viewer. Quantity/category edits, checking and regeneration preserve that identity. Transferred manual groceries may use verified source ownership. Unknown or departed adders have no attribution; personal rows and Generated badges retain their behavior. The manual shared row no longer says adjusted by you. Add controls share a 48px height and keep the pending spinner.

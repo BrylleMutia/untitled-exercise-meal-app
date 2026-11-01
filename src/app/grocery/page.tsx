@@ -6,7 +6,7 @@ import { classifyGroceryName, normalizeGroceryName, type GroceryCategoryDraft, t
 import { cookingUnits, cookingUnitLabel } from "@/utility/cookingUnits";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { LoaderCircle, Plus, RefreshCw } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Card } from "@/components/ui/Card";
 import { HelpPopover } from "@/components/ui/HelpPopover";
@@ -47,7 +47,7 @@ function PersonalGroceries({ week, disabled, onAmountSaving, onItemSaving }: {
   const { snapshot } = useApp();
   const weekOf = week.data?.weekOf;
   return <div data-grocery-section className="grid min-w-0 gap-4 pb-4">
-    {week.loading ? <p role="status">Loading this week&apos;s groceries…</p> : null}
+    {week.loading ? <p role="status">Loading this week&apos;s groceriesâ€¦</p> : null}
     {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-danger-100 p-4 text-danger-900"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
     {week.data ? <Card tone="mint"><GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onAmountSaving} /></Card> : null}
     {week.data?.grocery?.calendarReviewRequired ? <p role="status" className="rounded-2xl bg-peach-100 p-4 text-sm font-semibold">This list was regrouped after your start of week changed. Review ingredients and carried grocery edits.</p> : null}
@@ -60,6 +60,7 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
   const [name, setName] = useState("");
   const extraName = useRef<HTMLInputElement>(null);
   const extraSubmitting = useRef(false);
+  const [extraSaving, setExtraSaving] = useState(false);
   const [submission, setSubmission] = useState<GroceryExtraSubmission>();
   const [categoryDraft, setCategoryDraft] = useState<GroceryCategoryDraft>();
   const [resolvedCategory, setResolvedCategory] = useState<{ category: GroceryCategory; nameKey: string }>();
@@ -115,7 +116,7 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
 
   const customItemEditor = (
     <fieldset disabled={disabled || !draftReady} className="min-w-0" aria-label="Extra grocery item">
-      {!draftReady ? <p className="text-xs text-ink-soft" role="status">Restoring this week&apos;s item draft…</p> : null}
+      {!draftReady ? <p className="text-xs text-ink-soft" role="status">Restoring this week&apos;s item draftâ€¦</p> : null}
       {draftWasRestored ? (
         <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
           <span>Custom-item draft restored from this device.</span>
@@ -151,16 +152,17 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
           setSubmission(undefined); setName(next);
         }} />
         <div className="ml-auto flex min-w-0 max-w-full flex-1 basis-full flex-wrap items-start justify-end gap-2 md:basis-auto md:max-w-[26rem]">
-        <GroceryQuantityControl value={quantity} onChange={value => { suppressDraftWriteRef.current = false; setQuantity(value); setSubmission(undefined); }} label="Quantity" decreaseLabel="Decrease extra item quantity" increaseLabel="Increase extra item quantity" minimum={1} unit={unit} disabled={disabled || !draftReady} className="min-w-0 flex-1 basis-56" unitControl={<select value={unit === "L" ? "l" : unit} onChange={event => { suppressDraftWriteRef.current = false; setUnit(event.target.value); setSubmission(undefined); }} className="input !h-[44px] !min-h-[44px] !w-[76px] !px-[4px] !text-sm leading-none" aria-label="Unit">
+        <GroceryQuantityControl size="large" value={quantity} onChange={value => { suppressDraftWriteRef.current = false; setQuantity(value); setSubmission(undefined); }} label="Quantity" decreaseLabel="Decrease extra item quantity" increaseLabel="Increase extra item quantity" minimum={1} unit={unit} disabled={disabled || !draftReady} className="min-w-0 flex-1 basis-56" unitControl={<select value={unit === "L" ? "l" : unit} onChange={event => { suppressDraftWriteRef.current = false; setUnit(event.target.value); setSubmission(undefined); }} className="input !h-[48px] !min-h-[48px] !w-[76px] !px-[4px] !text-sm leading-none" aria-label="Unit">
           {["pcs", ...cookingUnits.filter(u => u !== "piece")].map(u => <option key={u} value={u}>{cookingUnitLabel(u)}</option>)}
         </select>} />
         <Button
           className="!min-h-12 !px-4"
           aria-label="Add custom grocery item"
-          disabled={disabled || !draftReady || !name.trim() || parsedQuantity === null}
+          aria-busy={extraSaving}
+          disabled={disabled || extraSaving || !draftReady || !name.trim() || parsedQuantity === null}
           onClick={async () => {
             if (parsedQuantity === null || extraSubmitting.current) return;
-            extraSubmitting.current = true; onSavingChange(true);
+            extraSubmitting.current = true; setExtraSaving(true); onSavingChange(true);
             try {
               const intent = submission ?? { idempotencyKey: createUuid(), groceryRevision: list?.revision ?? 0, calendarRevision: snapshot.profile?.calendarRevision, choice: categoryChoice(name, categoryDraft) ?? { category: resolvedCategory?.nameKey === normalizeGroceryName(name) ? resolvedCategory.category : classifyGroceryName(name) } };
               setSubmission(intent);
@@ -173,11 +175,11 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
               setName(""); setCategoryDraft(undefined); setSubmission(undefined);
               setQuantity("1"); setUnit("pcs"); setDraftWasRestored(false);
               requestAnimationFrame(() => extraName.current?.focus());
-            } finally { extraSubmitting.current = false; onSavingChange(false); }
+            } finally { extraSubmitting.current = false; setExtraSaving(false); onSavingChange(false); }
 
           }}
         >
-          <Plus className="h-4 w-4" aria-hidden />
+          {extraSaving ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
         </Button>
         </div>
       </div>

@@ -1033,6 +1033,15 @@ you” remain visible. Each account/week has its own recoverable extra-item draf
 including empty weeks. Fields and list mutations are disabled during loading,
 failed refreshes and pending saves. Extra-item fields also wait for draft recovery
 before accepting input, so recovery cannot replace newly typed text.
+Personal and shared extra-item Add buttons replace the plus with a same-size
+loading spinner while saving, expose a busy state, and remain disabled until the
+request finishes. Reduced-motion preferences stop the spinner animation.
+The quantity stepper, unit selector and Add button share a 48px height in both
+extra-item forms. They align horizontally at normal mobile widths, with wrapping
+retained for narrow or enlarged-text layouts. Row editors keep their 44px controls.
+Manual shared rows show “Added by {name}” when the original adder is a current
+member with a known profile name. They omit “adjusted by you”; unknown adders
+have no attribution line. Carried-week provenance remains visible alongside it.
 
 The top mint card places Total Amount below week navigation, with a bold
 PHP-formatted value and a 44px Edit total amount icon. Unset is ₱— with Not

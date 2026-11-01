@@ -22,7 +22,7 @@ const pendingQuantitySaves = new Map<string, Promise<boolean>>();
 const controlClass = "grid h-[44px] w-[44px] shrink-0 place-items-center rounded-full disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lav-500";
 const iconClass = `${controlClass} bg-white text-ink`;
 
-export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange, groupId }: { item: GroceryItem; week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void; groupId?: string }) {
+export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange, groupId, addedByName }: { item: GroceryItem; week: NutritionWeekReadModel; disabled: boolean; onRefresh: () => void; onSavingChange: (saving: boolean) => void; groupId?: string; addedByName?: string }) {
   const { snapshot, actions, error } = useApp();
   const [draft, setDraft] = useState<QuantityDraft | null>(null);
   const [ready, setReady] = useState(false);
@@ -48,9 +48,11 @@ export function GroceryItemRow({ item, week, disabled, onRefresh, onSavingChange
   const editing = draft !== null;
   const quantity = draft ? parseGroceryQuantity(draft.value) : null;
   const origin = groceryItemOrigin(item);
+  const sharedManual = Boolean(groupId) && origin === "Manual";
   const itemNotices = [
     item.carriedFromWeek ? `Carried from ${item.carriedFromWeek}` : null,
-    item.quantity !== item.generatedQuantity ? "adjusted by you" : null,
+    sharedManual && addedByName?.trim() ? `Added by ${addedByName}` : null,
+    !sharedManual && item.quantity !== item.generatedQuantity ? "adjusted by you" : null,
   ].filter(Boolean).join(" · ");
   const showPlanQuantity = editing && origin === "Generated" && (quantity ?? item.quantity) !== item.generatedQuantity;
   const calendarChanged = Boolean(draft && (draft.calendarRevision !== calendarRevision || draft.listId !== listId));

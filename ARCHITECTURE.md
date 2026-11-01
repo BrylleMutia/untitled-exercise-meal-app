@@ -1823,3 +1823,7 @@ and all 12 tested/deployed schema fingerprints match, the final dry run has no
 pending migrations/seeds/roles, and deployed authenticated personal/group reads
 and privilege checks passed without retaining verification data. The live input
 was checked with the user's existing draft left unchanged.
+
+## Shared grocery original-adder provenance
+
+Shared Add mutations stamp optional GroceryItem.addedByUserId from the authenticated caller in existing item JSON. Client-supplied authorship never controls this value. Existing reconciliation and calendar copies retain the JSON metadata. The row resolves the display name only from the authorized current-group membership read, using sourceOwner solely as a fallback for transferred manual items. No private profile lookup or snapshot expansion is required. A forward migration backfills only completed, unambiguous per-item Add receipts; unknown actors remain absent, touched weeks increment revision, and existing retry receipts stay immutable. Personal rows and Generated item labels are unaffected.
