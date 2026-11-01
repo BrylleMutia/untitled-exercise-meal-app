@@ -1359,6 +1359,10 @@ deployment's source commit to the pushed Git head and confirm the production
 alias is ready. Both calendar migrations above are already deployed; packaging
 the frontend does not require reapplying them.
 
+Both GitHub Actions jobs pin `ubuntu-24.04` for compatibility with the pinned
+Playwright 1.58.2 browser installer. Avoid a moving `ubuntu-latest` image until
+the installed Playwright version supports its operating system.
+
 ### Approved account recipes as shared defaults
 
 Forward migrations publish approved snapshots as new system meal and food rows,
