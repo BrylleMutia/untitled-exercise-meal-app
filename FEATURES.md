@@ -1640,3 +1640,9 @@ Choosing a suggestion updates only the draft name, preserves quantity/unit and r
 ### Shared grocery original-adder attribution
 
 Manually added shared groceries show Added by followed by the original adder's current group profile name, including for the current viewer. Quantity/category edits, checking and regeneration preserve that identity. Transferred manual groceries may use verified source ownership. Unknown or departed adders have no attribution; personal rows and Generated badges retain their behavior. The manual shared row no longer says adjusted by you. Add controls share a 48px height and keep the pending spinner.
+
+### Grocery row checking and removal feedback
+
+Personal and shared grocery rows can be checked or unchecked by clicking their name, displayed quantity, provenance, or blank card space. The native checkbox remains the keyboard control. Card-wide checking pauses while the quantity/category editor is open; its checkbox remains available when unlocked. Controls, retry actions, and text selection never also toggle the row. Pending mutations prevent duplicate activation and retain authoritative checked state.
+
+Item cards use loaders rather than visible action-progress captions. Checking/unchecking shows a 16px spinner fully inside the upper-right corner without moving controls or reserving a right-side gutter. Rows retain symmetric padding and the quantity/action row uses the available width. Save, Cancel and Delete replace their own icon while pending. One visually hidden live region announces progress and active controls expose a busy state. Errors, validation and recovery guidance remain visible; total-amount feedback is unchanged. The item remains visible until removal is confirmed. Failure restores icons and retains the item and any quantity/category draft for retry; success retains existing refresh and focus restoration.

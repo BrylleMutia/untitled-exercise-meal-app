@@ -1044,6 +1044,24 @@ before accepting input, so recovery cannot replace newly typed text.
 Personal and shared extra-item Add buttons replace the plus with a same-size
 loading spinner while saving, expose a busy state, and remain disabled until the
 request finishes. Reduced-motion preferences stop the spinner animation.
+Item cards use loaders instead of visible action-progress captions. Checking or
+unchecking shows a 16px spinner fully inside the upper-right corner, inset 6px.
+It overlays the card without reserving a gutter or moving controls; rows keep
+their symmetric padding and full quantity/action width. Mobile name/metadata
+text has a small local inset to keep long names clear of the loader. The loader
+is noninteractive and stays clear of action icons. Save, Cancel and Delete replace
+only their own icon with the same-size spinner in their existing 44px buttons.
+The active control exposes its busy state, and one visually hidden live region
+announces progress. Reduced motion stops animation. Errors, validation and draft
+recovery guidance remain visible. Failed actions restore icons and retain the
+item and editing draft; confirmed deletion retains its focus destination. This
+loader-only treatment is local to item cards; total-amount feedback is unchanged.
+In normal mode, the item name, displayed quantity, provenance and blank card
+space share the checkbox action and show a pointer cursor while unlocked.
+Interactive controls and selected text do not toggle the row. Card-wide checking
+pauses during editing, while the native checkbox remains available when unlocked.
+The list item keeps its semantics without a second tab stop; keyboard users use
+the checkbox. Loading and pending mutations disable both activation paths.
 The quantity stepper, unit selector and Add button share a 48px height in both
 extra-item forms. They align horizontally at normal mobile widths, with wrapping
 retained for narrow or enlarged-text layouts. Row editors keep their 44px controls.
