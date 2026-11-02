@@ -763,6 +763,22 @@ and their basis persist. Whole-recipe values are divided by yield; per-serving
 values stay unchanged when yield changes. Ingredient edits never recalculate
 source-provided estimates. Switching methods retains draft rows, links, factors
 and macro entries; calculation mode requires every ingredient's nutrition basis.
+Recipe cards and meal-entry recipe choices display saved recipe-wide calories per
+serving even when cooking ingredients have no food links. The normalized saved
+value takes precedence over ingredient calculations and is not divided by yield
+again. Explicit zero remains available; invalid or missing usable nutrition stays
+unavailable.
+
+In recipe-wide mode, Ingredients starts with Add cooking ingredient. Name and
+cooking measurement are sufficient; ingredient nutrition and food search are
+optional actions. Add ingredient nutrition opens a serving-and-macros form for
+that existing row. Use ingredient nutrition applies only a complete, validated
+record, retaining the row identity and authored cooking measurement. Back to
+ingredient retains incomplete inputs in the recoverable draft. Unfinished optional
+nutrition never blocks recipe saving, is visibly excluded from the save, and never
+creates placeholder foods or zero-filled macro records. This applies to both
+per-serving and whole-recipe macro entry. Calculate from ingredients retains its
+required source/conversion validation.
 
 A cooking row has its own stable identity, name, amount/range or unmeasured text,
 unit, preparation note, optional status and optional food link. Recipe-wide rows

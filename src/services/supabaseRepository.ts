@@ -1245,24 +1245,28 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     const savedMeals = [...input.currentSnapshot.savedMeals.filter((meal) => meal.id !== input.meal.id), input.meal];
     const foods = [...new Map([...FOODS, ...input.currentSnapshot.foods, ...newFoods].map((food) => [food.id, food])).values()];
     const previousMeal = input.currentSnapshot.savedMeals.find(meal => meal.id === input.meal.id);
-    // Cooking-unit metadata alone must not rewrite grocery rows or revisions.
-    const unchangedGroceryBasis = previousMeal && newFoods.length === 0 && previousMeal.servings === input.meal.servings
+    // New unplanned recipes and metadata-only edits do not change grocery requirements.
+    const newUnplannedRecipe = !previousMeal && !("catalog" in input && input.catalog)
+      && !input.currentSnapshot.mealPlan?.meals.some(meal => meal.mealId === input.meal.id);
+    const unchangedGroceryBasis = newUnplannedRecipe || previousMeal && newFoods.length === 0 && previousMeal.servings === input.meal.servings
       && JSON.stringify(previousMeal.cookingIngredients) === JSON.stringify(input.meal.cookingIngredients)
       && previousMeal.ingredients.length === input.meal.ingredients.length && previousMeal.ingredients.every((item, index) => {
         const next = input.meal.ingredients[index];
         return item.foodId === next.foodId && Math.round(item.servings * 1000) === Math.round(next.servings * 1000);
       });
-    const grocery = unchangedGroceryBasis ? null : input.currentSnapshot.mealPlan
-      ? mergeGroceryLists(
-          input.currentSnapshot.grocery ?? generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, foods, input.currentSnapshot.mealPlan.weekOf),
+    const grocery = unchangedGroceryBasis || !input.currentSnapshot.grocery || !input.currentSnapshot.mealPlan
+      || input.currentSnapshot.grocery.weekOf !== input.currentSnapshot.mealPlan.weekOf ? null
+      : mergeGroceryLists(
+          input.currentSnapshot.grocery,
           generateGroceryList(input.currentSnapshot.mealPlan, savedMeals, foods, input.currentSnapshot.mealPlan.weekOf),
-        )
-      : input.currentSnapshot.grocery;
+        );
     const expectedVersions = { ...(input.expectedVersions ?? {
       recordRevision: input.meal.revision,
       groceryRevision: input.currentSnapshot.grocery?.revision,
     }) };
-    if (unchangedGroceryBasis) delete expectedVersions.groceryRevision;
+    // No grocery write means no grocery concurrency dependency. In particular,
+    // JSON null is not an omitted value in the legacy authorized save function.
+    if (!grocery) delete expectedVersions.groceryRevision;
     return this.mutate(
       operation,
       {
@@ -1271,7 +1275,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
           : input.meal,
         ...(operation === "save_recipe" ? { newFoods } : {}),
         ...("catalog" in input && input.catalog ? { catalog: input.catalog } : {}),
-        ...(unchangedGroceryBasis ? {} : { grocery }),
+        ...(grocery ? { grocery } : {}),
         expectedVersions,
         idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
       },

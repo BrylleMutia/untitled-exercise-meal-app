@@ -62,6 +62,21 @@ describe("cooking-only recipes", () => {
   const exported = await repository.exportData({ idempotencyKey: randomUUID() });
   expect(JSON.stringify(exported.data)).toContain("Rice and onion");
  });
+ it("saves recipe-wide cooking rows with no loaded personal grocery or a stale transferred header", async () => {
+  const recipe: Meal = { id: `meal-missing-grocery-${randomUUID()}`, name: "Potato without ingredient macros", servings: 2, mealSlots: ["dinner"], complexity: "easy", notes: "Cook the potatoes.", ingredients: [],
+   nutritionInput: { method: "provided", basis: "whole-recipe", values: { calories: 777, proteinG: 13, carbsG: 155, fatG: 9 } }, providedNutrition: { calories: 388.5, proteinG: 6.5, carbsG: 77.5, fatG: 4.5 },
+   cookingIngredients: [{ id: "potato", cookingMeasurement: { kind: "amount", name: "Potato", quantity: 500, unit: "g" } }] };
+  const base=(await repository.load())!;
+  const currentSnapshot={...base,mealPlan:null,grocery:null};
+  const saved=await repository.saveRecipe({meal:recipe,newFoods:[],currentSnapshot,expectedVersions:{groceryRevision:999999},idempotencyKey:randomUUID()});
+  expect(saved.snapshot.savedMeals.find(item=>item.id===recipe.id)?.providedNutrition).toEqual(recipe.providedNutrition);
+  const latest=saved.snapshot.savedMeals.find(item=>item.id===recipe.id)!;
+  await repository.saveRecipe({meal:{...latest,notes:"Roast the potatoes.",cookingIngredients:latest.cookingIngredients!.map(item=>({...item,cookingMeasurement:{...item.cookingMeasurement,quantity:600}}))},newFoods:[],currentSnapshot:{...saved.snapshot,grocery:null},expectedVersions:{recordRevision:latest.revision,groceryRevision:999999},idempotencyKey:randomUUID()});
+  const copy={...recipe,id:`meal-stale-grocery-${randomUUID()}`,name:"New recipe after transfer"};
+  const transferredSnapshot={...base,grocery:{id:"missing-transferred-header",weekOf:"2026-10-12",revision:999999,items:[]}};
+  await repository.saveRecipe({meal:copy,newFoods:[],currentSnapshot:transferredSnapshot,expectedVersions:{groceryRevision:999999},idempotencyKey:randomUUID()});
+  expect((await repository.load())!.savedMeals.find(item=>item.id===copy.id)?.cookingIngredients).toEqual(recipe.cookingIngredients);
+ });
  it("shares, batches native groceries, copies and retains a recipe after departure", async () => {
   const peer = makeClient();
   let peerId = "";

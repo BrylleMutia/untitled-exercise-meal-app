@@ -1743,6 +1743,18 @@ There are no synthetic foods or zero-weight nutrition servings. Source macros
 normalize into the existing provided_nutrition per-serving contract at save time;
 server validation checks agreement with source values and yield atomically.
 
+Recipe editor optional custom-nutrition drafts are keyed by stable cooking-row
+identity inside the existing account-scoped recoverable draft. Applying a complete
+record links one food to that row without replacing its committed measurement or
+confirmed factors. Unapplied records are omitted from newFoods and recipe payloads;
+they never alter provided_nutrition or block a valid recipe-wide save. Legacy custom
+drafts can explicitly become cooking rows without inventing an amount or weight.
+This editor behavior uses the existing storage/RPC contracts and adds no schema.
+New unplanned recipe saves omit grocery payloads and grocery revisions. All recipe
+saves omit absent or mismatched-week grocery values rather than manufacturing a
+header or serializing JSON null, which the legacy RPC treats as a list update. The authoritative save still reconciles
+applicable grocery weeks, retaining checks for actual grocery writes.
+
 Existing authorized save/copy RPCs own metadata, validation and retry receipts.
 Cooking rows authorize optional food links against the caller's owned/system foods.
 Learning requires a real authorized identity and completed factors; no unfinished

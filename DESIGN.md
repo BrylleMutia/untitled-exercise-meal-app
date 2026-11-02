@@ -727,7 +727,10 @@ The upper-right badge is Popular for the five most eaten recipes in the last
 and separate 44px heart occupy the next row. Image and name open the overview;
 the heart only changes the personal favorite and reflects server confirmation.
 Coral calories remain per serving, displaying ≈number kcal without a calorie icon,
-with an accessible basis label. A mint pie-icon pill shows the whole recipe
+with an accessible basis label. Recipe-wide source macros supply that stored
+per-serving calorie value independently of ingredient food links; the same value
+appears in meal-entry recipe choices. An explicit zero displays ≈0 kcal, while
+invalid or unavailable nutrition keeps the unavailable label. A mint pie-icon pill shows the whole recipe
 yield. Lavender time means whole-recipe minutes displayed as “X mins”;
 its accessible label retains the whole-recipe
 basis. Missing time reads “Not set” and explicit zero remains valid. Peach
@@ -1446,6 +1449,19 @@ shows a Macro basis selector (Per serving / Whole recipe), four explicit source
 values, the derived opposite basis, and concise yield/estimate guidance. Switching
 to ingredient calculations retains entered values and exposes unresolved nutrition
 requirements. Source-wide totals never silently change after cooking-row edits.
+
+In recipe-wide mode, Ingredients puts Add cooking ingredient before optional
+Search ingredients and Describe ingredients actions. Cooking-row names receive
+focus when added. Each row offers Link food for nutrition or conversions and Add
+ingredient nutrition. The latter opens the existing serving/macros form within the
+row, clearly labeled optional; Use ingredient nutrition requires a complete record,
+while Back to ingredient restores focus and retains unfinished inputs. A persistent
+save-area notice explains that unfinished nutrition will not be applied. Recipe-save
+failures show the specific error and draft-retention guidance together, preserving
+that reason until the next attempt even if account reads clear the shared error.
+Unlinked
+rows explain that food linking and nutrition are optional rather than instructing
+the user to supply nutrition.
 
 Ingredients offers Add cooking ingredient independently of food search. Rows retain
 the existing name/amount/range/unit/note/optional controls; Link food for nutrition

@@ -8,7 +8,7 @@ import { Archive, Clock, Minus, Plus, Search, Sparkles, Trash2 } from "lucide-re
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
-import { NutritionFieldLabel, NutritionPills } from "@/components/ui/NutritionPills";
+import { NutritionPills } from "@/components/ui/NutritionPills";
 import { HelpPopover } from "@/components/ui/HelpPopover";
 import { Modal } from "@/components/ui/Modal";
 import { RecipeCover } from "./RecipeCover";
@@ -16,6 +16,7 @@ import { RecipeImagePicker } from "./RecipeImagePicker";
 import { RecipeTabs, type RecipeTab } from "./RecipeTabs";
 import { RecipeNutritionBasis } from "./RecipeNutritionBasis";
 import { RecipeConversionConfirmation } from "./RecipeConversionConfirmation";
+import { RecipeCustomNutrition, blankCustomNutrition as blankCustom, type CustomNutritionDraft as CustomDraft } from "./RecipeCustomNutrition";
 import { complexityLabels, defaultRecipeComplexity, isRecipeComplexity } from "@/utility/recipeCard";
 import { restoredRecipeImage } from "@/utility/recipeImage";
 import { providedNutritionKeys } from "@/utility/providedRecipeNutrition";
@@ -31,15 +32,12 @@ import { cookingUnitLabel } from "@/utility/cookingUnits";
 import type { IngredientConversionCandidate } from "@/types/backend";
 import { searchFoods } from "@/utility/foodSearch";
 import { maximumRecipeTimeMinutes, parseRecipeTime } from "@/utility/recipeTime";
-import type { Food, GroceryCategory, Meal, MealSlot, PreparationBasis, RecipeImage, UnmeasuredIngredient } from "@/types/domain";
-import type { CatalogRecipeEdit, ExpectedVersions, SaveRecipeInput } from "@/types/backend";
+import type { Food, Meal, MealSlot, RecipeImage, UnmeasuredIngredient } from "@/types/domain";
+import type { CatalogRecipeEdit, ExpectedVersions, RepositoryError, SaveRecipeInput } from "@/types/backend";
 
-const categories: GroceryCategory[] = ["Produce", "Protein", "Dairy", "Grains", "Pantry", "Other"];
 const metrics = ["calories", "proteinG", "carbsG", "fatG", "fiberG"] as const;
-type CustomDraft = { name: string; servingLabel: string; grams: string; unit: "g" | "piece"; preparation: PreparationBasis; category: GroceryCategory; calories: string; proteinG: string; carbsG: string; fatG: string; fiberG: string };
-type RecipeDraft = { mealSlots: MealSlot[]; mealId: string; name: string; servings: string; totalTimeMinutes: string; complexity: string; instructions: string; reference: string; image: RecipeImage | null; ingredients: RecipeIngredientDraft[]; unmeasuredIngredients: Array<UnmeasuredIngredient & { id: string }>; nutritionNotes: string; query: string; description: string; review: RecipeIngredientDraft[]; questions: string[]; custom: CustomDraft; saveKey: string; baseVersions: ExpectedVersions; catalog?: CatalogRecipeEdit; nutritionMethod?: "provided" | "ingredients"; macroBasis?: "per-serving" | "whole-recipe"; providedMacros?: Record<"calories" | "proteinG" | "carbsG" | "fatG", string> | null };
+type RecipeDraft = { mealSlots: MealSlot[]; mealId: string; name: string; servings: string; totalTimeMinutes: string; complexity: string; instructions: string; reference: string; image: RecipeImage | null; ingredients: RecipeIngredientDraft[]; unmeasuredIngredients: Array<UnmeasuredIngredient & { id: string }>; nutritionNotes: string; query: string; description: string; review: RecipeIngredientDraft[]; questions: string[]; custom: CustomDraft; customNutrition?: Record<string, CustomDraft>; customNutritionTarget?: string; saveKey: string; baseVersions: ExpectedVersions; catalog?: CatalogRecipeEdit; nutritionMethod?: "provided" | "ingredients"; macroBasis?: "per-serving" | "whole-recipe"; providedMacros?: Record<"calories" | "proteinG" | "carbsG" | "fatG", string> | null };
 const uid = (prefix: string) => `${prefix}-${createUuid()}`;
-const blankCustom = (): CustomDraft => ({ name: "", servingLabel: "", grams: "", unit: "g", preparation: "unknown", category: "Other", calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" });
 const validNumber = (value: string, min: number, max: number) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max;
 
 interface RecipeEditorProps {
@@ -68,6 +66,8 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   const [restored, setRestored] = useState(false);
   const [writeUnavailable, setWriteUnavailable] = useState(false);
   const [method, setMethod] = useState<RecipeIngredientMethod>("search");
+  const [ingredientToolsOpen, setIngredientToolsOpen] = useState(false);
+  const customNameInput = useRef<HTMLInputElement>(null);
   const [servingsBadInput, setServingsBadInput] = useState(false);
   const servingsId = useId();
   const timeId = useId();
@@ -90,6 +90,10 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   const [messageIsError, setMessageIsError] = useState(false);
   function setMessage(value: string, isError = false) { setMessageValue(value); setMessageIsError(isError); }
   const [saveFailed, setSaveFailed] = useState(false);
+  const [saveError, setSaveError] = useState<RepositoryError | null>(null);
+  // Account refreshes can clear the shared error before this retained draft is
+  // retried. Capture the failure once; only this editor's next attempt resets it.
+  if (saveFailed && error && !saveError) setSaveError(error);
   const draftType = `recipe:${meal?.id ?? "new"}`;
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const completed = useRef(false);
@@ -100,8 +104,16 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   const nameInput = useRef<HTMLInputElement>(null);
   const [focusIngredient, setFocusIngredient] = useState<string | null>(null);
   const focusedIngredient = useRef<string | null>(null);
+  const focusCookingName = useRef(false);
   const basisReturn = useRef<{ id: string; review: boolean } | null>(null);
   const userId = snapshot.userId;
+  const customTarget = [...draft.ingredients, ...draft.review].find(item => item.id === draft.customNutritionTarget);
+  const customTargetId = customTarget?.id;
+  useEffect(() => {
+    if (!open || !ready || tab !== "ingredients" || !customTargetId) return;
+    const frame = requestAnimationFrame(() => customNameInput.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open, ready, tab, customTargetId]);
   const pendingIngredient = [...draft.ingredients, ...draft.review].find(item => item.pendingConversion);
   const pendingIngredientId = pendingIngredient?.id;
   const pendingIngredientUnit = pendingIngredient?.pendingConversion?.unit;
@@ -147,10 +159,11 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
 
   useEffect(() => {
     if (!open || tab !== "ingredients" || !focusIngredient || focusedIngredient.current === focusIngredient || disabledInputs()) return;
-    root.current?.querySelector<HTMLInputElement>(`input[data-ingredient-id="${focusIngredient}"]`)?.focus();
+    root.current?.querySelector<HTMLInputElement>(`input[${focusCookingName.current ? "data-cooking-name-id" : "data-ingredient-id"}="${focusIngredient}"]`)?.focus();
     focusedIngredient.current = focusIngredient;
+    focusCookingName.current = false;
     function disabledInputs() { return Boolean(busy) || !ready; }
-  }, [focusIngredient, busy, ready, open, tab]);
+  }, [focusIngredient, busy, ready, open, tab, customTargetId]);
 
   function update(patch: Partial<RecipeDraft>, affectsSave = true) {
     conversionRevision.current += 1;
@@ -208,6 +221,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     }
     setMethod(next);
     setSearchTarget(null);
+    update({ customNutritionTarget: undefined }, false);
   }
   function choose(food: Food) {
     if (searchTarget) {
@@ -251,15 +265,54 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   const providedInvalid = recipeWide && !providedNutrition;
   const preview = providedInvalid ? null : ingredientPreview && providedNutrition ? { ...ingredientPreview, perServing: providedNutrition } : ingredientPreview;
   const extrasValid = parseUnmeasuredIngredients(draft.unmeasuredIngredients.map(({ name, measurement, optional }) => ({ name: name.trim(), measurement: measurement.trim(), ...(optional ? { optional: true } : {}) }))) !== null;
-  const custom = draft.custom;
+  const custom = customTarget ? draft.customNutrition?.[customTarget.id] ?? { ...blankCustom(), name: customTarget.name } : draft.custom;
   const customValid = Boolean(custom.name.trim() && custom.servingLabel.trim()) && validNumber(custom.grams, 0.1, 100000) && metrics.slice(0, 4).every(metric => validNumber(custom[metric], 0, 10000)) && (!custom.fiberG.trim() || validNumber(custom.fiberG, 0, 10000));
+  const legacyCustomPending = Boolean(draft.custom.name.trim() || draft.custom.servingLabel.trim() || draft.custom.grams.trim() || metrics.some(metric => draft.custom[metric].trim()));
+  const unfinishedCustomNutrition = recipeWide && (legacyCustomPending || [...draft.ingredients, ...draft.review].some(item => draft.customNutrition?.[item.id]));
+  function updateCustom(patch: Partial<CustomDraft>) {
+    update(customTarget ? { customNutrition: { ...draft.customNutrition, [customTarget.id]: { ...custom, ...patch } } } : { custom: { ...custom, ...patch } }, false);
+  }
+  function focusCookingIngredient(id: string) {
+    focusCookingName.current = true;
+    focusedIngredient.current = null;
+    setFocusIngredient(id);
+  }
+  function addCookingIngredient(recoverCustom = false) {
+    setIngredientToolsOpen(false);
+    const id = uid("ingredient");
+    update({ ingredients: [...draft.ingredients, { id, name: recoverCustom ? draft.custom.name : "", food: null, quantity: "", unit: "g", included: true, assumptions: [] }], customNutritionTarget: undefined,
+      ...(recoverCustom ? { customNutrition: { ...draft.customNutrition, [id]: draft.custom }, custom: blankCustom() } : {}) });
+    focusCookingIngredient(id);
+  }
+  function openIngredientNutrition(item: RecipeIngredientDraft) {
+    setSearchTarget(null); setIngredientToolsOpen(false);
+    update({ customNutritionTarget: item.id, customNutrition: { ...draft.customNutrition, [item.id]: draft.customNutrition?.[item.id] ?? { ...blankCustom(), name: item.name } } }, false);
+  }
+  function backToIngredient() {
+    if (customTarget) focusCookingIngredient(customTarget.id);
+    update({ customNutritionTarget: undefined }, false);
+  }
   function addCustom() {
     if (!customValid) return;
     const food: Food = { id: uid("food"), name: custom.name.trim(), servingLabel: custom.servingLabel.trim(), servingGrams: Number(custom.grams), unit: custom.unit, preparationBasis: custom.preparation, category: custom.category, calories: Number(custom.calories), proteinG: Number(custom.proteinG), carbsG: Number(custom.carbsG), fatG: Number(custom.fatG), ...(custom.fiberG.trim() ? { fiberG: Number(custom.fiberG) } : {}), source: "User entered", sourceVersion: "1", valueSource: "user_provided", estimated: true, confidence: "medium" };
-    choose(food);
-    update({ custom: blankCustom() }, false);
-    setMethod("search");
+    if (customTarget) {
+      const key = draft.review.some(item => item.id === customTarget.id) ? "review" : "ingredients";
+      const remaining = { ...draft.customNutrition }; delete remaining[customTarget.id];
+      // This is nutrition for the same authored ingredient, so its committed
+      // measurement and explicitly confirmed factors remain attached to the row.
+      update({ [key]: draft[key].map(item => item.id === customTarget.id ? { ...item, food } : item), customNutrition: remaining, customNutritionTarget: undefined }, key === "ingredients");
+      setConversionLookup(current => { const next = { ...current }; delete next[customTarget.id]; return next; });
+      focusCookingIngredient(customTarget.id);
+    } else {
+      choose(food);
+      update({ custom: blankCustom() }, false);
+      setMethod("search");
+    }
   }
+  function customNutritionForm() {
+    return <RecipeCustomNutrition value={custom} valid={customValid} optional={recipeWide} nameRef={customNameInput} onChange={updateCustom} onUse={addCustom} onBack={customTarget ? backToIngredient : undefined} />;
+  }
+
   const selectedReview = draft.review.filter(item => item.included);
   const reviewIssues = selectedReview.flatMap(item => {
     const issue = (recipeWide ? !item.name.trim() || !ingredientDraftMeasurement(item) ? "amount" : null : recipeIngredientIssue(item, foods));
@@ -310,18 +363,19 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     await queue.current;
     await clearDraft(userId, draftType);
     setDraft(freshDraft()); setTab("details"); setRestored(false); setMessage(""); setSaveFailed(false); setResults([]); setSearchTarget(null);
-    setMethod("search"); setServingsBadInput(false); setTimeBadInput(false);
+    setMethod("search"); setIngredientToolsOpen(false); setServingsBadInput(false); setTimeBadInput(false);
     nameInput.current?.focus();
   }
   async function save() {
     if (busyRef.current || imageBusy || recipeSettingsInvalid || pendingConversions || reviewNeedsAddition || !extrasValid || !isRecipeComplexity(draft.complexity) || !preview || !draft.name.trim() || !draft.instructions.trim() || timeInvalid || !recipeTime.valid) return;
+    setSaveError(null);
     busyRef.current = true; setBusy("save"); setMessage(""); setSaveFailed(false);
     const newFoods = [...new Map(draft.ingredients.flatMap(item => item.food && !foods.some(food => food.id === item.food!.id) ? [[item.food.id, item.food] as const] : [])).values()];
     try {
       await queue.current;
       const saved = await onSave({ meal: { mealSlots: draft.mealSlots, id: draft.mealId, name: draft.name.trim(), servings: Number(draft.servings), totalTimeMinutes: recipeTime.minutes, complexity: draft.complexity, notes: draft.instructions.trim(), reference: draft.reference.trim(), image: draft.image, providedNutrition, nutritionInput, cookingIngredients: draft.ingredients.map(item => ({ id: item.id, ...(item.food ? { foodId: item.food.id } : {}), ...(item.food && ingredientDraftServing(item, item.food) ? { nutritionServings: ingredientDraftServing(item, item.food)!.servings } : {}), cookingMeasurement: ingredientDraftMeasurement(item)! })), ingredients: preview.ingredients, unmeasuredIngredients: draft.unmeasuredIngredients.map(({ name, measurement, optional }) => ({ name: name.trim(), measurement: measurement.trim(), ...(optional ? { optional: true } : {}) })), nutritionNotes: draft.nutritionNotes, ...(!meal?.isSystem && meal?.revision ? { revision: meal.revision } : {}) }, newFoods, catalog: draft.catalog, expectedVersions: draft.baseVersions, idempotencyKey: draft.saveKey });
       if (saved) { completed.current = true; await queue.current; await clearDraft(userId, draftType); onSaved(draft.mealId); }
-      else if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; review the message above and retry.", true); }
+      else if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; retry when ready.", true); }
     } catch { if (active.current) { setSaveFailed(true); setMessage("Recipe was not saved. Your draft is retained; retry when the connection is available.", true); } }
     finally { busyRef.current = false; if (active.current) setBusy(null); }
   }
@@ -356,9 +410,9 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
     const sourceUnresolved = item.measurementKind !== "unmeasured" && recipeAuthoringUnit(item.unit, food) !== item.unit;
     return <li key={item.id} data-review-ingredient-id={review ? item.id : undefined} className="grid min-w-0 gap-2 rounded-2xl bg-lav-50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-4">
       <div className="flex min-w-0 items-center gap-2">
-        {review ? <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.included} onChange={event => updateIngredient(item.id, { included: event.target.checked }, true)} /><span className="break-words">{item.name}</span></label> : <label className="grid min-w-0 w-full gap-1 text-xs font-bold">Cooking ingredient name<input className="input min-w-0" aria-label={`${item.name || "Ingredient"} cooking name`} maxLength={256} value={item.name} onChange={event => updateIngredient(item.id, { name: event.target.value })} /></label>}
+        {review ? <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm font-bold"><input data-cooking-name-id={item.id} type="checkbox" checked={item.included} onChange={event => updateIngredient(item.id, { included: event.target.checked }, true)} /><span className="break-words">{item.name}</span></label> : <label className="grid min-w-0 w-full gap-1 text-xs font-bold">Cooking ingredient name<input className="input min-w-0" data-cooking-name-id={item.id} aria-label={`${item.name || "Ingredient"} cooking name`} maxLength={256} value={item.name} onChange={event => updateIngredient(item.id, { name: event.target.value })} /></label>}
       </div>
-      {!food ? <p className="text-xs font-semibold text-ink-soft">Choose a trusted match or supply custom nutrition.</p> : null}
+      {!food ? <p className="text-xs font-semibold text-ink-soft">{recipeWide ? "Food linking and ingredient nutrition are optional." : "Choose a trusted match or supply custom nutrition."}</p> : null}
       <label className="grid min-w-0 gap-1 text-xs font-bold">Measurement<select className="input min-w-0" aria-label={`${item.name} measurement type`} value={item.measurementKind ?? "amount"} onChange={event => updateIngredient(item.id, { measurementKind: event.target.value as RecipeIngredientDraft["measurementKind"], ...(event.target.value === "unmeasured" ? { cookingText: "To taste", nutritionServings: serving?.servings } : {}) }, review)}><option value="amount">Amount</option><option value="range">Range</option><option value="unmeasured">Unspecified</option></select></label>
       <div className="flex min-w-0 flex-wrap items-end gap-2 sm:col-start-2 sm:row-span-2 sm:row-start-1">
         {item.measurementKind === "unmeasured" ? <label className="grid min-w-0 w-full gap-1 text-xs font-bold">Cooking measurement<input className="input min-w-0" maxLength={256} value={item.cookingText ?? ""} aria-label={`${item.name} cooking measurement`} onChange={event => updateIngredient(item.id, { cookingText: event.target.value }, review)} /></label> : <>
@@ -369,7 +423,9 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
         </div></>}
           <Button variant="soft" className="!min-h-11 !w-11 shrink-0 !rounded-full !p-0" aria-label={`Remove ${item.name}`} onClick={() => {
             const remaining = draft[review ? "review" : "ingredients"].filter(candidate => candidate.id !== item.id);
-            update({ [review ? "review" : "ingredients"]: remaining }, !review);
+            const nutritionDrafts = { ...draft.customNutrition }; delete nutritionDrafts[item.id];
+            update({ [review ? "review" : "ingredients"]: remaining, customNutrition: nutritionDrafts,
+              ...(draft.customNutritionTarget === item.id ? { customNutritionTarget: undefined } : {}) }, !review);
             focusedIngredient.current = null;
             if (remaining.length) {
               setFocusIngredient(remaining[0].id);
@@ -391,7 +447,9 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
         updateIngredient(item.id, patch, review);
         if ("pendingConversion" in patch && !patch.pendingConversion) requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`input[data-ingredient-id="${item.id}"]`)?.focus());
       }} /> : null}
-      {review || recipeWide || !food ? <Button variant="ghost" className="w-fit !px-2 text-xs" onClick={() => { setSearchTarget(item.id); setMethod("search"); update({ query: item.name }, false); }}>{recipeWide ? "Link food for nutrition or conversions" : "Choose or change match"}</Button> : null}
+      {review || recipeWide || !food ? <Button variant="ghost" className="w-fit !px-2 text-xs" onClick={() => { setSearchTarget(item.id); setMethod("search"); setIngredientToolsOpen(true); update({ query: item.name, customNutritionTarget: undefined }, false); requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>('input[placeholder="e.g. cooked chicken breast"]')?.focus()); }}>{recipeWide ? "Link food for nutrition or conversions" : "Choose or change match"}</Button> : null}
+      {recipeWide || draft.customNutrition?.[item.id] ? <Button variant="ghost" className="w-fit !px-2 text-xs" onClick={() => openIngredientNutrition(item)}>Add ingredient nutrition</Button> : null}
+      {customTarget?.id === item.id ? customNutritionForm() : recipeWide && draft.customNutrition?.[item.id] ? <p className="text-xs text-ink-soft sm:col-span-2">Unfinished ingredient nutrition will not be applied when saving. Your cooking ingredient will be saved.</p> : null}
       {review && item.assumptions.length ? <p className="break-words text-xs text-ink-soft sm:col-span-2">{item.assumptions.join(" ")}</p> : null}
     </li>;
   }
@@ -440,18 +498,20 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
   return <Modal open={open} title={title} initialFocus={nameInput} returnFocus={returnFocus} onClose={close} dismissalDisabled={busy === "save" || busy === "archive" || imageBusy || archiveOpen}
     help={<HelpPopover title="Recipe authoring" label={`About ${title.toLowerCase()}`}><p>Search trusted foods or review an ingredient description. Recipe-wide macros use your selected source basis and yield; ingredient calculations use linked foods and confirmed quantities. Recipe edits do not rewrite eaten entries.</p></HelpPopover>}
     footer={<div className="grid min-w-0 gap-3">
-      {saveFailed && error ? <div className="grid gap-2 break-words text-sm text-danger-900" role="alert">
-        <p>{error.code === "stale_version" ? "Your saved recipe or groceries changed. Review your draft before applying it to the latest version." : error.message}</p>
-        {error.code === "stale_version" && draft.catalog && snapshot.savedMeals.find(item => item.id === draft.catalog!.mealId)?.catalogReplacementId
+      {saveFailed && saveError ? <div className="grid gap-2 break-words text-sm text-danger-900" role="alert">
+        <p>{saveError.code === "stale_version" ? "Your saved recipe or groceries changed. Review your draft before applying it to the latest version." : saveError.message}</p>
+        <p>Your draft is retained. Review the error and retry.</p>
+        {saveError.code === "stale_version" && draft.catalog && snapshot.savedMeals.find(item => item.id === draft.catalog!.mealId)?.catalogReplacementId
           ? <p>There is now a personal version. Cancel this draft and open Edit on that saved version.</p>
-          : error.code === "stale_version" ? <Button variant="soft" disabled={disabled} className="w-fit text-xs" onClick={() => {
+          : saveError.code === "stale_version" ? <Button variant="soft" disabled={disabled} className="w-fit text-xs" onClick={() => {
             const catalog = draft.catalog && snapshot.savedMeals.find(item => item.id === draft.catalog!.mealId);
             update({ baseVersions: { recordRevision: draft.catalog ? undefined : snapshot.savedMeals.find(item => item.id === draft.mealId)?.revision, groceryRevision: snapshot.grocery?.revision },
               ...(catalog ? { catalog: { mealId: catalog.id, recordRevision: catalog.revision ?? 1, preferenceRevision: catalog.catalogPreferenceRevision ?? 0 } } : {}) });
           }}>Use latest version</Button> : null}
       </div> : null}
       {busy ? <p className="text-sm font-bold" role="status">{busy === "search" ? "Searching trusted foods…" : busy === "analyze" ? "Analyzing ingredients…" : busy === "archive" ? "Archiving recipe…" : "Saving recipe…"}</p> : null}
-      {message ? <p className={`break-words text-sm font-semibold ${messageIsError ? "text-danger-900" : ""}`} role="status">{message}</p> : null}
+      {message && !(saveFailed && saveError) ? <p className={`break-words text-sm font-semibold ${messageIsError ? "text-danger-900" : ""}`} role="status">{message}</p> : null}
+      {unfinishedCustomNutrition ? <p className="text-xs text-ink-soft">Unfinished ingredient nutrition will not be applied. The recipe uses your recipe-wide macros and committed cooking measurements.</p> : null}
       {!disabled && missingMessage ? <div className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink-soft"><span>{missingMessage}</span>{!isRecipeComplexity(draft.complexity) ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => complexityInput.current?.focus()}>Choose complexity</Button> : null}{missingTab && tab !== missingTab ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => { setTab(missingTab); requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden]) input, [role="tabpanel"]:not([hidden]) textarea')?.focus()); }}>Go to {missingTab}</Button> : null}</div> : null}
       <div className={`grid min-w-0 items-center gap-2 sm:flex ${canArchive ? "grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-2"}`}>
         {canArchive ? <IconButton buttonRef={archiveButton} size="compact" variant="danger" portalTooltip label="Archive recipe" tooltip="Archive recipe" disabled={disabled || archiveOpen} onClick={() => { setArchiveTarget(meal ? { id: meal.id, name: meal.name } : null); setArchiveError(""); setArchiveOpen(true); }}><Archive className="h-4 w-4 shrink-0" aria-hidden /></IconButton> : null}
@@ -470,29 +530,28 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       <RecipeTabs active={tab} onChange={setTab} disabled={disabled || archiveOpen} panels={{
         ingredients: <section className="grid min-w-0 gap-3 " aria-label="Recipe ingredients">
         <h3 className="text-lg font-extrabold">Ingredients</h3>
-        <div className="flex flex-wrap gap-2">{([['search','Search ingredients'],['describe','Describe ingredients'],['custom','Add custom ingredient']] as const).map(([key,label]) => <Button key={key} variant={method === key ? "primary" : "soft"} aria-pressed={method === key} className="!px-3 text-xs" onClick={() => switchMethod(key)}>{key === "search" ? <Search className="h-4 w-4" aria-hidden /> : key === "describe" ? <Sparkles className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}{label}</Button>)}</div>
-        {method === "search" ? <div className="grid min-w-0 gap-2">
+        {recipeWide ? <>
+          <p className="text-xs text-ink-soft">Ingredient nutrition is optional. This recipe uses the macros entered in Details.</p>
+          <Button variant="soft" className="w-fit" disabled={draft.ingredients.length + draft.unmeasuredIngredients.length >= 100} onClick={() => addCookingIngredient()}>Add cooking ingredient</Button>
+          {legacyCustomPending ? <div className="grid min-w-0 gap-2" role="group" aria-label="Unfinished custom ingredient">
+            <p className="text-xs text-ink-soft">Your unfinished custom ingredient is retained. Add it as a cooking ingredient and enter its measurement; its nutrition can be completed later.</p>
+            <Button variant="soft" className="w-fit !px-3 text-xs" disabled={draft.ingredients.length + draft.unmeasuredIngredients.length >= 100} onClick={() => addCookingIngredient(true)}>Add as cooking ingredient</Button>
+          </div> : null}
+        </> : null}
+        <div className="flex flex-wrap gap-2">{([['search','Search ingredients'],['describe','Describe ingredients'],['custom','Add custom ingredient']] as const).filter(([key]) => !recipeWide || key !== 'custom').map(([key,label]) => <Button key={key} variant={method === key ? "primary" : "soft"} aria-pressed={method === key && (!recipeWide || ingredientToolsOpen)} className="!px-3 text-xs" onClick={() => { setIngredientToolsOpen(true); switchMethod(key); }}>{key === "search" ? <Search className="h-4 w-4" aria-hidden /> : key === "describe" ? <Sparkles className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}{label}</Button>)}</div>
+        {(!recipeWide || ingredientToolsOpen) && method === "search" ? <div className="grid min-w-0 gap-2">
           {searchTarget ? <p className="text-xs font-semibold">Select a match for the reviewed ingredient.</p> : null}
           <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold">Ingredient search<input className="input" maxLength={180} value={draft.query} placeholder="e.g. cooked chicken breast" onChange={event => { request.current += 1; setResults([]); update({ query: event.target.value }, false); }} /></label>
           <Button variant="soft" className="w-fit !px-3 text-xs" disabled={draft.query.trim().length < 2} onClick={() => void search()}>Search trusted USDA</Button>
           {suggestions.map(({ food, kind }) => <Button key={food.id} variant="soft" className="min-w-0 !justify-between !px-3 !text-left text-xs" onClick={() => choose(food)}><span className="min-w-0 break-words">{food.name}{kind === "close" ? <span className="ml-2 font-semibold text-ink-soft">Close match</span> : null}<span className="block font-normal">{food.servingLabel} · {food.preparationBasis ?? "basis unknown"} · {food.source}</span></span><Plus className="h-4 w-4 shrink-0" aria-hidden /></Button>)}
         </div> : null}
-        {method === "describe" ? <div className="grid min-w-0 gap-2">
+        {(!recipeWide || ingredientToolsOpen) && method === "describe" ? <div className="grid min-w-0 gap-2">
           <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-sm font-bold">Ingredient description<textarea className="input min-h-24 resize-y !py-3" maxLength={4000} value={draft.description} placeholder="e.g. 200 g chicken breast and 100 g cooked rice" onChange={event => update({ description: event.target.value }, false)} /></label>
           <p className="text-xs text-ink-soft">Analyze sends this description to DeepSeek. Review the ingredients and trusted matches before adding them.</p>
           <Button className="w-fit !px-3 text-xs" disabled={!draft.description.trim()} onClick={() => void analyze()}>Analyze ingredients</Button>
         </div> : null}
-        {method === "custom" ? <div className="grid min-w-0 gap-2" role="group" aria-label="Custom ingredient">
-          <h4 className="text-sm font-bold">Custom ingredient</h4><p className="text-xs text-ink-soft">Enter nutrition for one labeled serving. This ingredient is saved with your recipe.</p>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-2">{([['name','Ingredient name'],['servingLabel','Serving label'],['grams','Grams per serving']] as const).map(([key,label]) => <label key={key} className="grid min-w-0 gap-1 text-xs font-bold">{label}<input className="input" aria-label={`Custom ${label.toLowerCase()}`} type={key === "grams" ? "number" : "text"} step="any" min={key === "grams" ? "0.1" : undefined} maxLength={256} value={custom[key]} placeholder={key === "servingLabel" ? "e.g. 1 scoop (30 g)" : label} onChange={event => update({ custom: { ...custom, [key]: event.target.value } }, false)} /></label>)}
-          <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold">Serving type<select className="input" value={custom.unit} onChange={event => update({ custom: { ...custom, unit: event.target.value as CustomDraft["unit"] } }, false)}><option value="g">By weight</option><option value="piece">One piece per serving</option></select></label>
-          <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold">Preparation<select className="input" value={custom.preparation} onChange={event => update({ custom: { ...custom, preparation: event.target.value as PreparationBasis } }, false)}>{["unknown","raw","cooked","baked","dry","prepared","as_labeled"].map(value => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
-          <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold">Grocery category<select className="input" value={custom.category} onChange={event => update({ custom: { ...custom, category: event.target.value as GroceryCategory } }, false)}>{categories.map(value => <option key={value}>{value}</option>)}</select></label>
-          </div>
-          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">{metrics.map(metric => <NutritionFieldLabel key={metric} metric={metric}><input className="input" type="number" min="0" max="10000" step="any" aria-label={`Custom ${metric === "calories" ? "calories" : metric === "fiberG" ? "fiber (optional)" : metric.replace("G", "")}`} placeholder={metric === "fiberG" ? "Optional" : "Required"} value={custom[metric]} onChange={event => update({ custom: { ...custom, [metric]: event.target.value } }, false)} /></NutritionFieldLabel>)}</div>
-          <Button variant="soft" className="w-fit !px-3 text-xs" disabled={!customValid} onClick={addCustom}>Add custom ingredient to recipe</Button>
-        </div> : null}
-        <Button variant="soft" className="w-fit" disabled={draft.ingredients.length + draft.unmeasuredIngredients.length >= 100} onClick={() => { const id = uid("ingredient"); update({ ingredients: [...draft.ingredients, { id, name: "", food: null, quantity: "", unit: "g", included: true, assumptions: [] }] }); setFocusIngredient(id); }}>Add cooking ingredient</Button>
+        {!recipeWide && !customTarget && method === "custom" ? customNutritionForm() : null}
+        {!recipeWide ? <Button variant="soft" className="w-fit" disabled={draft.ingredients.length + draft.unmeasuredIngredients.length >= 100} onClick={() => addCookingIngredient()}>Add cooking ingredient</Button> : null}
         {draft.ingredients.length ? <ul className="grid min-w-0 gap-2">{draft.ingredients.map(item => row(item))}</ul> : <p className="text-sm text-ink-soft">Add an ingredient to start your recipe.</p>}
         <section className="grid min-w-0 gap-2" aria-label="Unmeasured cooking ingredients">
           <h4 className="text-sm font-bold">Seasonings and unmeasured items</h4>

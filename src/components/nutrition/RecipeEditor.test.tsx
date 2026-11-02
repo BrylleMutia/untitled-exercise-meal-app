@@ -28,3 +28,21 @@ describe("recipe editor archive eligibility", () => {
     }
   });
 });
+
+
+describe("recipe-wide ingredient entry", () => {
+  it("puts cooking entry first and keeps ingredient nutrition and search behind optional actions", () => {
+    for (const html of [render(), render(recipe({providedNutrition:{calories:100,proteinG:2,carbsG:20,fatG:1},cookingIngredients:[{id:"onion",cookingMeasurement:{kind:"amount",name:"Onion",quantity:1,unit:"piece"}}]}))]) {
+      expect(html).toContain("Ingredient nutrition is optional. This recipe uses the macros entered in Details.");
+      expect(html.indexOf("Add cooking ingredient</button>")).toBeLessThan(html.indexOf("Search ingredients</button>"));
+      expect(html).not.toContain('aria-label="Custom ingredient"');
+      expect(html).not.toContain("Ingredient search<input");
+      expect(html).not.toContain("Choose a trusted match or supply custom nutrition.");
+    }
+  });
+  it("retains nutrition authoring for ingredient calculations", () => {
+    const html=render(recipe());
+    expect(html).toContain("Add custom ingredient</button>");
+    expect(html).toContain("Ingredient search<input");
+  });
+});

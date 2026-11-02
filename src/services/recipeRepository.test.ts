@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.generated";
+import { FOODS } from "@/constants/foods";
 import type { AppSnapshot } from "@/types/domain";
 import { createSupabaseRepository } from "./supabaseRepository";
 
@@ -37,6 +38,38 @@ describe("recipe repository intent", () => {
     expect(payload).not.toHaveProperty("grocery"); expect(payload.expectedVersions).toEqual({ recordRevision: 2 });
     expect(expectedVersions).toEqual({ recordRevision: 2, groceryRevision: 4 });
     expect(outcome.events).toEqual([{ type: "meal-saved", mealId: input.meal.id }]);
+  });
+  it.each([null, { id: "archived-or-transferred", weekOf: "2026-10-12", revision: 7, items: [] }])("saves an unplanned recipe without depending on a missing or stale grocery", async grocery => {
+    const currentSnapshot = { ...snapshot, grocery };
+    const outcome = await repository.saveRecipe({ ...input, currentSnapshot, expectedVersions: { groceryRevision: 7 } });
+    const payload = rpc.mock.calls[0][1].p_payload;
+    expect(payload).not.toHaveProperty("grocery");
+    expect(payload.expectedVersions).not.toHaveProperty("groceryRevision");
+    expect(outcome.events).toEqual([{ type: "meal-saved", mealId: input.meal.id }]);
+  });
+  it("omits JSON null grocery payloads when an existing recipe changes without a loaded list", async () => {
+    const currentSnapshot = { ...snapshot, savedMeals: [{ ...input.meal, revision: 2 }] };
+    await repository.saveRecipe({ ...input, meal: { ...input.meal, servings: 2 }, currentSnapshot, expectedVersions: { recordRevision: 2, groceryRevision: 9 } });
+    const payload = rpc.mock.calls[0][1].p_payload;
+    expect(payload).not.toHaveProperty("grocery");
+    expect(payload.expectedVersions).toEqual({ recordRevision: 2 });
+  });
+  it.each([null, { id: "different-week", weekOf: "2026-10-05", revision: 7, items: [] }])("does not manufacture or mix grocery weeks when editing a planned recipe", async grocery => {
+    const mealPlan = { id: "plan", version: 1, weekOf: "2026-10-12", targetId: "target", meals: [{ id: "planned", date: "2026-10-12", slot: "lunch" as const, mealId: input.meal.id, label: input.meal.name, servings: 1 }] };
+    await repository.saveRecipe({ ...input, meal: { ...input.meal, servings: 2 }, currentSnapshot: { ...snapshot, mealPlan, grocery, savedMeals: [input.meal] }, expectedVersions: { recordRevision: 2, groceryRevision: 7 } });
+    const payload = rpc.mock.calls[0][1].p_payload;
+    expect(payload).not.toHaveProperty("grocery");
+    expect(payload.expectedVersions).toEqual({ recordRevision: 2 });
+  });
+  it("retains actual grocery writes, concurrency checks, purchases and quantity overrides for a planned recipe", async () => {
+    const food = { ...FOODS[0], id: "food-egg", unit: "g" as const, servingGrams: 100 };
+    const item = { id: "gi-food-egg", name: food.name, category: food.category, unit: "g", quantity: 150, generatedQuantity: 100, checked: true };
+    const grocery = { id: "actual-grocery", weekOf: "2026-10-12", revision: 7, items: [item] };
+    const mealPlan = { id: "plan", version: 1, weekOf: grocery.weekOf, targetId: "target", meals: [{ id: "planned", date: grocery.weekOf, slot: "lunch" as const, mealId: input.meal.id, label: input.meal.name, servings: 1 }] };
+    await repository.saveRecipe({ ...input, meal: { ...input.meal, ingredients: [{ foodId: food.id, servings: 2 }] }, currentSnapshot: { ...snapshot, mealPlan, grocery, foods: [food], savedMeals: [input.meal] }, expectedVersions: { recordRevision: 2, groceryRevision: 7 } });
+    const payload = rpc.mock.calls[0][1].p_payload;
+    expect(payload.grocery).toMatchObject({ id: grocery.id, revision: 7, items: [{ quantity: 150, generatedQuantity: 200, checked: true }] });
+    expect(payload.expectedVersions).toEqual({ recordRevision: 2, groceryRevision: 7 });
   });
   it("sends catalog identity and separate concurrency version with a new personal identity", async () => {
     const catalog = { mealId: "meal-korean-beef-bowl", recordRevision: 1, preferenceRevision: 0 };
@@ -85,7 +118,7 @@ describe("recipe repository intent", () => {
   });
   it("keeps recipe details, revisions and the retry key in the authorized save payload", async () => {
     const outcome = await repository.saveRecipe(input);
-    expect(rpc).toHaveBeenCalledWith("save_recipe", { p_payload: { meal: { ...input.meal, totalTimeMinutes: null }, newFoods: [], grocery: null, expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey } });
+    expect(rpc).toHaveBeenCalledWith("save_recipe", { p_payload: { meal: { ...input.meal, totalTimeMinutes: null }, newFoods: [], expectedVersions: input.expectedVersions, idempotencyKey: input.idempotencyKey } });
     expect(outcome.snapshot).toBe(snapshot);
   });
   it("rejects blank instructions before making a request", async () => {
