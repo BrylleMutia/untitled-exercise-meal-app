@@ -171,16 +171,17 @@ test("calendar preference and selected-day planning preserve dates across the ap
     await largeText.evaluate(element => element.parentNode?.removeChild(element));
     await dayChoices.screenshot({ path: `output/calendar/day-choices-${info.project.name}.png` });
     const preview = dialog.getByRole("region", { name: "Generated plan preview", exact: true });
-    await expect(preview.getByRole("listitem").first()).toContainText(formatFullDate(selectedDate));
+    const dailyPreview = preview.locator('[aria-label="Daily planned preview"]');
+    await expect(dailyPreview.getByRole("status")).toContainText(formatFullDate(selectedDate));
+    await expect(dailyPreview.getByRole("heading")).toHaveText(["Breakfast", "Lunch", "Dinner", "Snack"]);
     for (const row of await preview.getByRole("listitem").all()) {
-      await expect(row).toContainText(formatFullDate(selectedDate));
-      await expect(row).toContainText(/(?:Breakfast|Lunch|Dinner|Snack) · 1 serving/);
-      await expect(row).toHaveClass(/bg-lav-50/);
+      await expect(row).toContainText("Estimated servings");
+      await expect(row).toHaveClass(/bg-home-meal/);
       await expect(row.getByRole("button")).toHaveCount(0);
-      await expect(row.getByText(/kcal|protein|trusted-catalog/)).toHaveCount(0);
+      await expect(row.getByRole("group", { name: "Planned portion nutrition" })).toBeVisible();
     }
     const previewCount = await preview.getByRole("listitem").count();
-    await expect(preview.getByRole("heading")).toHaveText(`Preview · ${previewCount} ${previewCount === 1 ? "meal" : "meals"}`);
+    await expect(preview.getByRole("heading", { name: /^Preview/ })).toHaveText(`Preview · ${previewCount} ${previewCount === 1 ? "meal" : "meals"}`);
     if (info.project.name === "desktop") {
       await page.setViewportSize({ width: 760, height: 930 });
       const headingBox = await dayChoices.getByRole("heading", { name: "Choose days", exact: true }).boundingBox();
@@ -225,7 +226,7 @@ test("calendar preference and selected-day planning preserve dates across the ap
     await dialog.getByRole("button", { name: "Save plan", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await days.getByRole("button").first().click();
-    await expect(page.getByRole("button", { name: "Log", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Log planned / }).first()).toBeVisible();
     await days.getByRole("button").nth(1).click();
     await expect(days.locator('button[aria-pressed="true"]')).toHaveCount(1);
     await expect(days.getByRole("button").nth(1)).toHaveAttribute("aria-pressed", "true");
@@ -566,7 +567,7 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     const recipes = page.getByRole("region", { name: "Recipes", exact: true });
     await expect(recipes.getByRole("heading", { name: "Recipes", exact: true })).toHaveCount(1);
     await expect(recipes.getByRole("button", { name: "About Recipes", exact: true })).toHaveCount(1);
-    await expect(recipes.getByRole("button", { name: "Create", exact: true })).toHaveClass(/bg-white\/70 text-ink/);
+    await expect(recipes.getByRole("button", { name: "Create", exact: true })).toHaveClass(/bg-ink text-white/);
     await expect(recipes.getByRole("button", { name: "Create", exact: true }).locator('svg.lucide-plus[aria-hidden="true"]')).toHaveCount(1);
     const name = `Weekly Recipe ${info.project.name} with chicken, vegetables and rice`;
     await editor.getByLabel("Recipe name", { exact: true }).fill(name);
@@ -687,13 +688,23 @@ test("recipe meal assignments generate a recoverable weekly preview without chan
     for (const inset of imageInset) expect(inset).toBeCloseTo(15, 0);
     await expect(dialog.getByRole("heading", { name: "Preview · 4 meals", exact: true })).toBeVisible();
     const preview = dialog.getByRole("region", { name: "Generated plan preview" });
-    const first = await preview.getByRole("listitem").allTextContents();
+    async function weeklyPreviewRows() {
+      const days = preview.getByRole("group", { name: "Choose a day", exact: true });
+      const selected = await days.locator('[aria-pressed="true"]').getAttribute("data-date");
+      const rows: string[] = [];
+      for (const day of await days.locator("button:enabled").all()) {
+        await day.click(); rows.push(...await preview.getByRole("listitem").allTextContents());
+      }
+      if (selected) await days.locator(`[data-date="${selected}"]`).click();
+      return rows.sort();
+    }
+    const first = await weeklyPreviewRows();
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await expect(generate).toBeFocused(); await generate.click();
     await expect(dialog.getByText("Weekly plan draft restored. Review the preview before saving.")).toBeVisible();
-    expect(await preview.getByRole("listitem").allTextContents()).toEqual(first);
+    expect(await weeklyPreviewRows()).toEqual(first);
     await dialog.getByRole("button", { name: "Shuffle", exact: true }).click();
-    await expect(preview.getByRole("listitem")).toHaveCount(4);
+    expect(await weeklyPreviewRows()).toHaveLength(4);
     if (info.project.name === "mobile") await page.setViewportSize({ width: 320, height: 844 });
     expect(await gridColumns()).toBe(info.project.name === "mobile" ? 2 : 4);
     await choices.screenshot({ path: `output/weekly-generation/compact-cards-${info.project.name}.png` });

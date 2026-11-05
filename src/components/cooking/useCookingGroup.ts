@@ -8,16 +8,22 @@ let accountRefresh: Promise<boolean> | null = null;
 
 export function useCookingGroup(weekOf: string) {
   const { snapshot, actions } = useApp();
-  const [state, setState] = useState<{ key: string; data?: GroupWeek; error?: string }>({ key: "" });
+  const [state, setState] = useState<{ key: string; attempt?: number; basis?: typeof snapshot; data?: GroupWeek; error?: string }>({ key: "" });
   const [attempt, setAttempt] = useState(0);
   const key = `${snapshot.userId}:${weekOf}`;
-  const refresh = useCallback(() => setAttempt(n => n + 1), []);
+  const requesting = useRef(false);
+  const refresh = useCallback(() => {
+    if (requesting.current) return;
+    requesting.current = true;
+    setAttempt(n => n + 1);
+  }, []);
   const load = useRef(actions.loadCookingGroupWeek);
   useEffect(() => { load.current = actions.loadCookingGroupWeek; }, [actions.loadCookingGroupWeek]);
   useEffect(() => {
     if (!snapshot.userId || !snapshot.onboarded) return;
     let active = true;
-    void load.current(weekOf).then(data => { if (active) setState({ key, data }); }).catch(error => { if (active) setState(previous => ({ key, data: previous.key === key ? previous.data : undefined, error: error.message })); });
+    requesting.current = true;
+    void load.current(weekOf).then(data => { if (active) setState({ key, attempt, basis: snapshot, data }); }).catch(error => { if (active) setState(previous => ({ key, attempt, basis: snapshot, data: previous.key === key ? previous.data : undefined, error: error.message })); }).finally(() => { if (active) requesting.current = false; });
     return () => { active = false; };
   }, [snapshot, key, weekOf, attempt]);
   const groupId = state.key === key ? state.data?.group?.id : undefined;
@@ -41,5 +47,6 @@ export function useCookingGroup(weekOf: string) {
     const timer = setInterval(visibleRefresh, 30000);
     return () => { clearInterval(timer); window.removeEventListener("focus", visibleRefresh); window.removeEventListener("online", visibleRefresh); document.removeEventListener("visibilitychange", visibleRefresh); void client.removeChannel(channel); };
   }, [groupId, refresh, actions]);
-  return { data: state.key === key ? state.data : undefined, error: state.key === key ? state.error : undefined, loading: state.key !== key, refresh };
+  return { data: state.key === key ? state.data : undefined, error: state.key === key ? state.error : undefined, loading: state.key !== key,
+    refreshing: state.key !== key || state.attempt !== attempt || state.basis !== snapshot, refresh };
 }

@@ -3,6 +3,24 @@
 Living product contract for a responsive web app built with Next.js, with optional
 Progressive Web App (PWA) installation support.
 
+## Shared loading feedback — 2026-11-04
+
+The themed pan animation is the default for asynchronous loading panels. It is
+96px square, centered above a descriptive status label when the content region
+is at least 240px wide. Narrow regions and compact buttons, checkboxes, favorite
+actions and media placeholders retain their existing treatment. Numeric progress
+keeps its meaning. Loading never introduces artificial waits; empty, failed and
+completed states stop the animation. Reduced motion uses a static pan image.
+
+Generate plan reports cooking-group connection/retry, draft recovery and pending
+authoritative previews, including the 350ms debounce. Daily Preview places its
+loader below person/date navigation; Recipes to cook shows updating requirements;
+other steps show one preview loader below the restored notice. Stale meals and
+batches stay hidden. Invalid or missing inputs do not show generation as pending.
+Retry cannot fall back to personal planning after an unknown/failed group check.
+Ordinary background refreshes preserve the mounted wizard; browsing people or
+dates does not request previews or reset acknowledgment.
+
 ## MVP-3 handover status — 2026-10-04
 
 Everyday Usability and Choice is implemented: five onboarding groups and reliable
@@ -1502,9 +1520,9 @@ Members must have matching Start of week preferences. Later changes require unan
 
 Nutrition and Grocery use one page each, without a Personal/Group mode switch. Nutrition keeps the owner's daily targets, planned meals, actual logging and recipes visible, with an Overview action beside Generate and one combined Recipes collection. The Cooking overview modal uses current saved assignments, grouping recipe versions into cooking cards with portions, whole batches, leftovers and expandable date/slot/member distributions. Skipped portions are excluded from totals; already-logged planned meals remain part of the weekly cooking plan. Each default appears once by catalog identity; customized variants stay separate. Owned archive preferences remain effective, including retained default snapshots. Member recipes show Shared by: display name in Recipe overview; defaults show Source: Default recipe. Other members' recipes offer View and Save personal copy, while owned recipes retain their existing actions. Connected Generate plan selects people, days, recipes, maximum batches, and Fill empty meals or Replace planned meals on selected days. People defaults to everyone; selecting only yourself still uses shared planning and groceries. Unselected members retain existing assignments and cooking requirements. Accounts without a group keep individual generation. An unverified membership blocks generation with Retry rather than switching persistence paths. Replacement affects only selected members and dates and preserves actual entries and linked planned meals. Partially occupied slots fill only empty eligible members, using the same recipe for each shared slot. Group allocations appear in each person's normal daily Nutrition plan; only the owner may log intake.
 
-Personal portions reuse the 25/30/30/15 percent calorie shares, rounded to editable quarter servings between 0.25 and 4. The server enforces date-effective eligibility, remaining calories and structural planning constraints. Preferences are advisory. Portions are estimates. Maximum whole-batch counts initially equal the number of selected members. Retained assignments consume capacity; groceries buy the whole batches actually needed and the preview shows leftover servings. Recipe revisions remain distinct cooking batches. Replacements, portions, leftovers and incomplete results require review before saving. Individual Generate uses the same advisory review with its existing one-serving and weekly-yield rules.
+Personal portions reuse the 25/30/30/15 percent calorie shares, rounded to editable quarter servings between 0.25 and 4. The server enforces date-effective eligibility, remaining calories and structural planning constraints. Preferences are advisory. Portions are estimates. Maximum whole-batch counts default to 1 regardless of group size or selected people. Newly added recipes, unselected-card quantity staging and Select all use this default; manually edited and recovered draft limits remain unchanged when changing people or navigating steps. Retained assignments consume capacity; groceries buy the whole batches actually needed and the preview shows leftover servings. Recipe revisions remain distinct cooking batches. Replacements, portions, leftovers and incomplete results require review before saving. Individual Generate uses the same advisory review with its existing one-serving and weekly-yield rules.
 
-In connected Generate plan, equal-height recipe cards contain inline minus, Batches and plus controls outside their selection labels. Titles retain a minimum height and wrap fully. Controls remain visible but disabled on unchecked recipes, accept 1–100 whole batches, and describe the selected recipe's maximum weekly servings accessibly. Both selected and unchecked cards show compact approximate-calorie, recipe-yield, total-time and complexity pills matching the main Recipes cards; visible source and batch-helper paragraphs are omitted. Temporarily blank or invalid edits stay local, invalidate acknowledgment and block preview requests and saving until corrected; valid values retain the existing defaults, debounce and recoverable drafts. Selected recipes are candidates with preference warnings and enforced structural planning limits, and retained shared meals count toward their batch allowance. The preview counts new per-person date/meal-time assignments, excluding meals already kept in the plan. Recipes to cook describes whole batches needed and leftover servings. A current incomplete preview shows one unfilled-meal message and an initially collapsed Review unfilled meals section grouped by date and meal slot. Its count represents affected meal times where at least one selected person was unfilled, not missing member assignments or skipped intake. Toggling that disclosure preserves input and acknowledgment. Unknown planning warnings and the no-meals-fit explanation stay visible outside the disclosure. Stale, loading and failed preview warning summaries are hidden; zero assignments still cannot be saved. Existing draft recovery and authoritative preview/commit behavior are unchanged. Recipes and both Generate dialogs append “(edited)” to confirmed customized defaults as display-only names. Owned customization links and the shared read model’s derived isEditedDefault flag identify these versions; same-name personal recipes and retained copies without provenance are not guessed to be edited defaults. Missing calories and time stay explicit, and missing complexity follows the existing Medium default.
+Both Generate dialogs use a Classic Stack swiper in Choose recipes: swipe left to Skip and right to Add, with matching lavender Skip/X and mint Add/check buttons. Fresh plans and discarded drafts start with no recipes selected; Continue requires at least one selection and valid selected quantities, not decisions for every recipe. Restored drafts retain their selections and group batch limits, and the deck starts at the first unselected recipe. A one-time first-card demonstration moves left/right and highlights the corresponding action without selecting anything. It stops on interaction or leaving the step, and reduced motion removes scripted travel. Undo restores prior selections and quantities. Review choices lists every recipe with Added, Skipped or Not reviewed status and can reopen any card; its count is the catalog count, separate from the added count. Select all and Clear remain available and clear Undo history. Personal cards retain meal slots, yield, planned and remaining servings, with one serving per planned entry. Group cards show resource pills and a 1–100 batch editor defaulting to 1; unselected edits are staged locally until Add, while selected edits use existing validation and preview refresh. Invalid unselected text blocks Add only; invalid selected quantities block Continue and saving. Card gestures ignore inputs and preserve vertical scrolling, pointer cancellation and keyboard operation. Presentation-only navigation, hints and no-op decisions preserve acknowledgment; actual selection and quantity edits invalidate it. Selected recipes are candidates with preference warnings and enforced structural planning limits, and retained shared meals count toward their batch allowance. The preview counts new per-person date/meal-time assignments, excluding meals already kept in the plan. Recipes to cook describes whole batches needed and leftover servings. A current incomplete preview shows an initially collapsed Review unfilled meals section grouped by date and meal slot. Its count represents affected meal times where at least one selected person was unfilled, not missing member assignments or skipped intake. Toggling that disclosure preserves input and acknowledgment. Unknown planning warnings and the no-meals-fit explanation stay visible outside the disclosure. Stale, loading and failed preview warning summaries are hidden; zero assignments still cannot be saved. Existing draft recovery and authoritative preview/commit behavior are unchanged. Recipes and both Generate dialogs append “(edited)” to confirmed customized defaults as display-only names. Owned customization links and the shared read model’s derived isEditedDefault flag identify these versions; same-name personal recipes and retained copies without provenance are not guessed to be edited defaults. Missing calories and time stay explicit, and missing complexity follows the existing Medium default.
 
 Connected Grocery shows one categorized list and one shared PHP spending total with a single week navigator, Refresh action and extra-item form. Private extras and separate private spending are removed. Each member enables sharing of their own historical, current and future saved weeks through the disclosed Generate PIN or Connect and share action; another member cannot give this consent for them. The notice explains all-week sharing, recorded spending added once, group retention after leaving, and separate draft review. Existing connected members receive a one-time Share groceries with your group dialog on Groceries, with Share groceries and Not now. Closing or Escape also saves a caller-only dismissal for that membership without consenting; Enable grocery sharing in Cooking group settings reopens review. New memberships require fresh consent. Transfers preserve separate matching rows, quantities, checked state, overrides and removals, and add each recorded spending amount once, including explicit zero. Unknown spending remains unknown. Each week transfers atomically with revision checks, durable receipts and resumable retries. Archived calendar copies are not imported again. Source weeks map to the group week containing their start date and retain provenance and review notices when regrouped. Future shared groceries include consenting members’ independent meal-plan requirements, shared cooking and manual extras without duplicating group projections. Device-local drafts remain unsaved until explicitly reviewed and saved to the group. A recovered spending draft replaces the final shared amount the member confirms. Leaving retains transferred purchases and spending with the group and archives the original personal source headers; fresh personal lists do not bring transferred history back or send it to another group. Unconnected accounts retain the personal grocery workflow. Nutrition logs, health data and meal history are not shared by grocery consent. Every member may edit group portions, recipes and skipped state through revision-checked saves; recorded intake remains intact.
 
@@ -1516,14 +1534,76 @@ Successful generation records Recent: <display name>, <MM/DD/YY>, recipe-card su
 
 ### Advisory Generate review
 
+Generation is a guided modal with one active page per step. Personal planning follows
+days, recipes, daily preview, unused servings and final review.
+Connected planning combines people, days and planning mode on one Setup page,
+followed by recipes, preview, whole-batch cooking requirements
+and final review. Setup requires at least one person and one date; all three
+related Review edit actions return to Setup. Step count and progress reuse the
+onboarding design. Required choices and invalid numeric inputs block Continue;
+Back remains available during preview failures. Empty summaries retain their
+step with explicit copy. Zero-assignment previews remain reviewable but unsavable.
+
+Final Review gathers selection summaries with Edit shortcuts, recipe warnings,
+relevant daily warnings, replacements, unfilled meals and the acknowledgment.
+Recipe warnings have no separate step; their disclosure and Remove recipe actions
+remain available in Review. Removing a recipe refreshes the preview and clears
+acknowledgment while retaining the current Review page. Save plan is
+available only on this final step. Navigating steps does not regenerate, persist
+navigation state or clear acknowledgment. Actual planning edits still invalidate
+review. Draft recovery restores choices and restarts at the first step. Saving
+locks navigation and dismissal and preserves the existing retry contract.
+
+Both generation dialogs offer Discard draft in the restored-draft notice. It
+clears only the current account/week draft (and current group for connected
+generation), then returns to step one with fresh defaults and acknowledgment
+cleared. Group defaults select current members, future days and Fill mode, with no
+recipes selected and staged batch quantities starting at one. Personal generation reuses its initial choices.
+Resetting also clears portion/batch text and preview-navigation/disclosure state.
+Untouched reset defaults are not immediately saved as another recoverable draft;
+subsequent edits resume recovery. Storage failure preserves choices with retry
+guidance. Discarding does not save a plan or alter planned meals or actual logs.
+
+Both Generate dialogs provide a resulting-day preview using the reusable date
+selector; connected generation also selects a person from the selected members.
+Retained meals are Kept, generated assignments are New, and replaced/skipped
+prescriptions are excluded. Linked planned prescriptions remain without exposing
+actual intake. Every slot shows Estimated servings: personal and retained
+quantities are read-only; new group assignments retain editable 0.25–4 estimates.
+
+Current cooking-group membership permits viewing selected members’ retained
+personal planned meal names, portions and planned nutrition for selected
+generation dates, without a separate opt-in. Connection disclosures and Cooking
+group settings explain this visibility. This is distinct from grocery consent,
+which does not share meal history. Actual food logs, health inputs, private target
+facts and detailed preference reviews remain private. Leaving revokes live
+preview access. Saved histories remain unchanged.
+
+Both Generate dialogs initially collapse complete Recipe warnings and Daily
+preference warnings sections, showing affected-recipe/day counts. Expanded recipe
+reviews show all cards and existing removal actions. Group Review unfilled meals
+uses the same presentation and retains its affected-meal-time count. Each expanded
+section ends with a lavender Collapse all action that closes only that section,
+returns focus to its summary and brings it into view without animation. Empty
+sections are omitted; other warning-review callers retain their complete, read-only presentation. The generation summary omits recorded warning lists.
+Disclosures persist through step navigation and reset for a new preview. Group
+Setup, Choose recipes and Review move the selected planning, batch-limit and
+private-warning explanations into their current step help. The redundant Preview
+assignment explanation and standalone unfilled-meal message are removed. Personal
+help retains its fixed one-serving rules. The final acknowledgment has a 24px
+checkbox and a fully clickable label panel. Help, person/date navigation and
+disclosures preserve acknowledgment and make no preview requests. Planning/portion
+changes and recipe removal still require fresh review.
+A missing complete group response shows an actionable error and blocks saving.
+
 Both Generate dialogs show “Cost checks are temporarily paused.” once. All seeded,
 personal and shared recipe cost scores resolve to zero; stored cost preferences
-remain unchanged. Recipe warnings follow selection, grouped by selected recipe
+remain unchanged. Recipe warnings appear in final Review, grouped by selected recipe
 (including unused recipes), with cooking-time facts, source/estimated nutrition
 uncertainty, dietary conflicts, and prominent matched ingredients/avoided terms.
 Missing time is explicit. Remove recipe unchecks the existing selection; in
 connected generation this removes it for everyone. No per-recipe confirmation.
-Daily carbohydrate warnings follow the preview, grouped by date with estimated
+Daily carbohydrate warnings also appear in Review, grouped by date with estimated
 totals, saved thresholds and contributing recipes. Incomplete totals cannot be
 assessed reliably. Operational and unfilled-slot messages remain visible.
 
@@ -1534,10 +1614,16 @@ drafts recover selections but require a fresh advisory preview. Loading, failed,
 stale, invalid and zero-assignment previews remain unsavable.
 
 Connected previews expose only the viewer's detailed personal matches and a
-general reminder to consider other members' needs. Each selected recipient gets
-their own private post-save warning snapshot through the generation notice,
-labeled “Your review at generation” and reopenable in the summary. This is not
-unanimous pre-save approval. Later edits/settings do not rewrite reviews.
+general reminder to consider other members' needs. Commit retains each selected
+recipient's private warning snapshot; later edits/settings do not rewrite it.
+The generating account's acknowledgment is not unanimous pre-save approval.
+The generation summary omits the recorded recipe/daily warning lists. Detailed
+warnings remain in Generate plan's Review step before saving. The completion
+summary centers You're all set! above the supplied check-done animation, then
+shows Generated by, week/date, selected people, assignment counts and the cooking
+overview. The checkmark plays once and holds its final frame; reduced motion or
+animation failure uses its completed poster. Done and Close remain immediately
+available. Reopened summaries and recipient notices use the same presentation.
 “Selected people” shows actual new assignment counts for each selected account,
 including zero, with ID-based “(you)” labels when names match.
 

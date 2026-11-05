@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Apple, ConciergeBell, Plus, Sandwich, Sun, UtensilsCrossed } from "lucide-react";
@@ -61,7 +62,7 @@ export function TodayMealsCard() {
       ] as const).map(([label, metric, maximum]) => <ProgressBar key={metric} label={label} value={status === "unlogged" ? null : totals[metric]} target={maximum} unit=" g" compact inlineHeader barClassName={nutritionMetricStyles[metric].bar} />)}</div>
         : <p className="min-w-0 text-xs font-semibold text-ink-soft">Daily targets aren&apos;t set yet. You can still log meals.</p>}
     </div>
-    {week.loading ? <p role="status" className="mt-3 text-xs text-ink-soft">Refreshing today&apos;s meals…</p> : null}
+    {week.loading ? <LoadingIndicator className="mt-3" label="Refreshing today’s meals…" /> : null}
     {week.error ? <div role="alert" className="mt-3 rounded-xl bg-danger-100 p-3 text-sm text-danger-900"><p>Today&apos;s meals could not be refreshed. Your saved entries are retained.</p><Button variant="soft" onClick={refresh}>Retry meals</Button></div> : null}
     <div className="mt-4 grid min-w-0 divide-y divide-ink/10 rounded-2xl bg-white/50">{mealSlots.map(mealSlot => {
       const items = rows.filter(row => row.slot === mealSlot);

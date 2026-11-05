@@ -54,6 +54,10 @@ describe("connected planning repository", () => {
     expect((await outsider.client.storage.from("recipe-covers").download(coverPath)).error).not.toBeNull();
     const input = { reviewPolicyVersion: "advisory_v1" as const, groupId: connected.group!.id, weekOf, memberIds: [a.id, b.id], selectedDates: [weekOf], mode: "fill" as const, recipes: connected.recipes.filter(r => r.id === privateRecipeId).map(r => ({ id: r.id, revision: r.revision!, maxBatches: 2 })), seed: "group-integration", overrides: {} };
     const preview = await a.group.preview(input);
+    expect(preview.resultingMeals.filter(meal => meal.status === "new").map(meal => meal.id).sort()).toEqual(preview.assignments.map(meal => meal.id).sort());
+    const recipientPreview = await b.group.preview(input);
+    expect(recipientPreview.resultingMeals.some(meal => meal.image?.kind === "upload" && meal.image.path === coverPath)).toBe(true);
+    expect(preview.resultingMeals.every(meal => input.memberIds.includes(meal.memberId!) && input.selectedDates.includes(meal.date))).toBe(true);
     expect(preview.assignments.length).toBeGreaterThan(0); expect(JSON.stringify(preview)).not.toMatch(/"(?:remainingCalories|remainingCarbs|allergies|dietaryPattern|targets)":/);
     expect((await outsider.group.load(weekOf)).group).toBeNull();
     await expect(outsider.group.command({ action: "commit", previewId: preview.id, acknowledged: true, idempotencyKey: randomUUID() })).rejects.toThrow();
@@ -75,8 +79,11 @@ describe("connected planning repository", () => {
     expect(concurrent.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(concurrent.filter(result => result.status === "rejected")).toHaveLength(1);
     const anotherPreview = await a.group.preview({ ...input, seed: "another" });
+    expect(anotherPreview.resultingMeals.some(meal => meal.status === "kept")).toBe(true);
+    expect(anotherPreview.resultingMeals.filter(meal => meal.status === "kept").every(meal => !anotherPreview.replacements.some(replacement => replacement.id === meal.id && replacement.memberId === meal.memberId))).toBe(true);
     shared = await b.group.load(weekOf);
     await b.group.command({ action: "leave", groupId: shared.group!.id, groupRevision: shared.group!.revision, idempotencyKey: randomUUID() });
+    await expect(b.group.preview(input)).rejects.toThrow();
     await expect(a.group.command({ action: "commit", previewId: anotherPreview.id, acknowledged: true, idempotencyKey: randomUUID() })).rejects.toThrow(/changed/);
     expect((await b.group.load(weekOf)).group).toBeNull();
     const personal = await b.repository.loadNutritionWeek(weekOf); expect(personal.mealPlan?.meals.length).toBeGreaterThan(0); expect(personal.recipes.some(r => r.id.startsWith("group-copy-"))).toBe(true);

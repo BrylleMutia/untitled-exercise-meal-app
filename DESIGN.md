@@ -1,5 +1,85 @@
 # Cali - Exercise and Meal Planner — Design Decisions
 
+## Shared pan loader — 2026-11-04
+
+Use the authored, themed pan animation at its original speed for spacious loading
+panels across the app. The reusable LoadingIndicator measures its own available
+width: at least 240px shows a fixed 96px square above centered, wrapping status
+text; narrower regions use the compact fallback. Compact controls keep their
+existing spinner/text, including on desktop. No numeric percentage is fabricated.
+The supplied colors and transparent background remain unchanged. Reduced motion
+uses a static frame from the same artwork; loading/runtime failure also retains a
+usable fallback. Animation pauses offscreen and while the document is hidden.
+
+Generate plan uses this loader rather than horizontal progress bars. Labels are
+Loading cooking group…, Restoring plan draft…, Generating plan preview… and
+Updating cooking requirements…. Keep navigation and restored-draft notices in
+place. Preview feedback sits beneath person/date navigation; cooking feedback
+appears beneath the notice. Other steps show only one preview-loading status.
+Hide stale meal/batch rows and retain existing retry/error guidance.
+
+Connected Generate recipe batch controls default to 1 regardless of group size or
+selected people, including newly added recipes, Select all and staged unselected-card
+values. Fresh plans have no recipes selected. Batch labels and the 1–100 range retain their existing meaning.
+Manual edits and restored drafts keep their values through people/step navigation.
+
+## Generate plan daily review — 2026-11-03
+
+Generation uses the same shared Stepper header and Back/Continue actions as
+onboarding: a readable step count, section heading, and lavender progress
+segments. The modal keeps progress in its bounded header, one active page
+in the independently scrolling body, and navigation in its fixed footer.
+Personal steps are Choose days → Choose recipes → Preview → Unused servings →
+Review. Connected steps are Setup → Choose recipes → Preview → Recipes to cook
+→ Review. Recipe warnings appear in final Review before the acknowledgment. Setup groups People, Choose days
+and Planning mode in that order with visible section labels. Continue requires
+at least one person and one date. Their Review edit shortcuts all return to Setup.
+Empty warning/serving summaries have explicit copy and do not change step counts.
+
+Required selections and valid batch/portion inputs gate Continue. Review includes
+Edit shortcuts, recipe and daily warnings, replacements/unfilled-slot explanations where
+applicable, and the final acknowledgment; Save plan appears only here. Back,
+Continue and Edit move focus to the current heading and reset the body scroll.
+View navigation preserves inputs, preview selection, warning disclosure and
+acknowledgment. Reopened drafts begin at the first step and require fresh review.
+Both flows show a lavender restored-draft notice with a 44px Discard draft action.
+It wraps beneath the message on narrow screens and remains available across steps.
+Discarding locks conflicting controls, then returns focus to the first step heading,
+resets body scrolling and announces the reset. Defaults stay unsaved until edited;
+failed clearing keeps the notice and current choices available for retry.
+Saving locks navigation, edits and dismissal. At very narrow widths, navigation
+icons and padding adapt to the available container width so Back/Continue labels
+remain readable, including enlarged text. Expanded recipe-review rows stack at
+narrow text widths, and disclaimer text and removal controls wrap within the
+modal body.
+
+Both Generate dialogs initially collapse entire Recipe warnings and Daily
+preference warnings sections using the same native details/summary presentation
+as Review unfilled meals. Summaries show affected recipe, day or meal-time counts.
+Expanding Recipe warnings shows its introduction and every recipe card; the former
+first-card See more/See less treatment is removed. Each expanded section ends in
+a 44px lavender text-only Collapse all action with a section-specific accessible
+name. It closes only its section, focuses its summary and scrolls it into view
+instantly. Disclosure state survives step navigation and resets for each new
+preview. Other warning-review callers keep their full presentation by default.
+Generation summaries omit warning lists. Group Setup, Choose recipes
+and Review use keyed header help for planning-mode, recipe/batch and private-review
+guidance. The selected Preview explanation and standalone unfilled status are
+removed. Personal generation retains its existing help. The acknowledgment
+uses a 24px native checkbox inside a full-panel clickable label. Disclosure,
+person and date navigation preserve acknowledgment and do not regenerate.
+
+The preview reuses DayStrip with generation dates enabled. Connected generation
+adds a Person select limited to selected members, defaulting to you when selected.
+The date defaults to today when selected, otherwise the earliest selected date;
+valid view selections survive regeneration. Breakfast, Lunch, Dinner and Snack
+reuse Planned typography, recipe covers and portion nutrition pills. New and
+Kept identify generated and retained meals. Every row shows Estimated servings;
+only new group assignments have editable quantities. Missing meals and nutrition
+stay explicit. Counts remain total new assignments, excluding Kept. Stale,
+loading and failed previews hide meal details. Private image access is unchanged;
+unavailable covers use the standard placeholder.
+
 > **Purpose:** Record the current visual direction, design tokens, UX patterns,
 > responsive/navigation model, and auth-first setup for the app. This file is
 > the owner of DESIGN.md-owned visual and component detail.
@@ -1126,7 +1206,7 @@ The design follows the accessibility and motion guidance in `ARCHITECTURE.md`.
   changing numbers.
 - **Reduced motion:** global override in `globals.css` (see
   [Shape, Elevation, and Motion](#shape-elevation-and-motion)).
-- **Loading/error/empty/offline:** `loading.tsx` (centered pulse, `role="status"`),
+- **Loading/error/empty/offline:** `loading.tsx` (shared responsive pan loader, `role="status"`),
   `error.tsx` (blush panel with "Your saved data was not affected" and Try
   again), `EmptyState` for empty content, and the shell's storage-unavailable
   banner plus toast warnings for offline/unsaved-state feedback. Network and
@@ -1283,8 +1363,8 @@ From [`package.json`](./package.json), the Next.js scripts are:
 
 | Script | Command | Covers |
 |--------|---------|--------|
-| `dev` | `node scripts/copy-exercise-assets.mjs && next dev` | Local dev server; copies exercise frames first |
-| `build` | `node scripts/copy-exercise-assets.mjs && next build` | Production build; copies exercise frames first |
+| `dev` | `node scripts/copy-exercise-assets.mjs && node scripts/copy-loading-assets.mjs && next dev` | Local dev server; copies exercise and loading assets first |
+| `build` | `node scripts/copy-exercise-assets.mjs && node scripts/copy-loading-assets.mjs && next build` | Production build; copies exercise and loading assets first |
 | `start` | `next start` | Serve the production build |
 | `typecheck` | `tsc --noEmit` | Strict TypeScript verification |
 | `lint` | `eslint .` | ESLint (core-web-vitals + TypeScript configs) |
@@ -1410,9 +1490,11 @@ helper sentence; validation errors and carried-amount review guidance remain.
 
 ## Cooking group interactions
 
-Connected Generate plan uses equal-height recipe selection cards with stretching bodies and a `min-h-11` title minimum; names wrap fully and may grow at large text sizes. Covers, names and compact resource pills form the keyboard-focusable selection label. The pills reuse the main Recipes card component in coral approximate calories per serving, mint yield per batch, lavender total minutes and peach complexity order, using text-xs, smaller padding and icons, and natural wrapping. Source and weekly maximum-serving information remain in accessible descriptions rather than visible paragraphs. Selection focus draws one outline around the entire outer card, including its batch footer; the label has no separate outline. Batch inputs and buttons retain their own focus indicators when operated. A separate footer inside each card contains 44px minus, numeric Batches and plus controls, always visible and disabled for unchecked recipes. The grid uses up to two columns through tablet widths and four on wide screens; a 10rem card minimum reduces the column count on narrow screens and at large text sizes, retaining room for the stepper. Selected cards describe the maximum servings for the week to assistive technology; both selected and unchecked cards show the four compact pills. Controls accept whole batches from 1–100; invalid or temporarily blank text stays local, shows recovery guidance, clears acknowledgment and blocks preview requests and saving. Valid allowances retain the existing draft and debounce behavior. The nearby explanation states that selected recipes remain available with preference warnings while structural planning limits apply, and that retained meals consume the weekly batch allowance. There is no separate Cooking limits list. Confirmed customizations of default recipes display “(edited)” after their names in Recipes and both Generate dialogs. This is a display annotation derived from catalog replacement links or the authorized shared isEditedDefault flag; names, images and revision numbers alone are not evidence. Stored names, IDs and planning references remain unchanged.
+Choose recipes in both Generate dialogs uses the approved Classic Stack composition: a single prominent white recipe card with a thin ink border, a lavender food-photo mat, wrapping title and recipe facts, with two subtly offset inert backing cards. Large round lavender Skip/X controls sit on the left and mint Add/check controls on the right, with directional arrows and visible labels. Left swipes skip; right swipes add. The first card moves 18px left/center/right/center once when card and controls are visible, highlighting the matching action; pointer, keyboard and field interaction interrupt it. Reduced motion omits this demonstration, rotation and exit travel. Horizontal drags follow the pointer, short gestures return to center, and committed cards exit over 220ms. The image and card scroll in the modal; touch-action preserves vertical panning and pinch zoom. Native buttons and scoped Left/Right Arrow keys provide alternatives, polite status updates announce choices, and hidden backing cards never enter the focus order.
 
-Current preview gaps show Some meal slots are still unfilled once, followed by a collapsed Review unfilled meals disclosure with an affected-meal-time count. Details group meal slots chronologically by date and explain that at least one selected person could not be assigned that meal time, without inferring which members or private health limits caused a gap. Opening or closing this disclosure preserves input and acknowledgment. The preview heading counts new per-person meal assignments and excludes retained meals. Recipes to cook explains whole batches and leftover servings. Unknown server warnings and the zero-assignment explanation remain visible under Planning notes. Pending, outdated and failed previews do not show warning summaries as current results. Recipe cooking totals, replacement review and confirmation before saving remain visible in the preview flow.
+Recipe position and added count sit above the deck; Undo and an expandable Review choices list sit below its action controls. Review choices uses compact cover/name/status rows and explicit Review buttons rather than a second grid. Fresh plans start empty, restored choices remain Added, and invalid local batch text stays visible with recovery guidance. Group quantity controls are usable before adding and display the maximum servings produced by the batch allowance; staged unselected edits do not regenerate. Personal cards retain Yield, Planned, Remaining and meal slots. Source covers, approximate nutrition, time, complexity and edited-default annotations reuse existing recipe presentation. Layouts wrap at enlarged text sizes, and action targets remain at least 44px.
+
+Current preview gaps show a collapsed Review unfilled meals disclosure with an affected-meal-time count, without a separate unfilled-status sentence. Its bottom lavender Collapse all action closes only this section and returns focus to the summary. Details group meal slots chronologically by date and explain that at least one selected person could not be assigned that meal time, without inferring which members or private health limits caused a gap. Opening or closing this disclosure preserves input and acknowledgment. The preview heading counts new per-person meal assignments and excludes retained meals. Recipes to cook explains whole batches and leftover servings. Unknown server warnings and the zero-assignment explanation remain visible under Planning notes. Pending, outdated and failed previews do not show warning summaries as current results. Recipe cooking totals, replacement review and confirmation before saving remain visible in the preview flow.
 
 The 2026-10-21 compact-pill/edited-default refinement passed 519 local tests, 1,302 database assertions across 40 files, and desktop/mobile cooking-group flows with local fixture cleanup. Dialog checks cover 320, 390, 469, 570, 594, 760 and 1440px, 200% text, reduced motion, keyboard focus, current-preview acknowledgment, draft recovery and loading/error/empty feedback. TypeScript, ESLint and the webpack production build passed. Browser verification uses an isolated webpack test server.
 
@@ -1424,21 +1506,31 @@ Connected Grocery uses one week navigator, one categorized Grocery list, one Ref
 
 ### Advisory preference review in Generate
 
-Place Recipe warnings after recipe selection in both dialogs, grouped by recipe
+Place Recipe warnings in final Review in both dialogs, grouped by recipe
 with 44px Remove recipe actions. Avoided-food/allergy matches use semantic danger
 surfaces and readable dark text; other warnings use pastel warning treatment.
 Name matched ingredients and terms without claiming safety. Warned recipes remain
 selectable. State once that cost checks are temporarily paused.
 
-Daily carbohydrate review follows assignments, grouped chronologically with
+Daily carbohydrate warnings follow recipe warnings in Review, grouped chronologically with
 estimated totals, saved thresholds and contributing recipes. Unknown totals are
 explicitly incomplete. Keep operational/unfilled warnings distinct. One final
 checkbox covers the current preview and warnings; input changes clear it.
 Connected Generate shows only the viewer's detailed matches and a general
 reminder to consider others. The summary shows Selected people with actual
-per-account assignment counts (including zero), ID-based “(you)” labels, and the
-private Your review at generation snapshot. Existing cross-route notices reopen
-this historical review. Text wraps within scrolling modals at enlarged sizes;
+per-account assignment counts (including zero) and ID-based “(you)” labels.
+The completion summary places its single centered You’re all set! heading in the
+scrolling content above the centered check-done animation, followed by
+Generated by and the existing saved-generation details and cooking overview.
+The checkmark is 1.5 times its initial visible size: a centered 192px artwork
+viewport makes the completed circle about 70px wide. Its compact 88px-high,
+160px-wide outer area and smaller bottom gap reduce the whitespace before
+Generated by. Overflow is clipped and the static poster uses the same sizing. The
+header retains Close; the footer retains Done. The supplied animation plays once
+and holds its completed checkmark, with a completed static poster for reduced
+motion or failures. It never delays dismissal. Your review at generation and
+its recipe/daily warning lists are omitted from this summary. Existing cross-route
+notices and reopened summaries share this presentation. Text wraps within scrolling modals at enlarged sizes;
 44px controls, keyboard focus and reduced-motion behavior remain intact.
 
 ### Shared Add meal modal and planned actions

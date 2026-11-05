@@ -4,8 +4,8 @@
   "private": true,
   "description": "Cali - Exercise and Meal Planner — authenticated responsive Next.js web app",
   "scripts": {
-    "dev": "node scripts/copy-exercise-assets.mjs && next dev",
-    "build": "node scripts/copy-exercise-assets.mjs && next build",
+    "dev": "node scripts/copy-exercise-assets.mjs && node scripts/copy-loading-assets.mjs && next dev",
+    "build": "node scripts/copy-exercise-assets.mjs && node scripts/copy-loading-assets.mjs && next build",
     "test:e2e": "playwright test",
     "test:e2e:release": "node scripts/run-local-supabase-test.mjs browser",
     "test:e2e:public": "playwright test --project=public",
@@ -30,6 +30,7 @@
   "dependencies": {
     "@bryllim/workout-guide": "^1.0.0",
     "@floating-ui/react": "^0.27.20",
+    "@lottiefiles/dotlottie-web": "0.82.1",
     "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.115.0",
     "fflate": "^0.8.3",

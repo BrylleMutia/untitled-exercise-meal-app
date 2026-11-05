@@ -48,7 +48,7 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     await expect(individual.getByRole("checkbox", { name: "Creamy Lemon Chicken (edited)", exact: true })).toBeVisible();
     await individual.getByRole("button", { name: "Close", exact: true }).click();
     await pa.goto("/settings"); await pa.getByRole("button", { name: "Generate PIN", exact: true }).click();
-    const pin = (await pa.locator("#cooking-group [role=status]").innerText()).match(/\b[A-Z0-9]{6}\b/)?.[0]; expect(pin).toBeTruthy();
+    const pin = (await pa.locator("#cooking-group [role=status]").filter({ hasText: "Your connection PIN" }).innerText()).match(/\b[A-Z0-9]{6}\b/)?.[0]; expect(pin).toBeTruthy();
     await pb.goto("/settings"); await pb.getByLabel("Connection PIN", { exact: true }).fill(pin!); await pb.getByRole("button", { name: "Review connection" }).click();
     const review = pb.getByRole("dialog", { name: "Connect cooking accounts" }); await expect(review.getByText("Cooking Alice", { exact: true })).toBeVisible();
     await expect(review.getByText("Week starts on Sunday.", { exact: true })).toBeVisible();
@@ -72,7 +72,7 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     await expect(recipes.getByRole("button", { name: "Add to plan", exact: true })).toHaveCount(0);
     await recipes.getByRole("button", { name: "Filter recipes", exact: true }).click();
     const recipeFilters = pa.getByRole("dialog", { name: "Filter recipes", exact: true });
-    await recipeFilters.getByRole("checkbox", { name: "Shared recipes", exact: true }).check();
+    await recipeFilters.getByRole("button", { name: "Shared recipes", exact: true }).click();
     await recipeFilters.getByRole("button", { name: "Apply filters", exact: true }).click();
     await expect(recipes.getByRole("button", { name: "View recipe: Shared supper", exact: true })).toHaveCount(1);
     await expect(recipes.getByRole("button", { name: "View recipe: Sticky Teriyaki Chicken (edited)", exact: true })).toBeVisible();
@@ -109,10 +109,12 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
       json.warnings = previewState === "complete" ? [] : [message(dates.at(-1)!, "lunch"), message(dates[0], "dinner"), message(dates[0], "breakfast"), "A planning note for this preview."];
       if (previewState === "empty") {
         json.assignments = [];
+        json.resultingMeals = json.resultingMeals.filter(meal => meal.status === "kept");
         json.warnings.push("No meals fit these people, days, recipes, and available planning limits.");
       }
       await route.fulfill({ response, json });
     });
+    await expect(pa.getByRole("button", { name: "Generate", exact: true })).toBeEnabled();
     await pa.getByRole("button", { name: "Generate", exact: true }).focus();
     await pa.keyboard.press("Enter");
     const dialog = pa.getByRole("dialog", { name: "Generate plan" });
@@ -124,9 +126,10 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     const warningReview = dialog.locator("details").filter({ has: pa.locator("summary", { hasText: /^Review unfilled meals/ }) });
     const acknowledgment = dialog.getByRole("checkbox", { name: /I reviewed the assignments/ });
     const savePlan = dialog.getByRole("button", { name: "Save plan", exact: true });
-    await expect(dialog.getByText("Some meal slots are still unfilled.", { exact: true })).toBeVisible({ timeout: 45000 });
+    await expect(warningReview.locator("summary")).toBeVisible({ timeout: 45000 });
+    await expect(dialog.getByText("Some meal slots are still unfilled.", { exact: true })).toHaveCount(0);
     await expect(dialog.locator("summary", { hasText: /^Cooking limits$/ })).toHaveCount(0);
-    await expect(batchLimit).toHaveValue("2");
+    await expect(batchLimit).toHaveValue("1");
     await expect(batchLimit).toHaveAttribute("placeholder", "Batches");
     await expect(recipeChoices.getByRole("spinbutton")).toHaveCount(await recipeChoices.getByRole("checkbox").count());
     await expect(batchLimit).toHaveAccessibleDescription("Default recipe. Up to 8 servings this week.");
@@ -317,12 +320,12 @@ test("cooking group connects two accounts, previews, saves, and delivers one sha
     await pa.screenshot({ path: `output/grocery-amount/overview-${info.project.name}.png`, fullPage: false });
     await schedule.getByRole("button", { name: "Close", exact: true }).click();
     await expect(pa.getByRole("button", { name: "Overview", exact: true })).toBeFocused();
-    await pa.getByRole("region", { name: "Planned", exact: true }).getByRole("button", { name: "Edit", exact: true }).first().click();
-    await expect(schedule).toBeVisible();
-    await expect.poll(() => pa.evaluate(() => document.activeElement?.textContent)).toBe("Edit planned meal");
-    await pa.keyboard.press("Enter");
-    await schedule.getByRole("button", { name: "Cancel", exact: true }).click();
-    await schedule.getByRole("button", { name: "Close", exact: true }).click();
+    const removePlanned = pa.getByRole("region", { name: "Planned", exact: true }).getByRole("button", { name: /^Remove planned / }).first();
+    await removePlanned.click();
+    const removal = pa.getByRole("dialog", { name: "Remove planned meal", exact: true });
+    await expect(removal).toBeVisible();
+    await removal.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(removePlanned).toBeFocused();
     await pa.getByRole("button", { name: "Generate", exact: true }).click();
     const solo = pa.getByRole("dialog", { name: "Generate plan", exact: true });
     await solo.getByRole("checkbox", { name: "Cooking Bea", exact: true }).uncheck();

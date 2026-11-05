@@ -32,3 +32,38 @@ describe("preference review presentation", () => {
     expect(planningAcknowledgment).toContain("unused servings");
   });
 });
+
+
+describe("collapsible generation warnings", () => {
+  const multiple: PreferenceReview = { ...review, recipeWarnings: [...review.recipeWarnings, { code: "cooking-time-unknown", recipeId: "second", recipeRevision: 1, recipeName: "Second recipe", message: "Second warning" }] };
+  it("starts the whole recipe review collapsed and includes every recipe and message", () => {
+    const html = renderToStaticMarkup(<RecipeWarningReview collapsible review={multiple} onRemove={() => {}} />);
+    expect(html).toContain("Sesame seeds");
+    expect(html).toContain("Cooking time is not set.");
+    expect(html).toContain("Second warning");
+    expect(html).toContain("(2 recipes)");
+    expect(html).toContain("<summary");
+    expect(html).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
+    expect(html).toContain('aria-label="Collapse all recipe warnings"');
+    expect(html).not.toContain("See more..");
+  });
+  it("omits empty sections, still discloses one recipe and keeps historical reviews complete", () => {
+    expect(renderToStaticMarkup(<RecipeWarningReview collapsible review={{ ...review, recipeWarnings: [] }} />)).toBe("");
+    expect(renderToStaticMarkup(<RecipeWarningReview collapsible review={review} />)).toContain("(1 recipe)");
+    const historical = renderToStaticMarkup(<RecipeWarningReview review={multiple} />);
+    expect(historical).toContain("Second warning");
+    expect(historical).not.toContain("<details");
+    expect(historical).not.toContain("Collapse all");
+  });
+  it("counts affected days, retains unavailable nutrition, and opts historical daily reviews out", () => {
+    const daily = { ...review, dailyWarnings: [...review.dailyWarnings, { ...review.dailyWarnings[0], date: "2026-10-23" }] };
+    const html = renderToStaticMarkup(<DailyWarningReview collapsible review={daily} />);
+    expect(html).toContain("(2 days)");
+    expect(html).toContain("cannot be assessed reliably");
+    expect(html).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
+    expect(html).toContain('aria-label="Collapse all daily preference warnings"');
+    expect(renderToStaticMarkup(<DailyWarningReview collapsible review={review} />)).toContain("(1 day)");
+    expect(renderToStaticMarkup(<DailyWarningReview collapsible review={{ ...review, dailyWarnings: [] }} />)).toBe("");
+    expect(renderToStaticMarkup(<DailyWarningReview review={daily} />)).not.toContain("<details");
+  });
+});

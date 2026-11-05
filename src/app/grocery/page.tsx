@@ -1,4 +1,5 @@
 "use client";
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { GroceryNameInput } from "@/components/GroceryNameInput";
 import { createUuid } from "@/utility/uuid";
 import { GroceryCategoryField, categoryChoice } from "@/components/GroceryCategoryField";
@@ -47,7 +48,7 @@ function PersonalGroceries({ week, disabled, onAmountSaving, onItemSaving }: {
   const { snapshot } = useApp();
   const weekOf = week.data?.weekOf;
   return <div data-grocery-section className="grid min-w-0 gap-4 pb-4">
-    {week.loading ? <p role="status">Loading this week&apos;s groceriesâ€¦</p> : null}
+    {week.loading ? <LoadingIndicator label="Loading this week’s groceries…" /> : null}
     {week.error ? <div role="alert" className="grid gap-2 rounded-2xl bg-danger-100 p-4 text-danger-900"><p>This week&apos;s groceries could not be refreshed. Your saved list and drafts are retained.</p><Button variant="soft" onClick={week.refresh}>Retry grocery week</Button></div> : null}
     {week.data ? <Card tone="mint"><GroceryTotalAmount key={`${snapshot.userId}:${weekOf}`} week={week.data} disabled={disabled} onRefresh={week.refresh} onSavingChange={onAmountSaving} /></Card> : null}
     {week.data?.grocery?.calendarReviewRequired ? <p role="status" className="rounded-2xl bg-peach-100 p-4 text-sm font-semibold">This list was regrouped after your start of week changed. Review ingredients and carried grocery edits.</p> : null}
@@ -116,7 +117,7 @@ function GroceryWeek({ week, disabled, onRefresh, onSavingChange }: { week: Nutr
 
   const customItemEditor = (
     <fieldset disabled={disabled || !draftReady} className="min-w-0" aria-label="Extra grocery item">
-      {!draftReady ? <p className="text-xs text-ink-soft" role="status">Restoring this week&apos;s item draftâ€¦</p> : null}
+      {!draftReady ? <LoadingIndicator label="Restoring this week’s item draft…" /> : null}
       {draftWasRestored ? (
         <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
           <span>Custom-item draft restored from this device.</span>

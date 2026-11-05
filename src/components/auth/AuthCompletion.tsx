@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { useEffect } from "react";
 
 export function AuthCompletion({ next }: { next: string }) {
@@ -8,8 +9,6 @@ export function AuthCompletion({ next }: { next: string }) {
   }, [next]);
 
   return (
-    <div className="grid min-h-[60dvh] place-items-center text-center" role="status">
-      <p className="text-sm font-bold text-muted">Loading your account…</p>
-    </div>
+    <div className="grid min-h-[60dvh] place-items-center text-center"><LoadingIndicator label="Loading your account…" /></div>
   );
 }

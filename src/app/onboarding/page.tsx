@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ChevronLeft, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ArrowRight, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useAppOptional } from "@/contexts/AppContext";
+import { Stepper, StepperActions } from "@/components/ui/Stepper";
 import { Card } from "@/components/ui/Card";
 import { nutritionMetricStyles } from "@/components/ui/nutritionMetrics";
 import { Button } from "@/components/ui/Button";
@@ -344,22 +345,9 @@ export default function OnboardingPage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
-          Onboarding · step {step + 1} of {STEPS.length}
-        </p>
-        <div className="flex items-center justify-between gap-2"><h1 ref={headingRef} tabIndex={-1} className="mt-1 text-2xl font-extrabold">{STEPS[step]}</h1><HelpPopover title={STEPS[step]}>
+      <Stepper label="Onboarding" steps={STEPS} step={step} headingRef={headingRef} help={<HelpPopover title={STEPS[step]}>
           {step === 0 ? <><p>Your profile is used to estimate targets and build plans. The calorie formula uses age, height, weight, and the selected sex.</p><p>Some situations need individual advice. Screening saves only your choice, without a reason or diagnosis. Adults 18+ only; invalid values are rejected rather than clamped.</p></> : step === 1 ? <><p>Both workout programs stay editable. Pilates foundations use controlled beginner movements without special equipment.</p><p>Your experience, equipment, days, and session time shape the plan.</p></> : step === 2 ? <><p>Choose foods that work for you; you can change these later. Meals use measured portions and respect your exclusions. When no meal fits, the slot stays open.</p><p>Meal cost preferences compare the starter catalog; they are not prices or a money budget.</p></> : step === 3 ? <p>Goals guide estimated targets. Automated targets do not replace medical or dietary care; some health situations need professional advice.</p> : <p>Review your answers and estimated targets before saving. Plans remain editable, and later changes do not rewrite completed history.</p>}
-        </HelpPopover></div>
-        <div className="mt-3 flex gap-1.5" aria-hidden>
-          {STEPS.map((s, i) => (
-            <span
-              key={s}
-              className={`h-1.5 flex-1 rounded-full ${i <= step ? "bg-lav-500" : "bg-lav-100"}`}
-            />
-          ))}
-        </div>
-      </div>
+        </HelpPopover>} />
 
       {draftWasRestored ? (
         <div className="flex items-center justify-between gap-2 rounded-2xl bg-mint-100 px-3 py-2 text-xs font-bold" role="status">
@@ -776,18 +764,7 @@ export default function OnboardingPage() {
         </Card>
       ) : null}
 
-      <div className="flex gap-3">
-        {step > 0 ? (
-          <Button variant="soft" disabled={finalizing} onClick={() => setStep((s) => s - 1)}>
-            <ChevronLeft className="h-4 w-4" aria-hidden /> Back
-          </Button>
-        ) : null}
-        {step < STEPS.length - 1 ? (
-          <Button className="flex-1" onClick={next}>
-            Continue <ArrowRight className="h-4 w-4" aria-hidden />
-          </Button>
-        ) : (
-          <Button
+      <StepperActions step={step} total={STEPS.length} busy={finalizing} onBack={() => setStep(value => value - 1)} onContinue={next} finalAction={<Button
             className="flex-1"
             onClick={finish}
             disabled={finalizing || (!preview && draft.targetEligibility !== "unsupported")}
@@ -795,9 +772,7 @@ export default function OnboardingPage() {
           >
             {finalizing ? "Saving your plan…" : app?.error?.retryable ? "Retry saving" : draft.targetEligibility === "unsupported" ? "Continue without automated targets" : "Create my plan"}
             {finalizing ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <ArrowRight className="h-4 w-4" aria-hidden />}
-          </Button>
-        )}
-      </div>
+          </Button>} />
       {finalizing ? <p role="status" className="text-center text-sm font-semibold text-muted">Finalizing your account and saving your plan…</p> : null}
 
     </div>

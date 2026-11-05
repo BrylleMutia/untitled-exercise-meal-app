@@ -4,6 +4,13 @@ import { DayStrip } from "./DayStrip";
 
 afterEach(() => vi.useRealTimers());
 describe("Local calendar day labels", () => {
+  it("limits preview days without changing unrestricted callers", () => {
+    const props = { weekOf: "2026-10-11", selected: "2026-10-14", onSelect: () => {} };
+    const restricted = renderToStaticMarkup(<DayStrip {...props} availableDates={["2026-10-14", "2026-10-16"]} />);
+    expect(restricted.match(/disabled=""/g)).toHaveLength(5);
+    expect(renderToStaticMarkup(<DayStrip {...props} />)).not.toContain('disabled=""');
+    expect(renderToStaticMarkup(<DayStrip {...props} availableDates={[]} />).match(/disabled=""/g)).toHaveLength(7);
+  });
   it("keeps the compact week anchored independently of selection and distinguishes today", () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 11, 30, 12));
     const html = renderToStaticMarkup(<DayStrip compact weekOf="2026-12-28" selected="2027-01-01" onSelect={() => {}} />);

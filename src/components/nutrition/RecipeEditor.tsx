@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { createUuid } from "@/utility/uuid";
 import { recipeMealSlots, mealSlotLabels, parseMealSlots, validRecipeYield } from "@/utility/recipeMealSlots";
 
@@ -509,7 +510,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
               ...(catalog ? { catalog: { mealId: catalog.id, recordRevision: catalog.revision ?? 1, preferenceRevision: catalog.catalogPreferenceRevision ?? 0 } } : {}) });
           }}>Use latest version</Button> : null}
       </div> : null}
-      {busy ? <p className="text-sm font-bold" role="status">{busy === "search" ? "Searching trusted foods…" : busy === "analyze" ? "Analyzing ingredients…" : busy === "archive" ? "Archiving recipe…" : "Saving recipe…"}</p> : null}
+      {busy ? <LoadingIndicator label={busy === "search" ? "Searching trusted foods…" : busy === "analyze" ? "Analyzing ingredients…" : busy === "archive" ? "Archiving recipe…" : "Saving recipe…"} /> : null}
       {message && !(saveFailed && saveError) ? <p className={`break-words text-sm font-semibold ${messageIsError ? "text-danger-900" : ""}`} role="status">{message}</p> : null}
       {unfinishedCustomNutrition ? <p className="text-xs text-ink-soft">Unfinished ingredient nutrition will not be applied. The recipe uses your recipe-wide macros and committed cooking measurements.</p> : null}
       {!disabled && missingMessage ? <div className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink-soft"><span>{missingMessage}</span>{!isRecipeComplexity(draft.complexity) ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => complexityInput.current?.focus()}>Choose complexity</Button> : null}{missingTab && tab !== missingTab ? <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={() => { setTab(missingTab); requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden]) input, [role="tabpanel"]:not([hidden]) textarea')?.focus()); }}>Go to {missingTab}</Button> : null}</div> : null}
@@ -585,7 +586,7 @@ export function RecipeEditor({ open, meal, foods, returnFocus, onSave, onSaved, 
       <div className="grid min-w-0 gap-3">
         <p className="break-words font-bold">Archive {archiveTarget?.name}?</p>
         <p>Archiving hides this saved recipe from Recipes. Existing planned meals and logged history stay available. Unsaved edits will not be saved.</p>
-        {busy === "archive" ? <p role="status">Archiving recipe…</p> : null}
+        {busy === "archive" ? <LoadingIndicator label="Archiving recipe…" /> : null}
         {archiveError ? <div role="alert" className="rounded-xl bg-danger-50 p-3 text-sm font-semibold text-danger-900"><p>{archiveError}</p>{error ? <p>{error.message}</p> : null}</div> : null}
       </div>
     </Modal> : null}

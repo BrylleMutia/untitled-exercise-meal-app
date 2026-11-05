@@ -9,6 +9,19 @@ test.use({ storageState: { cookies: [], origins: [] } });
 // supplies the configured project values.
 const isUnconfiguredCi = Boolean(process.env.CI && !process.env.NEXT_PUBLIC_SUPABASE_URL);
 
+test("serves only the named public loading assets without authentication", async ({ request }) => {
+  for (const asset of ["pan-loading.lottie", "pan-loading.png", "check-done.lottie", "check-done.png", "dotlottie-player.wasm"]) {
+    const response = await request.get(`/animations/${asset}`, { maxRedirects: 0 });
+    expect(response.status()).toBe(200);
+    expect((await response.body()).length).toBeGreaterThan(100);
+  }
+  const protectedResponse = await request.get("/nutrition", { maxRedirects: 0 });
+  expect(protectedResponse.status()).toBe(307);
+  expect(protectedResponse.headers().location).toContain("/auth/");
+  const unnamedAsset = await request.get("/animations/private.lottie", { maxRedirects: 0 });
+  expect(unnamedAsset.status()).toBe(307);
+});
+
 test("serves the public sign-in surface without authenticated state", async ({ page }) => {
   await page.goto("/auth/sign-in?next=%2F");
   await expect(page).toHaveTitle("Cali - Exercise and Meal Planner");

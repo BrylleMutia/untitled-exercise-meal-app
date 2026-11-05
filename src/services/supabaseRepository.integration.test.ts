@@ -386,7 +386,8 @@ describe("Supabase repository against the disposable local stack", () => {
     const edit = { ...convertedRecipe, providedNutrition: { calories: 560, proteinG: 45, carbsG: 58, fatG: 16 }, ingredients: [{ foodId: "food-egg", servings: 3, cookingMeasurement: { kind: "range" as const, quantity: 1, upperQuantity: 3, unit: "piece" } }] };
     const changed = await account.repository.saveRecipe({ meal: edit, newFoods: [], currentSnapshot: converted.snapshot, expectedVersions: { recordRevision: convertedRecipe.revision, groceryRevision: converted.snapshot.grocery?.revision }, idempotencyKey: randomUUID() });
     expect(changed.snapshot.savedMeals.find(meal => meal.id === recipe.id)).toMatchObject({ providedNutrition: edit.providedNutrition, ingredients: [{ servings: 3 }] });
-    await expect(account.repository.saveRecipe({ ...input, meal: { ...recipe, ingredients: [{ foodId: "food-egg", servings: 2, cookingMeasurement: { kind: "amount", quantity: 1, unit: "cup" } }] }, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
+    // Reuse a valid measurement so client validation does not mask the stale snapshot.
+    await expect(account.repository.saveRecipe({ ...input, meal: recipe, expectedVersions: { recordRevision: loaded.revision }, idempotencyKey: randomUUID() })).rejects.toMatchObject({ repositoryError: { code: "stale_version" } });
   });
 
   it("corrects whole saved-recipe portions atomically and preserves plans, supplied macros and retries", async () => {

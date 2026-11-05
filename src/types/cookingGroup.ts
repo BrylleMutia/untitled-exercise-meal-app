@@ -1,3 +1,4 @@
+import type { ResultingPlannedMeal } from "./planningPreview";
 import type { GroceryCategoryChoice } from "@/utility/groceryCategory";
 import type { PreferenceReview } from "./planningPreferences";
 import type { Food, GroceryList, Meal, MealSlot, Weekday } from "./domain";
@@ -15,7 +16,7 @@ export type GroceryTransferWeek = { sourceListId: number; sourceRevision: number
 export type GrocerySharingStatus = { status: "disconnected" | "not-enabled" | "transferring" | "enabled"; promptDismissed?: boolean; remaining: number; completed: number; next?: GroceryTransferWeek | null; draftWeeks?: Array<{ sourceWeek: string; targetWeek: string }> };
 export type GroupWeek = { group: CookingGroup | null; grocerySharing?: GrocerySharingStatus; recipeOrigins?: RecipeOrigin[]; cooking?: CurrentCooking[]; weekOf: string; recipes: GroupRecipe[]; assignments: GroupAssignment[]; grocery: GroceryList | null; generation: GroupGeneration | null; notices: GroupGeneration[]; revision: number };
 export type GroupPlanningInput = { reviewPolicyVersion?: "advisory_v1"; groupId: string; weekOf: string; memberIds: string[]; selectedDates: string[]; mode: "fill" | "replace"; recipes: Array<{ id: string; revision: number; maxBatches: number }>; seed: string; overrides: Record<string, number> };
-export type GroupPreview = { id: string; expiresAt: string; assignments: GroupAssignment[]; batches: CookingBatch[]; replacements: Array<{ memberId: string; date: string; slot: MealSlot; name: string }>; warnings: string[]; preferenceReview?: PreferenceReview; basis: string };
+export type GroupPreview = { id: string; expiresAt: string; assignments: GroupAssignment[]; batches: CookingBatch[]; resultingMeals: ResultingPlannedMeal[]; replacements: Array<{ id: string; memberId: string; date: string; slot: MealSlot; name: string }>; warnings: string[]; preferenceReview?: PreferenceReview; basis: string };
 export type GroupCommand =
   | { action: "share-groceries"; groupId: string; groupRevision: number; acknowledged: boolean; idempotencyKey: string }
   | { action: "dismiss-grocery-sharing"; groupId: string; groupRevision: number; idempotencyKey: string }

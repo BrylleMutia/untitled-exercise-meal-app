@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { createUuid } from "@/utility/uuid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Sparkles, X, TriangleAlert, WandSparkles, SlidersHorizontal } from "lucide-react";
@@ -22,6 +23,7 @@ import { RecipeFilterDialog } from "@/components/nutrition/RecipeFilterDialog";
 import { activeRecipeFilterCount, emptyRecipeFilters } from "@/utility/recipeFilters";
 import { RecipeCover } from "@/components/nutrition/RecipeCover";
 import { AddMealDialog } from "@/components/nutrition/AddMealDialog";
+import { PlannedMealSummary } from "@/components/nutrition/PlannedMealSummary";
 import { PlannedMealActions } from "@/components/nutrition/PlannedMealActions";
 import { LoggedMealAction } from "@/components/nutrition/LoggedMealAction";
 import { MealRow } from "@/components/nutrition/MealRow";
@@ -290,7 +292,7 @@ export default function NutritionPage() {
           </div>
         </div>
         <DayStrip weekStartsOn={appSnapshot.profile?.weekStartsOn ?? 0} selected={selected} onSelect={selectDay} disabled={entrySaving || savingPlannedLog || Boolean(pendingMutation)} />
-        {week.loading ? <p className="mt-3 text-xs font-bold text-ink-soft" role="status">Loading this week’s nutrition…</p> : null}
+        {week.loading ? <LoadingIndicator className="mt-3" label="Loading this week’s nutrition…" /> : null}
         {week.error ? <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-danger-900" role="alert"><span>{week.error}</span><Button variant="soft" className="!min-h-11 !px-3 text-xs" onClick={week.refresh}>Retry week</Button></div> : null}
         {week.data ? <>
         {summaryMode === "planned" ? <>
@@ -338,19 +340,7 @@ export default function NutritionPage() {
               {planned.length > 0 ? <ul className="mt-2 grid min-w-0 gap-1.5 max-sm:-mx-5">
                 {planned.map((pm) => {
                   const recipe = pm.mealId ? snapshot.savedMeals.find(meal => meal.id === pm.mealId) : undefined;
-                  const savedNutrition = plannedDayNutrition([pm], selected);
-                  const nutrition = Object.values(savedNutrition.metrics).some(metric => metric.value !== null)
-                    ? Object.fromEntries(Object.entries(savedNutrition.metrics).map(([metric, value]) => [metric, value.value])) : null;
-                  const title = <>
-                    <span className="block text-sm font-extrabold">{pm.label}</span>
-                    <span data-meal-serving className="block text-[11px] font-semibold text-ink-soft">{servingLabel(pm.servings)}</span>
-                  </>;
-                  return <MealRow tone="home-meal" mobileFlatPanels inline edgeToEdgeThumbnail inlineActionAlign="center" ariaLabel={`${pm.skipped ? "Skipped planned meal" : "Planned meal"}: ${pm.label}`} key={pm.id} thumbnail={<RecipeCover image={recipe?.image} name={pm.label} fill />} summary={<>
-                    {recipe ? <button type="button" className="min-h-11 w-full min-w-0 rounded-lg text-left [overflow-wrap:anywhere]" aria-label={`View recipe: ${pm.label}`} onClick={event => openRecipe(recipe, event.currentTarget, true)}>{title}</button>
-                      : <div className="min-w-0 [overflow-wrap:anywhere]">{title}</div>}
-                    {nutrition ? <><NutritionPills scrollable abbreviateOnMobile compactOnMobile className="mt-1" values={nutrition} nullLabel="unavailable" precision={0} label="Planned portion nutrition" />{savedNutrition.affectedMeals ? <span className="mt-1 block text-xs font-semibold text-ink-soft">Partial total</span> : null}</>
-                      : <span className="mt-1 block text-xs font-semibold text-ink-soft">Nutrition unavailable</span>}
-                  </>} actions={<PlannedMealActions meal={pm} snapshot={snapshot} week={week.data!} unavailableGuidance="remove-and-add" disabled={entrySaving || Boolean(pendingMutation)} onChanged={week.refresh} focusAfterChange={() => { entryReturnFocus.current = slot; }} />} />;
+                  return <MealRow tone="home-meal" mobileFlatPanels inline edgeToEdgeThumbnail inlineActionAlign="center" ariaLabel={`${pm.skipped ? "Skipped planned meal" : "Planned meal"}: ${pm.label}`} key={pm.id} thumbnail={<RecipeCover image={recipe?.image} name={pm.label} fill />} summary={<PlannedMealSummary meal={pm} onOpen={recipe ? button => openRecipe(recipe, button, true) : undefined} />} actions={<PlannedMealActions meal={pm} snapshot={snapshot} week={week.data!} unavailableGuidance="remove-and-add" disabled={entrySaving || Boolean(pendingMutation)} onChanged={week.refresh} focusAfterChange={() => { entryReturnFocus.current = slot; }} />} />;
 
                 })}
               </ul> : null}
@@ -399,7 +389,7 @@ export default function NutritionPage() {
           />
         ) : null}
         {recipeReadCurrent && (recipeReadCurrent.status === "loading" || recipeReadFailed) ? <div className={`mt-3 grid min-w-0 gap-2 ${recipeReadFailed ? "text-danger-900" : ""}`} role={recipeReadFailed ? "alert" : "status"}>
-          <p className={`text-sm ${recipeReadFailed ? "text-danger-900" : "text-ink-soft"}`}>{recipeReadFailed ? "Original recipe measurements could not be loaded. Your drafts are retained. Retry to view the latest recipe." : "Loading original recipe measurements…"}</p>
+          {recipeReadFailed ? <p className="text-sm text-danger-900">Original recipe measurements could not be loaded. Your drafts are retained. Retry to view the latest recipe.</p> : <LoadingIndicator label="Loading original recipe measurements…" />}
           <div className="flex flex-wrap gap-2">{recipeReadFailed ? <Button variant="soft" className="!px-3 text-xs" onClick={() => { const meal = snapshot.savedMeals.find(meal => meal.id === recipeReadCurrent.id); if (meal && recipeReturnFocus.current) void openRecipe(meal, recipeReturnFocus.current, recipeReadOnly); }}>Retry recipe</Button> : null}
             <Button variant="ghost" className="!px-3 text-xs" onClick={() => { recipeReadRequest.current += 1; setRecipeRead(null); setViewingRecipeId(null); recipeReturnFocus.current?.focus(); }}>Cancel</Button></div>
         </div> : null}
@@ -409,7 +399,7 @@ export default function NutritionPage() {
           editLabel={viewingRecipe.id.startsWith("group-copy-") ? "Save personal copy" : "Edit"}
           onEdit={recipeReadOnly ? undefined : () => { if (viewingRecipe.id.startsWith("group-copy-")) { void saveEditableGroupRecipe(viewingRecipe.id); return; } setRecipeRead(null); setReturnToRecipeOverview(viewingRecipeId); setEditingRecipeId(snapshot.savedMeals.find(meal => meal.id === viewingRecipeId)?.catalogReplacementId ?? viewingRecipeId); setShowNewRecipe(false); setViewingRecipeId(null); setRecipeModalOpen(true); }}
         /> : null}
-        {recipeMetadata.loading ? <p className="mt-3 text-xs text-ink-soft" role="status">Loading favorites and Popular…</p> : null}
+        {recipeMetadata.loading ? <LoadingIndicator className="mt-3" label="Loading favorites and Popular…" /> : null}
         {recipeMetadata.error ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-danger-100 p-3 text-xs text-danger-900" role="status"><span>{recipeMetadata.error}</span><Button variant="ghost" className="!px-2 text-xs underline" disabled={recipeMetadata.loading || recipeMetadata.pendingMeal !== null} onClick={recipeMetadata.refresh}>Refresh cards</Button></div> : null}
         {recipeFiltersOpen ? <RecipeFilterDialog applied={recipeFilters} favoritesAvailable={recipeMetadata.available} returnFocus={recipeFilterTrigger}
           onApply={filters => { setRecipeFilters(filters); setRecipeFiltersOpen(false); }} onClose={() => setRecipeFiltersOpen(false)} /> : null}

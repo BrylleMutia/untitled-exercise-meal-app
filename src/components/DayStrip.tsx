@@ -11,6 +11,7 @@ interface DayStripProps {
   weekStartsOn?: Weekday;
   compact?: boolean;
   weekOf?: string;
+  availableDates?: readonly string[];
 }
 
 const stripClassName = "flex min-w-0 gap-1 overflow-x-auto p-1.5";
@@ -55,7 +56,7 @@ export function DayCheckboxStrip({ weekOf, selectedDates, onToggle, disabled = f
 }
 
 /** Local-calendar week selector with full dates for assistive navigation. */
-export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 0, compact = false, weekOf }: DayStripProps) {
+export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 0, compact = false, weekOf, availableDates }: DayStripProps) {
   const today = todayKey();
   const anchor = weekOf ?? startOfWeek(selected, weekStartsOn);
   const days = weekDates(anchor);
@@ -89,7 +90,7 @@ export function DayStrip({ selected, onSelect, disabled = false, weekStartsOn = 
           <button
             key={key}
             type="button"
-            disabled={disabled}
+            disabled={disabled || (availableDates !== undefined && !availableDates.includes(key))}
             onClick={() => onSelect(key)}
             aria-pressed={active}
             aria-label={formatFullDate(key)}

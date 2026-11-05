@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 import type { AppSnapshot } from "@/types/domain";
 import { ConnectedGenerateDialog } from "./ConnectedGenerateDialog";
 
-let state: { data?: { group: object | null }; loading: boolean; error?: string };
+let state: { data?: { group: object | null }; loading: boolean; refreshing?: boolean; error?: string };
 vi.mock("./useCookingGroup", () => ({ useCookingGroup: () => ({ ...state, refresh: vi.fn() }) }));
 vi.mock("./GroupGenerateDialog", () => ({ GroupGenerateDialog: () => <p>People planner</p> }));
 vi.mock("@/components/nutrition/GenerateWeekDialog", () => ({ GenerateWeekDialog: () => <p>Individual planner</p> }));
@@ -28,7 +28,7 @@ describe("one connected generation path", () => {
   });
   it("blocks an unknown membership and offers Retry on failure", () => {
     state = { loading: true };
-    expect(renderToStaticMarkup(<ConnectedGenerateDialog {...props} />)).toContain("Checking cooking group");
+    expect(renderToStaticMarkup(<ConnectedGenerateDialog {...props} />)).toContain("Loading cooking group");
     state = { data: { group: null }, loading: false, error: "Offline" };
     const html = renderToStaticMarkup(<ConnectedGenerateDialog {...props} />);
     expect(html).toContain("Retry connection");
@@ -38,5 +38,19 @@ describe("one connected generation path", () => {
   it("preserves individual generation after confirming there is no group", () => {
     state = { data: { group: null }, loading: false };
     expect(renderToStaticMarkup(<ConnectedGenerateDialog {...props} />)).toContain("Individual planner");
+  });
+  it("shows retry progress without permitting another retry or a personal fallback", () => {
+    state = { loading: false, refreshing: true, error: "Offline" };
+    const html = renderToStaticMarkup(<ConnectedGenerateDialog {...props} />);
+    expect(html).toContain("Loading cooking group");
+    expect(html).toMatch(/disabled=""[^>]*>Retry connection/);
+    expect(html).not.toContain("Individual planner");
+    expect(html).toContain(">Close</button>");
+  });
+  it("keeps a connected wizard mounted during ordinary background refreshes", () => {
+    state = { data: { group: {} }, loading: false, refreshing: true, error: "Background refresh failed" };
+    const html = renderToStaticMarkup(<ConnectedGenerateDialog {...props} />);
+    expect(html).toContain("People planner");
+    expect(html).not.toContain("Retry connection");
   });
 });

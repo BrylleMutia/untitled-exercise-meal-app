@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { createUuid } from "@/utility/uuid";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "@/contexts/AppContext";
@@ -48,9 +49,9 @@ export function CombinedRecipeLibrary({ owned, renderOwned, filters, favoriteIds
       <Button variant="ghost" className="!min-h-11 !px-2 text-xs underline" onClick={onClearFilters}>Clear filters</Button>
     </div> : null}
     <ul className={`mt-3 grid min-w-0 gap-3 md:grid-cols-2 ${mobileFlatPanels ? "max-sm:-mx-5 max-sm:[&>li:not(:has(.recipe-card))]:px-5" : ""}`} aria-label="Recipe collection">
-    {cooking?.loading ? <li className="md:col-span-2" role="status">Loading shared recipes…</li> : null}
+    {cooking?.loading ? <li className="md:col-span-2"><LoadingIndicator label="Loading shared recipes…" /></li> : null}
     {cooking?.error ? <li className="md:col-span-2 text-danger-900" role="alert"><p>Shared recipes could not be refreshed. Your recipes remain available.</p><Button variant="soft" onClick={cooking.refresh}>Retry shared recipes</Button></li> : null}
-    {reading ? <li className="md:col-span-2" role="status">Loading shared recipe…</li> : null}
+    {reading ? <li className="md:col-span-2"><LoadingIndicator label="Loading shared recipe…" /></li> : null}
     {error ? <li className="md:col-span-2 text-danger-900" role="alert">{error}</li> : null}
     {!favoritesBlocked && !filtered.length && (library.length > 0 || !cooking?.loading && !cooking?.error) ? <li className="md:col-span-2 text-sm text-ink-soft">{library.length ? "No recipes match these filters." : "No recipes yet. Create a recipe to start your collection."}</li> : null}
     {(favoritesBlocked ? [] : filtered).map(meal => {

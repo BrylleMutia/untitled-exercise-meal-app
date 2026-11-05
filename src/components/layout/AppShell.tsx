@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
@@ -49,12 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!app?.hydrated) {
     return (
-      <main className="grid min-h-dvh place-items-center px-6" role="status">
-        <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-pulse rounded-3xl bg-lav-100" />
-          <p className="mt-3 text-sm font-bold text-muted">Loading your account…</p>
-        </div>
-      </main>
+      <main className="grid min-h-dvh place-items-center px-6"><LoadingIndicator label="Loading your account…" /></main>
     );
   }
 

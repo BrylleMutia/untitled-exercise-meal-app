@@ -1136,6 +1136,59 @@ consent, uncertainty, operational errors, and recovery actions remain visible.
 - Defer non-critical charts, catalog, illustration, audio, and animation assets until their surface mounts.
 - Asset optimization must preserve the intended visual style and be measured against a recorded bundle baseline.
 
+## Shared loading runtime
+
+LoadingIndicator owns presentation only: required label, auto/compact mode and
+optional compact fallback. ResizeObserver applies the 240px content-width rule;
+IntersectionObserver and document visibility suspend hidden animation. A single
+lazy import in lottieRuntime initializes @lottiefiles/dotlottie-web; reusable
+LottieArtwork owns and cleans up each player for pan and completion artwork. Canvas is decorative; one polite atomic status
+announces text. An SSR-safe reduced-motion subscription replaces playback with
+the static poster, and failures never block application requests.
+
+The supplied assets/pan loading.lottie remains the authored source. Development
+and builds copy it, the checked-in poster and the pinned runtime's WASM into
+public/animations. The poster regeneration script renders pan frame 31 or
+check-done frame 179 locally. The named pan/check animations, their posters and
+shared WASM bypass authenticated route interception;
+no CDN requests, runtime recoloring, backend or persistence contracts are added.
+The runtime fetches local WASM and animation bytes with handled failures before
+constructing players; a single page-scoped WASM blob prevents player fetch errors
+and aborted requests from producing console errors during ordinary dismissal.
+
+GenerationSummary opts into Modal's content title placement; the single h2 still
+labels the dialog while appearing centered above the checkmark. Existing callers
+keep header titles. GenerationSuccessAnimation uses the same local runtime and
+player lifecycle as loading, with loop disabled, completed-frame retention,
+visibility suspension and reduced-motion/failure posters. Close/Done never await
+animation completion. The summary omits personalReview warning lists without
+changing stored snapshots, response contracts or acknowledgment mutations.
+
+Completion-summary verification on 2026-11-05 passed 784 local tests across 111
+files and desktop/mobile generation acceptance. Checks cover the single content
+heading, checkmark/generator ordering, one-shot completion, visibility resume
+without replay, reduced-motion and asset-failure posters, immediate dismissal,
+warning omission, saved counts and cooking overview. The pan-loader regression
+and signed-out named-asset checks also passed. Summary layouts were exercised at
+320/409/438/1440px with 200% text; the final 1.5x checkmark uses an 88px-high area
+and the same geometry for animated and static presentation.
+
+Cooking-group reads expose initial loading separately from same-key refresh
+pending. Retry requests are guarded against duplicate activation. Generation
+preview pending includes valid stale inputs during debounce, active requests and
+explicit source refreshes; request cleanup ignores superseded responses. Failed
+source refreshes retain retry guidance instead of automatically restarting a
+preview. Presentation-only person/date state never participates in request keys.
+
+Loading verification on 2026-11-04 passed 779 local tests across 109 files,
+ESLint and the production build. Focused desktop/mobile browser checks cover
+animated pixels, the 239/240px boundary, offscreen/document visibility, reduced
+motion, animation/WASM failure, delayed connection/retry and draft reads, stale
+preview/cooking rows, and 320/409/1440px layouts with 200% text. Personal and
+connected review/save flows and signed-out static-asset access were verified;
+the public-asset exception does not expose protected routes or unnamed files.
+
+
 ## TypeScript, Naming, and Comments
 
 - TypeScript remains strict; avoid `any`.
@@ -1462,6 +1515,162 @@ The standalone runner records milestone output, screenshots of each member's sha
 Recipe resource pills share a regular/compact presentation component. Calories remain per-serving estimates and yield remains whole-recipe servings; card density changes never alter calculations. Edited-default display names derive from existing catalog replacement links for owned recipes. The membership-authorized shared library adds only a boolean `isEditedDefault`, resolved by its private helper from the indexed replacement relationship with matching recipe ownership. It exposes no catalog preference rows or health data. The helper preserves its VOLATILE declaration, empty search path, and revoked client execution. Display annotations never modify saved names, recipe identities, revisions, drafts, or historical plan/log references.
 
 ## Advisory generation policy and private review snapshots
+
+### Resulting-day preview — 2026-11-03
+
+CardSwiper is a controlled, reusable presentation component. Dialogs own selections, serving limits and planning mutations; the swiper owns its active recipe ID, decision history and opaque per-item undo snapshots, disclosure and gesture state. Fresh/discarded inputs have no recipes selected. New group selections and Select all initialize maxBatches to 1 regardless of member count; restored values remain intact. Unselected batch text is staged locally by recipe ID/revision and reaches input only on Add. Selected batch edits retain authoritative validation and debounce. Actual choice changes use existing preview/acknowledgment handlers; no-op decisions, demonstration and browsing do not write drafts or request previews.
+
+The pure cardSwiper utility maps bounded distance to left/skip or right/add. Native pointer capture begins after horizontal intent is established, with pan-y/pinch-zoom and interactive-child exclusions. Cancellation never commits; a synchronous decision lock prevents duplicates during exit. Decisions and undo history are recorded before animation, preserving choices if navigation interrupts it. The selected recipe/version basis resets local deck history while step navigation preserves it; Discard remounts the deck and resets staged controls. The reduced-motion subscription uses an SSR-safe external-store snapshot. Intersection observation starts the once-per-session teaching hint only when both card and actions are visible. All observers, listeners, capture and timers are cleaned up on step exit or disabling. No motion dependency, draft schema or backend/save contract change is required.
+
+Classic Stack verification on 2026-11-04 passes TypeScript, ESLint, production
+build and 774 local tests. Focused desktop/mobile browser scenarios pass teaching
+feedback, mouse and real touch gestures, cancellation, vertical scrolling, Undo,
+keyboard alternatives, repeated-click protection, no-op acknowledgment retention,
+batch staging/validation, restored drafts, discard, preview failure/retry,
+idempotent saving and recipient privacy. Layout checks cover 320, 409 and 1440px,
+200% text, reduced motion and both modal-body/footer overflow. Review rows and
+navigation adapt with container queries, and acknowledgment/removal controls wrap
+at enlarged text. Touch handling ignores capture-loss events bubbling from an
+image when its implicit capture transfers to the card. Production verification
+runs after the isolated browser server finishes writing its route-type artifacts.
+
+The generation wizard is presentation state owned by each mounted dialog.
+Onboarding and both dialogs share Stepper and StepperActions; Modal accepts an
+optional bounded header stepper. GenerationStep keeps inactive panels mounted
+with native hidden semantics so local preview/disclosure/input state survives
+Back/Continue without entering the focus order. Step changes focus the heading
+and reset only the modal body scroll. They do not change generation inputs,
+draft persistence, Context/repository contracts, preview identities or backend
+requests. Restored drafts start at step one with the existing fresh-review rule.
+GenerationDraftNotice shares the scoped discard action across personal and group
+dialogs. Discard drains queued draft writes before clearing and re-reading the
+account/week key, including the group ID for group drafts. Write guards prevent
+older choices being queued during clearing. A reset builds fresh inputs and retry
+identity, clears acknowledgment and local editors, remounts presentation panels,
+and focuses/scrolls to step one. Untouched reset inputs skip autosave; later edits
+resume it. Group preview effects cancel their previous response handler during
+discard and require a fresh preview. A remaining stored draft reports failure
+without resetting inputs. No durable mutation or draft schema change is involved.
+
+Draft-discard verification on 2026-11-04 passes TypeScript, ESLint, production
+build, 767 local tests and six focused browser checks including fixture lifecycle.
+Desktop/mobile checks cover scoped clearing, storage failure/retry, later autosave,
+unchanged planned meals, delayed-preview rejection, focus/scroll reset and existing
+generation/save flows. Restored notices pass 320, 409 and 1440px layouts with
+normal/200% text, keyboard interaction and reduced motion; layout detection is clean.
+
+Required selection/number checks gate forward navigation; authoritative save
+checks remain unchanged and Save is composed only in the final Review step.
+The connected flow has five steps: Setup, recipes, preview, cooking requirements
+and review. Both dialogs compose recipe warnings within final Review before the
+acknowledgment, retaining the existing removal, preview refresh and review reset. Setup composes the existing people/day/mode fieldsets
+and gates Continue on both member and date selections. Their Review edit actions
+share the Setup destination. Personal generation also has five steps: days,
+recipes, preview, unused servings and Review.
+
+ReviewDisclosure owns native details/summary state and the section-scoped
+Collapse all action. RecipeWarningReview uses it only when collapsible is opted
+in; DailyWarningReview adds the same optional prop, defaulting to false. Both
+Generate dialogs opt in; other callers retain full warning presentation by
+default. GenerationSummary omits recorded warning lists from its presentation.
+Recipe/day/meal-time counts stay visible when collapsed. Preview identity keys
+reset all disclosures for new results; mounted GenerationStep panels preserve
+them while navigating. Collapse focuses the summary and uses instant nearest
+scrolling inside the existing modal. Group header HelpPopover content is keyed
+by step/session for Setup, recipe selection and Review, so guidance cannot remain
+open with stale content. Personal help is also keyed without changing its copy.
+Help/disclosure state is local presentation: no draft, preview, acknowledgment or
+save-payload changes occur. Existing recipe-removal handlers still own invalidation.
+
+The 2026-11-05 disclosure refinement passed 781 local tests across 110 files,
+TypeScript, ESLint and the production build. Desktop/mobile generation acceptance
+passed with fixture setup/cleanup, covering complete warning sections, independent
+collapse actions, keyboard/focus return, acknowledgment and request preservation,
+step navigation, recipe removal, historical review, retry and final saving.
+Both dialogs were checked at 320/390/409/1440px with 200% text and reduced motion;
+expanded review content reports no horizontal overflow.
+
+Warnings-in-Review verification on 2026-11-03: both five-step flows pass
+TypeScript, ESLint, production build and 767 local tests. Four focused browser
+checks pass, including desktop/mobile generation and fixture setup/cleanup.
+Warnings appear only in Review, keep disclosure state during navigation, and
+recipe removal stays on Review while clearing acknowledgment and refreshing the
+preview. Coverage includes selection gates, Setup edit shortcuts, portions,
+failure/retry, recovered drafts, save locks and final saving. All five connected
+pages pass at 320, 409 and 1440px with normal/200% text and reduced motion; the
+layout scan has no findings. Daily-warning assertions allow valid multiple
+one-serving assignments on a day rather than assuming one assignment per date.
+
+Earlier combined Setup verification on 2026-11-03: TypeScript, ESLint, production build,
+767 local tests and four focused browser checks pass, including desktop/mobile
+generation and fixture setup/cleanup. The group flow verifies both Setup selection
+gates, all three Review shortcuts returning to Setup with retained values and
+acknowledgment, and no extra preview requests during navigation. All six group
+pages pass at 320, 409 and 1440px with 200% text and reduced motion, including
+portion validation, preview failure/retry, zero-assignment save blocking and
+final saving. The personal six-step recovery/retry flow passes in the same run.
+The layout scan reports no findings. Production build verification runs after
+the isolated browser server finishes regenerating its route-type artifacts.
+
+Initial eight-step wizard verification on 2026-11-03: TypeScript, ESLint, production build and 767
+local tests pass. The focused desktop/mobile browser run passes generation
+selection gates, heading focus, warning disclosure retention, preview selection,
+Back/Continue/Edit navigation without new preview requests, recovered drafts,
+save locks, unchanged retry identity, invalid portions, preview failure/retry,
+zero-assignment save denial and private recipient notices. All eight connected
+steps were checked at 320, 409 and 1440px with 200% text and reduced motion.
+The existing onboarding recovery/failure/save flow also passes in both browser
+projects after extracting the shared Stepper; the run totals six passing checks
+including fixture setup/cleanup. Layout detection reports no findings.
+
+GroupPreview adds resultingMeals and replacement IDs to the existing Edge response.
+The service-only store_group_planning_preview RPC assembles selected-date/member
+planned facts under the group lock and basis check using the private
+cooking_resulting_meals helper. The active canonical personal plan owns retained
+rows; shared references are not appended again. Replacements match member/meal
+identities. Saved portion nutrition is retained without rescaling; new portions
+use existing normalization. Skipped rows are excluded; linked prescriptions stay.
+
+Only presentation fields are returned: no health inputs, actual logs or another
+member’s review. Private cover access is unchanged. The resulting-day collection
+is response-only, absent from generation summaries, browser drafts and the general
+shared-week cache. The unchanged Edge handler exposes the additive RPC response;
+old clients ignore the extra field. New clients reject a missing collection instead
+of presenting a partial day. Allocation and commit contracts remain unchanged.
+
+DailyPlanPreview owns transient person/date selection. DayStrip’s optional
+availableDates constrains preview navigation without changing existing callers.
+Both dialogs and Nutrition reuse PlannedMealSummary. Native label/checkbox
+semantics make the acknowledgment panel toggle once.
+
+Preflight baseline 20261101010000: the clean local rebuild and linked project
+matched all 12 release-schema-fingerprint categories, including routine digest
+3c8ec088f3d3ce5e7d5c833615ccad90 and routine-grant digest
+64e51da65a3fb54db6a3215443e71297. Linked/local history matched and the initial
+dry run had no pending migrations. Forward migrations are 20261103010000_generation_daily_preview and
+20261103011000_authorized_preview_covers; no history repair is required. The
+second reuses uploaded paths only where the existing group image policy already
+permits access; storage policies and grants remain unchanged.
+
+Deployment verification on 2026-11-03: all 123 linked/local migration versions
+match through 20261103011000 and the dry run is up to date. All 12 schema
+fingerprint categories match the final clean local rebuild; the routine digest
+is 557b72e6e0bb5e4276ee39db2f8a27bb. Linked type regeneration leaves the public
+contract unchanged. The rollback-only deployment smoke verifies retained/new
+rows, outsider denial, commit and retry; no fixture accounts remain and live
+planned-row counts are unchanged. Anonymous Edge requests return 401.
+
+Local verification passes 765 utility/component/service tests, 38 repository
+integration tests, and 1,603 pgTAP assertions after a clean reset with both forward
+migrations. TypeScript, ESLint and the production build pass. Focused desktop and
+mobile browser acceptance covers warning disclosure, native checkbox toggling,
+person/date navigation, kept meals, serving edits, failure/retry and empty save
+gating at 320–1440px including 409×930, 200% text and reduced motion. The selected-
+date calendar regression also passes. Browser acceptance uses the local backend;
+separate rollback checks verify the linked backend. Hosted frontend acceptance
+remains a separate release step. Older broad browser scenarios
+still contain obsolete recipe-editor selectors and are not a full-suite release
+gate result for this change.
 
 New individual and connected generation use advisory_v1. Pure TypeScript and
 private SQL helpers separate structural validity from preference review. Cooking

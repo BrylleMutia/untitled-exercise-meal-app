@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useCookingGroup } from "./useCookingGroup";
@@ -76,7 +77,7 @@ export function CookingGroupSurface({ weekOf, onWeekChange, kind, busy = false, 
       {currentGroup && week ? <><p className="mt-3 break-words text-xs text-ink-soft">Shared with {currentGroup.members.map(member => member.name).join(", ")}</p><h2 className="mt-4 font-extrabold">Shared spending</h2><GroceryTotalAmount key={`${currentGroup.id}:${weekOf}`} groupId={currentGroup.id} week={asNutritionWeek(week)} disabled={locked || Boolean(group.error)} onRefresh={group.refresh} onSavingChange={setSharedSaving} /></> : null}
     </Card> : null}
     {kind === "nutrition" ? personal : null}
-    {group.error ? <div role="alert" className="grid gap-2 rounded-xl bg-danger-100 p-3 text-danger-900"><p>Shared cooking could not be refreshed. Your saved meals, groceries, and drafts are retained.</p><Button variant="soft" className="justify-self-start" disabled={locked} onClick={group.refresh}>Retry shared week</Button></div> : group.loading ? <p role="status">Checking shared cooking…</p> : null}
+    {group.error ? <div role="alert" className="grid gap-2 rounded-xl bg-danger-100 p-3 text-danger-900"><p>Shared cooking could not be refreshed. Your saved meals, groceries, and drafts are retained.</p><Button variant="soft" className="justify-self-start" disabled={locked} onClick={group.refresh}>Retry shared week</Button></div> : group.loading ? <LoadingIndicator label="Checking shared cooking…" /> : null}
     {currentGroup && week && kind === "grocery" ? <section data-grocery-section aria-label="Grocery list" className="grid min-w-0 gap-4"><GroupGrocery sharing={<GrocerySharing key={currentGroup.id} week={week} locked={locked || Boolean(group.error)} refresh={group.refresh} onSavingChange={setSharedSaving} />} key={`${currentGroup.id}:${weekOf}`} week={week} refresh={group.refresh} locked={locked || Boolean(group.error) || week.grocerySharing?.status === "transferring"} onSavingChange={setSharedSaving} />{week.generation ? <button className="min-h-11 justify-self-start text-left text-xs font-bold underline" disabled={locked} onClick={() => setSummary(week.generation)}>View generation summary</button> : null}</section> : null}
     {kind === "grocery" && !currentGroup ? personal : null}
     {overview && kind === "nutrition" ? <CookingOverview week={week} loading={group.loading} error={group.error} disabled={locked} refresh={group.refresh} assignmentId={overview.assignmentId} returnFocus={overviewFocus} onClose={() => setOverview(null)} onSummary={() => { setSummaryFromOverview(true); setOverview(null); setSummary(week?.generation ?? null); }} /> : null}

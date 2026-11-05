@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { createUuid } from "@/utility/uuid";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useApp } from "@/contexts/AppContext";
@@ -47,7 +48,7 @@ export function CookingOverview({ week, loading, error, refresh, onClose, onSumm
       {week ? <p className="text-sm font-bold">Week of {formatFullDate(week.weekOf)}</p> : null}
       <p className="text-xs text-ink-soft">Current saved cooking plan. Portions and batches include planned meals already logged; actual intake stays private. Skipped portions are excluded from cooking totals.</p>
       <LastGenerated generation={week?.generation ?? null} />
-      {loading ? <p role="status">Loading this week&apos;s cooking…</p> : null}
+      {loading ? <LoadingIndicator label="Loading this week’s cooking…" /> : null}
       {error || week?.group && !week.cooking ? <div role="alert" className="text-danger-900"><p>{error ?? "Cooking overview needs the latest database update."}</p><Button variant="soft" disabled={disabled} onClick={refresh}>Retry cooking overview</Button></div> : null}
       {!loading && !error && week && !week.group ? <p role="status">You are no longer connected to this cooking group.</p> : null}
       {!loading && !error && week?.group && week.cooking?.length === 0 ? <p>Nothing planned for the group this week.</p> : null}

@@ -40,7 +40,10 @@ export function cookingGroupRepository(client: SupabaseClient<Database>) {
         if ("context" in error && error.context instanceof Response) { try { message = (await error.context.json()).message ?? message; } catch { /* Retain the actionable fallback. */ } }
         throw new Error(message);
       }
-      return data as GroupPreview;
+      if (!data || !Array.isArray(data.resultingMeals)) throw new Error("The complete daily preview is unavailable. Refresh after the preview service is updated.");
+      const preview = data as GroupPreview;
+      if (preview.resultingMeals.some(meal => !input.memberIds.includes(meal.memberId ?? "") || !input.selectedDates.includes(meal.date) || !meal.id || !["new", "kept"].includes(meal.status))) throw new Error("The daily preview could not be verified. Refresh and review again.");
+      return preview;
     },
   };
 }

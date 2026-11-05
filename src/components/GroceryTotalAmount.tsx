@@ -1,4 +1,5 @@
 "use client";
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 
 import { createUuid } from "@/utility/uuid";
 import { useEffect, useId, useRef, useState } from "react";
@@ -109,7 +110,7 @@ export function GroceryTotalAmount({ week, disabled, onRefresh, onSavingChange, 
       {failed && !stale ? <p className="text-xs font-semibold text-danger-900" role="alert">{error?.message ?? "The amount was not confirmed. Your input is retained; retry."}</p> : null}
       <div className="flex flex-wrap justify-end gap-2"><Button variant="soft" onClick={() => void cancel()}>Cancel</Button><Button data-save-grocery-amount disabled={stale || !parsed?.valid} onClick={() => void save()}>{failed && !stale ? "Retry save" : "Save amount"}</Button></div>
     </fieldset> : null}
-    {busy ? <p role="status" className="text-xs font-semibold">Saving changes…</p> : null}
+    {busy ? <LoadingIndicator label="Saving changes…" /> : null}
     {storageUnavailable ? <p role="status" className="text-xs font-semibold">Draft recovery is unavailable on this device. Keep this form open until saved.</p> : null}
   </section>;
 }

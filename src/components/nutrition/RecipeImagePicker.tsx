@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { createUuid } from "@/utility/uuid";
 import { useId, useRef, useState } from "react";
 import { ImagePlus, Link, RotateCcw, Upload } from "lucide-react";
@@ -45,7 +46,7 @@ export function RecipeImagePicker({ image, onChange, disabled, onBusy }: {
         <Button variant="soft" className="w-fit !min-h-11 !px-3" disabled={disabled || busy || !safeRecipeImageUrl(url)} onClick={() => { onChange({ kind: "url", url: safeRecipeImageUrl(url)! }); setUrlMode(false); setUploadFailed(false); setMessage("Image URL selected. Save the recipe to apply it."); }}>Use this image</Button>
         {url && !safeRecipeImageUrl(url) ? <p className="text-xs font-semibold text-danger-900" role="status">Enter a complete HTTPS URL without a username or password.</p> : null}
       </div> : null}
-      {busy ? <p className="mt-2 text-center text-sm font-bold" role="status">Uploading image…</p> : null}
+      {busy ? <LoadingIndicator className="mt-2" label="Uploading image…" /> : null}
       {!busy && uploadFailed ? <Button variant="soft" className="mt-2 !min-h-11 !px-3" disabled={disabled} onClick={() => void upload(uploadIdentity.current?.file)}>Retry upload</Button> : null}
       {message ? <p className={`mt-2 break-words text-center text-xs ${uploadFailed ? "text-danger-900" : "text-ink-soft"}`} role="status">{message}</p> : null}
     </div>

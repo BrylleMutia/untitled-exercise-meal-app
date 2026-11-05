@@ -1,37 +1,24 @@
 "use client";
 
-import { useId } from "react";
-import { RecipeCover } from "./RecipeCover";
+import { RecipeSwipeCard } from "./RecipeSwipeCard";
+import { RecipeResourcePills } from "./RecipeResourcePills";
 import { mealSlotLabels, parseMealSlots } from "@/utility/recipeMealSlots";
+import { mealNutrition } from "@/utility/nutrition";
+import { usableRecipeNutrition } from "@/utility/planningPreferences";
 import type { WeeklyRecipeOption } from "@/utility/weeklyMealGeneration";
+import type { Food } from "@/types/domain";
 
 function servingsLabel(value: number): string {
   const displayed = Number(value.toFixed(3));
   return `${displayed.toLocaleString("en-US")} ${displayed === 1 ? "serving" : "servings"}`;
 }
 
-export function GenerationRecipeCard({ option, selected, disabled, onChange, displayName }: {
-  displayName?: string; option: WeeklyRecipeOption; selected: boolean; disabled: boolean; onChange: (selected: boolean) => void;
-}) {
-  const id = useId();
+export function GenerationRecipeCard({ option, displayName, foods }: { displayName?: string; option: WeeklyRecipeOption; foods: Food[] }) {
   const { recipe, used, remaining } = option;
-  return <label className={`relative grid h-full min-h-11 min-w-0 content-start gap-2 rounded-2xl border p-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-lav-500 ${selected ? "border-ink bg-lav-50" : "border-ink/15 bg-white"} ${disabled ? "cursor-not-allowed" : "cursor-pointer hover:border-ink/60"}`}>
-    <input type="checkbox" className="sr-only"
-      aria-labelledby={`${id}-name`} aria-describedby={`${id}-details`} disabled={disabled} checked={selected}
-      onChange={event => onChange(event.target.checked)} />
-    <span className="grid aspect-square min-w-0 rounded-xl bg-lav-100 p-[15px]">
-      <RecipeCover image={recipe.image} name={displayName ?? recipe.name} selection />
-    </span>
-    <span className="flex min-h-11 min-w-0 items-start">
-    <span id={`${id}-name`} className="min-w-0 break-words text-sm font-extrabold leading-snug [overflow-wrap:anywhere]">{displayName ?? recipe.name}</span>
-    </span>
-    <span id={`${id}-details`} className="grid min-w-0 gap-2 break-words text-xs leading-relaxed text-ink-soft [overflow-wrap:anywhere]">
-      <span>{parseMealSlots(recipe.mealSlots).map(slot => mealSlotLabels[slot]).join(", ") || "No meals assigned"}</span>
-      <span className="grid gap-0.5 tabular-nums">
-        <span>Yield: <span className="font-bold text-ink">{servingsLabel(recipe.servings)}</span></span>
-        <span>Planned: <span className="font-bold text-ink">{servingsLabel(used)}</span></span>
-        <span>Remaining: <span className="font-bold text-ink">{servingsLabel(remaining)}</span></span>
-      </span>
-    </span>
-  </label>;
+  return <RecipeSwipeCard name={displayName ?? recipe.name} image={recipe.image}>
+    <RecipeResourcePills compact calories={usableRecipeNutrition(recipe, foods) ? mealNutrition(recipe, foods).perServing.calories : undefined} recipeServings={recipe.servings} totalTimeMinutes={recipe.totalTimeMinutes} complexity={recipe.complexity} />
+    <p className="text-xs text-ink-soft">{parseMealSlots(recipe.mealSlots).map(slot => mealSlotLabels[slot]).join(", ") || "No meals assigned"}</p>
+    <dl className="flex min-w-0 flex-wrap gap-x-5 gap-y-2 border-t border-ink/10 pt-3 text-xs text-ink-soft">{[["Yield", recipe.servings], ["Planned", used], ["Remaining", remaining]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd className="mt-0.5 font-bold tabular-nums text-ink">{servingsLabel(Number(value))}</dd></div>)}</dl>
+    <p className="text-xs text-ink-soft">Planned meals use one serving per entry.</p>
+  </RecipeSwipeCard>;
 }

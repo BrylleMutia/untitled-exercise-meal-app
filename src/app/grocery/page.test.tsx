@@ -32,7 +32,7 @@ describe("week-specific Grocery", () => {
   });
   it("distinguishes loading and failed reads from an empty week", () => {
     data = undefined; loading = true;
-    expect(renderToStaticMarkup(<GroceryPage />)).toContain("Loading this week&#x27;s groceries");
+    expect(renderToStaticMarkup(<GroceryPage />)).toContain("Loading this week’s groceries");
     expect(renderToStaticMarkup(<GroceryPage />)).not.toContain("No groceries for this week");
     loading = false; error = "Offline";
     const html = renderToStaticMarkup(<GroceryPage />);
