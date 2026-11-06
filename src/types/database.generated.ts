@@ -1751,6 +1751,7 @@ export type Database = {
         Row: {
           age: number
           allergies: string[]
+          birth_date: string | null
           calendar_revision: number
           celebrations_enabled: boolean
           cooking_time_minutes: number | null
@@ -1781,6 +1782,7 @@ export type Database = {
         Insert: {
           age: number
           allergies?: string[]
+          birth_date?: string | null
           calendar_revision?: number
           celebrations_enabled?: boolean
           cooking_time_minutes?: number | null
@@ -1811,6 +1813,7 @@ export type Database = {
         Update: {
           age?: number
           allergies?: string[]
+          birth_date?: string | null
           calendar_revision?: number
           celebrations_enabled?: boolean
           cooking_time_minutes?: number | null

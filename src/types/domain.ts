@@ -43,6 +43,8 @@ export interface UserProfile {
   id: string;
   name: string;
   age: number;
+  /** Private calendar birthday; age remains the last confirmed compatibility snapshot. */
+  birthDate?: string;
   sex: SexForBmr;
   heightCm: number;
   weightKg: number;

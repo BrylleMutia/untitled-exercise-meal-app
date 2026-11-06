@@ -1,4 +1,5 @@
 import type { DailyTarget, PrimaryGoal, SexForBmr, TargetEligibility, UserProfile } from "@/types/domain";
+import { profileAgeOnDate } from "@/utility/birthDate";
 
 export const HEALTH_DISCLAIMER =
   "Estimates for healthy adults only. This app is not medical, dietary, or exercise care.";
@@ -140,6 +141,9 @@ export function isAggressiveRate(
 let targetSeq = 0;
 
 export function buildDailyTarget(profile: UserProfile, effectiveDate: string): DailyTarget {
+  const age = profileAgeOnDate(profile, effectiveDate);
+  if (!Number.isInteger(age) || age < 18 || age > 100) throw new UnsupportedTargetError("Automated targets require a valid age between 18 and 100.");
+  profile = { ...profile, age };
   const eligibility = targetEligibilityFor(profile);
   if (eligibility !== "eligible") {
     throw new UnsupportedTargetError(
@@ -172,7 +176,7 @@ export function buildDailyTarget(profile: UserProfile, effectiveDate: string): D
     formula: BMR_FORMULA,
     activityFactor: factor,
     disclaimer: HEALTH_DISCLAIMER,
-    calculationAssumptions: `Policy ${calculationVersion}; Mifflin–St Jeor; activity factor ${factor}; goal adjustment ${GOAL_ADJUSTMENT[profile.goal]}.${totalCarbLimit(profile.dietaryPattern) === null ? "" : ` Total-carbohydrate planning limit ${totalCarbLimit(profile.dietaryPattern)} g/day; remaining energy allocated to fat. This is a planning estimate, not dietary care.`}`,
+    calculationAssumptions: `Policy ${calculationVersion}; Mifflin–St Jeor; activity factor ${factor}; goal adjustment ${GOAL_ADJUSTMENT[profile.goal]}; age ${age} as of ${effectiveDate}.${totalCarbLimit(profile.dietaryPattern) === null ? "" : ` Total-carbohydrate planning limit ${totalCarbLimit(profile.dietaryPattern)} g/day; remaining energy allocated to fat. This is a planning estimate, not dietary care.`}`,
     calculationVersion,
     rawCalories: calories,
     goalAdjustment: GOAL_ADJUSTMENT[profile.goal],

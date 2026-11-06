@@ -1,3 +1,5 @@
+import { hasSamePlanInputs } from "@/utility/profilePlanInputs";
+import { profileAgeOnDate, validateBirthDate } from "@/utility/birthDate";
 import { loadGroceryNameSuggestions } from "./grocerySuggestions";
 import { loadGroceryCategoryPreferences } from "./groceryCategories";
 import { classifyGroceryName, formatGroceryItemName } from "@/utility/groceryCategory";
@@ -238,6 +240,7 @@ function profileBundle(
   savedMeals: Meal[] = SAVED_MEALS,
   foods: Food[] = FOODS,
 ) {
+  profile = { ...profile, age: profileAgeOnDate(profile, effectiveDate) };
   let target: ReturnType<typeof buildDailyTarget>;
   try {
     target = buildDailyTarget(profile, effectiveDate);
@@ -290,34 +293,6 @@ function profileBundle(
     grocery,
     effectiveDate,
   };
-}
-
-/**
- * Name and display-unit edits do not alter health or plan inputs. Keeping the
- * comparison explicit prevents a harmless profile edit from creating a new
- * target/plan version and preserves the historical prescription.
- */
-function hasSamePlanInputs(current: UserProfile, next: UserProfile) {
-  const comparable = (profile: UserProfile) => ({
-    age: profile.age,
-    sex: profile.sex,
-    heightCm: profile.heightCm,
-    weightKg: profile.weightKg,
-    experience: profile.experience,
-    trainingProgram: profile.trainingProgram ?? "calisthenics",
-    equipment: profile.equipment,
-    daysPerWeek: profile.daysPerWeek,
-    sessionMinutes: profile.sessionMinutes,
-    goal: profile.goal,
-    dietaryPattern: profile.dietaryPattern,
-    allergies: profile.allergies,
-    foodPreferences: profile.foodPreferences,
-    cookingTimeMinutes: profile.cookingTimeMinutes,
-    mealBudget: profile.mealBudget,
-    targetEligibility: profile.targetEligibility ?? "eligible",
-    eligibilityVersion: profile.eligibilityVersion ?? "calicoach-eligibility-v1",
-  });
-  return JSON.stringify(comparable(current)) === JSON.stringify(comparable(next));
 }
 
 function sessionPayload(session: WorkoutSession, snapshot: AppSnapshot) {
@@ -516,7 +491,16 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
     };
   }
 
+  private async requireBirthDateSchema(profile: UserProfile): Promise<void> {
+    if (!profile.birthDate) return;
+    const invalid = validateBirthDate(profile.birthDate, todayKey());
+    if (invalid) throw repositoryException(toRepositoryError(`validation_failed: ${invalid}`));
+    const { error, status } = await this.client.from("profiles").select("birth_date").limit(0);
+    if (error) throw repositoryException(toRepositoryError("validation_failed: Birthday storage is not available yet. Your draft is retained; apply the database update first.", status));
+  }
+
   async completeOnboarding(input: OnboardingInput): Promise<MutationOutcome> {
+    await this.requireBirthDateSchema(input.profile);
     const invalidTarget = validateDailyStepTarget(input.profile.dailyStepTarget);
     if (invalidTarget) throw repositoryException(toRepositoryError(`validation_failed: ${invalidTarget}`));
     if (input.profile.dailyStepTarget !== undefined || input.currentSnapshot.profile?.dailyStepTarget !== undefined) {
@@ -530,6 +514,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         "complete_onboarding",
         {
           profile,
+          effectiveDate: todayKey(),
           ...goalPayload(input.goal),
           expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
           idempotencyKey: input.idempotencyKey ?? idempotencyKey(),
@@ -556,6 +541,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
   }
 
   async updateProfile(input: ProfileUpdateInput): Promise<MutationOutcome> {
+    await this.requireBirthDateSchema(input.profile);
     const invalidTarget = validateDailyStepTarget(input.profile.dailyStepTarget);
     if (invalidTarget) throw repositoryException(toRepositoryError(`validation_failed: ${invalidTarget}`));
     if (input.profile.dailyStepTarget !== undefined) await this.requireDailyStepTargetSchema();
@@ -566,7 +552,8 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
       return this.mutate(
         "update_profile",
         {
-          profile: input.profile,
+          profile: { ...input.profile, age: input.currentSnapshot.profile!.age },
+          effectiveDate: todayKey(),
           profileOnly: true,
           expectedVersions: input.expectedVersions ?? {
             profileRevision: input.currentSnapshot.profile?.revision,
@@ -581,6 +568,7 @@ export class SupabaseSnapshotRepository implements SnapshotRepository {
         "update_profile",
         {
           profile: input.profile,
+          effectiveDate: todayKey(),
           ...goalPayload(input.goal),
           expectedVersions: input.expectedVersions ?? expectedVersionsForSnapshot(input.currentSnapshot),
           idempotencyKey: input.idempotencyKey ?? idempotencyKey(),

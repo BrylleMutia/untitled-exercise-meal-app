@@ -35,4 +35,10 @@ describe("walking energy profile eligibility", () => {
       expect(supportsWalkingEnergyEstimate({ ...profile, weightKg })).toBe(false);
     }
   });
+  it("uses current birthday-derived age without altering the confirmed snapshot", () => {
+    const saved = { ...profile, age: 59, birthDate: "1966-11-06" };
+    expect(supportsWalkingEnergyEstimate(saved, "2026-11-05")).toBe(true);
+    expect(supportsWalkingEnergyEstimate(saved, "2026-11-06")).toBe(false);
+    expect(saved.age).toBe(59);
+  });
 });

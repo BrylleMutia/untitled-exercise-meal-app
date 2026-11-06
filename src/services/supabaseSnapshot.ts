@@ -68,6 +68,7 @@ function mapProfile(row: ProfileRow): UserProfile {
     id: row.id,
     name: row.name,
     age: row.age,
+    ...(row.birth_date ? { birthDate: row.birth_date } : {}),
     sex: row.sex as UserProfile["sex"],
     heightCm: Number(row.height_cm),
     weightKg: Number(row.weight_kg),

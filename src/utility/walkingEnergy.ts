@@ -1,4 +1,6 @@
 import type { UserProfile } from "@/types/domain";
+import { profileAgeOnDate } from "@/utility/birthDate";
+import { todayKey } from "@/utility/dates";
 
 /** 2024 Adult Compendium walking codes 17152 and 17190, level ground.
  * https://pacompendium.com/walking/ */
@@ -12,10 +14,12 @@ export interface WalkingEnergyEstimate {
 }
 
 export function supportsWalkingEnergyEstimate(
-  profile: Pick<UserProfile, "age" | "weightKg" | "targetEligibility"> | null | undefined,
+  profile: Pick<UserProfile, "age" | "birthDate" | "weightKg" | "targetEligibility"> | null | undefined,
+  referenceDate = todayKey(),
 ): boolean {
+  const age = profile ? profileAgeOnDate(profile, referenceDate) : Number.NaN;
   return profile?.targetEligibility === "eligible" &&
-    profile.age >= 19 && profile.age <= 59 &&
+    age >= 19 && age <= 59 &&
     Number.isFinite(profile.weightKg) && profile.weightKg > 0;
 }
 

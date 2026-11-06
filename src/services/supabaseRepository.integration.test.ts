@@ -131,6 +131,38 @@ function completedSession(snapshot: AppSnapshot, session: WorkoutSession): Worko
 }
 
 describe("Supabase repository against the disposable local stack", () => {
+  it("stores private birthdays, preserves them for old clients, versions explicit age changes and exports only the owner", async () => {
+    const account = await createAccount();
+    const year = Number(todayKey().slice(0, 4));
+    const birthDate = `${year - 30}-01-01`;
+    const initial = (await account.repository.completeOnboarding({ profile: { ...profile(account.id, "Birthday owner"), birthDate }, currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
+    expect(initial.profile).toMatchObject({ age: 30, birthDate });
+    expect(initial.target!.calculationAssumptions).toContain(`age 30 as of ${todayKey()}`);
+    const renamed = (await account.repository.updateProfile({ profile: { ...initial.profile!, name: "Birthday renamed" }, currentSnapshot: initial, idempotencyKey: randomUUID() })).snapshot;
+    expect(renamed.target!.id).toBe(initial.target!.id);
+    expect(renamed.plan!.id).toBe(initial.plan!.id);
+    const { birthDate: omitted, ...legacy } = renamed.profile!;
+    expect(omitted).toBe(birthDate);
+    const key = randomUUID();
+    const input = { profile: { ...legacy, name: "Older client" }, currentSnapshot: renamed, idempotencyKey: key };
+    const older = (await account.repository.updateProfile(input)).snapshot;
+    expect(older.profile!.birthDate).toBe(birthDate);
+    await account.repository.updateProfile(input);
+    expect((await account.repository.load())!.profile!.revision).toBe(older.profile!.revision);
+    const edits = await Promise.allSettled(["First", "Second"].map(name => account.repository.updateProfile({ profile: { ...older.profile!, name }, currentSnapshot: older, idempotencyKey: randomUUID() })));
+    expect(edits.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const latest = (await account.repository.load())!;
+    const changed = (await account.repository.updateProfile({ profile: { ...latest.profile!, birthDate: `${year - 31}-01-01`, age: 31 }, currentSnapshot: latest, idempotencyKey: randomUUID() })).snapshot;
+    expect(changed.profile).toMatchObject({ birthDate: `${year - 31}-01-01`, age: 31 });
+    expect(changed.target!.id).not.toBe(initial.target!.id);
+    expect(changed.target!.version).toBeGreaterThan(initial.target!.version);
+    const exported = (await account.repository.exportData({ idempotencyKey: randomUUID() })).data!;
+    expect(exported.profile!.birth_date).toBe(`${year - 31}-01-01`);
+    expect(exported.dailyTargets.some(target => target.app_id === initial.target!.id)).toBe(true);
+    const other = await createAccount();
+    expect((await other.client.from("profiles").select("birth_date").eq("id", account.id)).data).toEqual([]);
+    expect((await other.repository.exportData({ idempotencyKey: randomUUID() })).data!.profile).toBeNull();
+  });
   it("versions reviewed manual additions as advisory, preserves history and rejects stale reviews and policy forgery", async () => {
     const account = await createAccount();
     const base = (await account.repository.completeOnboarding({ profile: { ...profile(account.id, "Direct meals"), dietaryPattern: "Vegan Keto-style", allergies: ["soy"], cookingTimeMinutes: 15 }, currentSnapshot: (await account.repository.load())!, idempotencyKey: randomUUID() })).snapshot;
