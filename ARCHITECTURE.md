@@ -190,6 +190,23 @@ unconfirmed AI candidates in the durable app snapshot.
 ### Plan and target versioning
 
 - `UserProfile` stores user inputs and preferences, not derived health values.
+- Optional `UserProfile.birthDate` maps to nullable owner-only `profiles.birth_date`.
+  Existing numeric `age` is a compatibility snapshot of the last confirmed
+  profile/target update. Old age-only profiles/payloads remain supported, and
+  omitted birthdays preserve stored dates. Never fabricate dates from saved age.
+  New onboarding requires a complete birthday; recoverable drafts store nullable
+  day/month/year selections and preserve other fields from legacy drafts.
+- Pure calendar utilities derive completed years from local `YYYY-MM-DD` keys,
+  with March 1 for February 29 in non-leap years and an 18–100 supported range.
+  Full profile/target RPCs validate birthday/age consistency using the mutation's
+  local effective-date key. New target assumptions retain that age and date.
+  Local midnight/resume refreshes presentation only; it creates no mutation.
+  Name/unit-only edits preserve the saved age and plan versions even after an
+  anniversary; explicit calculation-input updates use current birthday-derived age.
+- Owner export includes birthday. Group member read models and provider inputs
+  use explicit allowlists without birthday. Group planning fingerprints exclude
+  birth_date and profile bookkeeping revision/timestamp so a birthday-only edit
+  with unchanged calculation inputs does not invalidate a group preview.
 - `Goal` and `DailyTarget` retain the assumptions and effective dates used to create a target.
 - Updating a target creates a new target version and does not rewrite historical summaries.
 - Name and display-unit edits use the profile-only mutation path: they bump the
@@ -825,6 +842,18 @@ Automated target calculations use policy version `calicoach-health-v1`. The
 eligibility outcome (`eligible`, `unsupported`, or `not_answered`) and screening
 version are stored without sensitive reasons. Unsupported screening outcomes and
 raw estimates below the supported calorie floor do not create automated targets.
+
+Onboarding gates its Review preview and final save on an explicit Review
+acknowledgement. Recoverable onboarding drafts retain a
+`reviewAcknowledgementVersion` matching the screening policy and the existing
+eligibility outcome. Older drafts without this marker retain all inputs but
+reset eligibility to `not_answered`; a previously saved profile does not precheck
+the acknowledgement. This marker is draft-only and is not a new durable health
+record. Unit-switch drafts also retain a measurement basis (display string,
+unit system and exact metric value) so rounding cannot drift or invalidate
+supported boundary measurements. Editing the measurement invalidates that basis.
+Repositories and server mutations continue to receive only the existing profile
+measurements, eligibility outcome and screening policy version.
 
 ## Supabase Security and Database Rules
 

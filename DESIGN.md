@@ -545,9 +545,68 @@ and not medical, dietary, or exercise care.
 `max-w-xl` column that hides header, footer, and bottom nav) with its own
 step progress bar and navigation.
 
+All five steps use one viewport-height `OnboardingFrame`: the step heading and
+progress remain above a top-aligned white card sized to its content, and Back,
+Continue or the final save action remain at the bottom of the viewport. The card
+is capped at the available height; longer content scrolls inside it. Shorter
+steps leave the pastel page background between the card and actions, rather than
+blank space inside the white card. Fields retain their natural spacing and
+padding, without height animations or JavaScript content measurement. Review keeps its
+acknowledgement, tinted target summary, macros and choices as sections inside
+this same card. Recovery notices and errors belong to the scrolling content;
+saving status belongs to the bottom action area. Step changes reset card scroll,
+and validation/save errors receive focus and scroll into view inside the card.
+The frame follows the normal-zoom visual viewport as the keyboard or browser
+toolbar changes, with `100dvh` as fallback and safe-area padding. Pinch zoom
+does not resize the layout. On very short screens or enlarged text, oversized
+header/footer regions can scroll within bounded heights to keep controls
+reachable. The document itself does not scroll during onboarding. Other routes
+and generation dialogs retain their existing layout.
+
 MVP-3 uses five groups: About you, Movement, Food choices, Your goal, Review.
+Below the name, Birthday uses a full-width `BirthDatePicker` with day/month/year
+columns, a shared lavender selection band and a 132px viewport: three fully visible
+44px rows with the selected date centered. Day/Month/Year names remain available
+to assistive technology without visible column headers. The Birthday legend has
+12px bottom spacing. The complete field occupies about 180px before validation
+feedback; row heights grow with enlarged text. Selected values are bold and neighboring options are
+quieter. Native vertical scroll snapping supports swipes and mouse wheels;
+clicking a visible option, Arrow keys, Page Up/Down, Home/End and typeahead also
+select values. Each named listbox has one focus stop and visible focus treatment.
+There is no automatic animation. A new picker is empty, and the read-only age
+below it appears only for a complete valid calendar date. Invalid days are cleared
+when month/year changes. Partial choices survive recovery. Legacy profiles show
+“Birthday not set” with their saved age until a date is supplied. Gender follows
+on its own row. Review includes birthday and age; Settings → Edit reuses the picker.
+Gender uses two side-by-side native Female/Male radios with visible circular
+indicators, rounded lavender labels, checked-state styling, visible keyboard focus
+and at least 44px touch targets. The pair stacks when enlarged text makes two
+columns too narrow. The existing selection/default and sex-for-BMR
+calculation input are unchanged.
+About you uses two stacked compact `MeasurementRuler` controls for height and
+current weight below the shared unit selector. Each combines a centered editable
+value and small unit suffix with a shallow tick ruler, labeled major ticks and
+a fixed lavender center marker. Controls occupy about 124px each at normal text
+size and grow with text enlargement. There is no BMI classification strip.
+Dragging left increases the measurement; dragging right decreases it. Arrow
+keys adjust by 0.1, Page Up/Down by 1, and Home/End reach supported bounds.
+Vertical scrolling and pinch zoom remain available. Numeric entry preserves
+empty, partial and invalid strings; invalid values receive inline feedback.
+Muted starting positions never become answers without interaction. Rounded
+unit displays retain the original measurement for validation and saving.
+
+The former About you eligibility buttons are replaced by a Review-first
+acknowledgement panel. An explicit checkbox combines the estimates disclaimer
+and adult eligibility confirmation; a separate “These situations apply to me /
+I’m unsure” control selects manual logging. These choices are mutually exclusive.
+Automated estimates appear only after eligibility is confirmed. Before a choice,
+neutral guidance replaces the preview and the final action is disabled.
+Unsupported users retain “Continue without automated targets”. The checkbox and
+manual option lock during saving; navigation, recovered drafts and save retries
+retain the choice. Drafts predating this acknowledgement require a fresh choice.
 Headings receive focus on step changes. Review emphasizes the daily estimate
-and choices; calculation details are expandable. Cost choices use familiar labels
+and choices; shared stepper Back/Continue actions use left/right chevrons.
+Calculation details are expandable. Cost choices use familiar labels
 and explain that they are relative costs, not prices. The final button says
 “Saving your plan…” with a spinner/status announcement; navigation controls are
 disabled until the save resolves, and failures leave the draft visible.

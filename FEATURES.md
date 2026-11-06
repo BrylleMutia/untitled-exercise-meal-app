@@ -80,7 +80,7 @@ an exercise, change a serving, skip a meal, and record what they actually did.
 Create or sign in to a Supabase account, then collect the minimum information
 needed to produce the first workout plan:
 
-- Age
+- Birthday (private day/month/year; current age is calculated)
 - Sex used for BMR estimation
 - Height
 - Current weight
@@ -99,8 +99,43 @@ recommendations:
 - Cooking time and meal budget
 - Target weight, desired rate of change, and target date when relevant
 
+About you collects Birthday in a full-width compact day/month/year wheel below
+the name, followed by Female/Male radio choices for Gender. The birthday wheel
+shows three fully visible rows in an approximately 132px viewport, with the selected
+date centered. Column headers are hidden visually while retaining accessible names;
+extra space sits below the Birthday label and calculated age appears underneath.
+New onboarding starts without a selected date and
+requires a valid birthday giving a completed age of 18–100. The read-only age
+updates on date changes, local midnight and app resume. A February 29 birthday
+advances on March 1 in non-leap years. Changing month/year clears an impossible
+selected day and requests a valid day. Partial dates survive draft recovery;
+legacy age-only drafts retain their other answers but require a birthday.
+Review shows the birthday and calculated age.
+
+Settings → Edit uses this same flow. Existing age-only profiles retain their
+saved age with “Birthday not set”; no birthday is inferred. Birthdays belong to
+the owner's private profile and account export, never shared-group member data,
+planning fingerprints or AI/provider inputs. Numeric age remains the snapshot
+from the last confirmed profile/target update. Birthday rollovers update current
+age presentation without changing saved targets, plans or history. Name-only
+and unit-only edits preserve those versions. An explicit change to calculation
+or plan inputs uses the current derived age and existing future versioning;
+new target assumptions record the age used and its local reference date.
+
 Before showing automated calorie, macro, or personalized progression targets,
-the user must answer a brief health screen. Store only `eligible`, `unsupported`,
+the user must answer a brief health screen on the final Review step. About you
+collects height and current weight with stacked compact rulers: swipe left to
+increase, swipe right to decrease, use the keyboard, or tap a value to type.
+Both units support 0.1 increments; empty starting positions are not answers.
+Unit switching retains the original measurement behind the rounded display.
+The supported ranges remain 120–230 cm and 35–300 kg (or their imperial equivalents).
+
+Review requires an explicit checkbox confirming adult eligibility, none of the
+listed unsupported situations, and understanding that estimates do not replace
+care. “These situations apply to me / I’m unsure” instead selects manual logging
+without automated targets. Until a choice is made, target previews are hidden
+and saving is disabled. The choices remain editable and survive draft recovery
+and failed saves; legacy drafts require the new acknowledgement. Store only `eligible`, `unsupported`,
 or `not_answered` plus the screening policy version; do not store a sensitive
 free-text reason. Unsupported or unanswered screening blocks automated target
 creation while preserving the user’s inputs for manual logging or later review.
@@ -108,6 +143,16 @@ creation while preserving the user’s inputs for manual logging or later review
 The initial onboarding path should not require every optional preference. A user
 must be able to reach the first plan in under five minutes, then complete or
 edit the remaining profile fields from Settings.
+
+Across all five onboarding steps and screen sizes, the form uses one top-aligned,
+content-sized card between a persistent step heading and bottom navigation.
+The card grows with conditional fields and notices up to the available height;
+shorter steps leave the page background below the card. Long content,
+recovery notices and errors scroll inside the card while Back/Continue and final
+save actions remain in the bottom area. Keyboard changes resize the visible
+frame; large-text and short-screen layouts keep every control reachable.
+Changing steps resets the card scroll and focuses the heading. Validation and
+save failures reveal and focus the relevant alert without losing answers.
 
 Display calculated values as estimates, not medical measurements:
 
