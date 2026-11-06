@@ -38,14 +38,17 @@ async function context(session) {
 async function onboard(page, name) {
   await page.goto("/onboarding");
   await page.getByLabel("What should we call you?").fill(name);
-  await page.getByLabel("Age", { exact: true }).fill("30");
-  await page.getByText("None of the situations below apply to me", { exact: true }).click();
+  await page.getByRole("listbox", { name: "Year", exact: true }).press("Home");
+  await page.getByRole("listbox", { name: "Year", exact: true }).pressSequentially(String(new Date().getFullYear() - 30));
+  await page.getByRole("listbox", { name: "Month", exact: true }).press("Home");
+  await page.getByRole("listbox", { name: "Day", exact: true }).press("Home");
   await page.getByLabel("Height (cm)").fill("168"); await page.getByLabel("Weight (kg)").fill("68");
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByText("Maintain weight", { exact: true }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
   await page.getByRole("button", { name: "Create my plan", exact: true }).click();
   await expect(page).toHaveURL(`${baseURL}/`, { timeout: 45000 });
 }

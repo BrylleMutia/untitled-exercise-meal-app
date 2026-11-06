@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createBrowserClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import type { Browser, BrowserContext } from "@playwright/test";
+import type { Browser, BrowserContext, BrowserContextOptions } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -35,6 +35,7 @@ export async function createAuthenticatedContext(
   browser: Browser,
   baseURL: string,
   account: LocalAccount,
+  options: BrowserContextOptions = {},
 ): Promise<BrowserContext> {
   assertLocalSupabaseConfigured();
   const client = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -58,7 +59,7 @@ export async function createAuthenticatedContext(
   const { error: sessionError } = await browserClient.auth.setSession(data.session);
   if (sessionError) throw sessionError;
   // Fresh-account flows must not inherit the project's fixture cookies or storage.
-  const context = await browser.newContext({ serviceWorkers: "block", storageState: { cookies: [], origins: [] } });
+  const context = await browser.newContext({ ...options, serviceWorkers: "block", storageState: { cookies: [], origins: [] } });
   await context.addCookies([...cookieJar.entries()].map(([name, value]) => ({ name, value, url: baseURL })));
   return context;
 }

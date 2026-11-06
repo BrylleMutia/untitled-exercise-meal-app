@@ -49,7 +49,7 @@ export default defineConfig({
     },
     {
       name: "desktop",
-      testMatch: /(?:mvp[13]-release|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
+      testMatch: /(?:mvp[13]-release|onboarding-rulers|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -59,7 +59,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
-      testMatch: /(?:mvp[13]-release|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
+      testMatch: /(?:mvp[13]-release|onboarding-rulers|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Pixel 5"],

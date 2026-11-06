@@ -1,3 +1,4 @@
+import { selectBirthday } from "./birth-date";
 import { test, expect, type Browser, type BrowserContext, type Locator, type Page, type Route } from "@playwright/test";
 import fs from "node:fs";
 import { strFromU8, unzipSync } from "fflate";
@@ -79,8 +80,7 @@ test("calendar preference and selected-day planning preserve dates across the ap
   try {
     await page.goto("/onboarding");
     await page.getByLabel("What should we call you?").fill("Calendar Test");
-    await page.getByLabel("Age").fill("30");
-    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await selectBirthday(page, 30);
     await page.getByLabel("Height (cm)").fill("168");
     await page.getByLabel("Weight (kg)").fill("68");
     await page.getByRole("button", { name: /Continue/ }).click();
@@ -89,6 +89,7 @@ test("calendar preference and selected-day planning preserve dates across the ap
     await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByText("Maintain weight", { exact: true }).click();
     await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
     await page.getByRole("button", { name: "Create my plan", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
     await page.goto("/settings");
@@ -2194,8 +2195,7 @@ async function completeOnboarding(page: Page, name: string) {
   await page.goto("/onboarding");
   await expect(page.getByText(/Onboarding · step 1 of/i)).toBeVisible();
   await page.getByLabel("What should we call you?").fill(name);
-  await page.getByLabel("Age").fill("30");
-  await page.getByText("None of the situations below apply to me", { exact: true }).click();
+  await selectBirthday(page, 30);
   await page.getByLabel("Height (cm)").fill("168");
   await page.getByLabel("Weight (kg)").fill("68");
   await page.getByRole("button", { name: /Continue/ }).click();
@@ -2203,6 +2203,7 @@ async function completeOnboarding(page: Page, name: string) {
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByText("Maintain weight", { exact: true }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
   await page.getByRole("button", { name: "Create my plan" }).click();
   await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
 }

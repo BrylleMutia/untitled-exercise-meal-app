@@ -1,3 +1,4 @@
+import { selectBirthday } from "./birth-date";
 import { test, expect, type Page } from "@playwright/test";
 import { createAuthenticatedContext, createLocalAccount, deleteLocalAccount } from "./local-account";
 
@@ -174,15 +175,14 @@ test("help covers onboarding, settings, editors and workout logging without subm
     await page.setViewportSize(testInfo.project.use.viewport!);
     await page.goto("/onboarding");
     await page.getByLabel("What should we call you?").fill("Help Test");
-    await page.getByLabel("Age", { exact: true }).fill("30");
-    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await selectBirthday(page, 30);
     await page.getByLabel("Height (cm)").fill("168");
     await page.getByLabel("Weight (kg)").fill("68");
     const firstHelp = page.getByRole("button", { name: /^About / }).first();
     await firstHelp.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByLabel("Age", { exact: true })).toHaveValue("30");
+    await expect(page.getByText("Age: 30 years", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByLabel("Daily step target (optional)").fill("8000");
     await checkHelp(page, "Daily step target");
@@ -191,6 +191,7 @@ test("help covers onboarding, settings, editors and workout logging without subm
     await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByText("Maintain weight", { exact: true }).click();
     await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
     await checkHelp(page, "Macro targets (estimates)");
     await page.getByRole("button", { name: "Create my plan" }).click();
     await expect(page).toHaveURL(/:\d+\/$/);

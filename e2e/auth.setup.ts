@@ -1,3 +1,4 @@
+import { selectBirthday } from "./birth-date";
 import { test as setup, expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -19,8 +20,7 @@ async function completeOnboarding(page: import("@playwright/test").Page, display
   await page.goto("/onboarding");
   await expect(page.getByText(/Onboarding · step 1 of/i)).toBeVisible();
   await page.getByLabel("What should we call you?").fill(displayName);
-  await page.getByLabel("Age").fill("30");
-  await page.getByText("None of the situations below apply to me", { exact: true }).click();
+  await selectBirthday(page, 30);
   await page.getByLabel("Height (cm)").fill("168");
   await page.getByLabel("Weight (kg)").fill("68");
   await page.getByRole("button", { name: /Continue/ }).click();
@@ -29,6 +29,7 @@ async function completeOnboarding(page: import("@playwright/test").Page, display
   await page.getByText("Maintain weight", { exact: true }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await expect(page.getByRole("button", { name: "Create my plan" })).toBeVisible();
+  await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
   await page.getByRole("button", { name: "Create my plan" }).click();
   await expect(page).toHaveURL(new RegExp(`${new URL(baseURL).origin}/?$`));
   await expect(page.getByRole("heading", { name: "Today's meals", exact: true })).toBeVisible();

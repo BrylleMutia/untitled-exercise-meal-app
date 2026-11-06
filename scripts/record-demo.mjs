@@ -116,8 +116,10 @@ try {
   } else {
     await scene('A plan that starts with you', 'Set your basics, movement, food preferences and goal in five simple steps.', '/onboarding', async page => {
       await fill(page, page.getByLabel('What should we call you?'), 'Alex');
-      await fill(page, page.getByLabel('Age', { exact: true }), '30');
-      await click(page, page.getByText('None of the situations below apply to me', { exact: true }));
+      await page.getByRole('listbox', { name: 'Year', exact: true }).press('Home');
+      await page.getByRole('listbox', { name: 'Year', exact: true }).pressSequentially(String(new Date().getFullYear() - 30));
+      await page.getByRole('listbox', { name: 'Month', exact: true }).press('Home');
+      await page.getByRole('listbox', { name: 'Day', exact: true }).press('Home');
       await fill(page, page.getByLabel('Height (cm)'), '168');
       await fill(page, page.getByLabel('Weight (kg)'), '68');
       await click(page, page.getByRole('button', { name: /Continue/ }));
@@ -134,6 +136,7 @@ try {
       await click(page, page.getByText('Maintain weight', { exact: true }));
       await click(page, page.getByRole('button', { name: /Continue/ }));
       await pause(page, 3500);
+      await page.getByRole('checkbox', { name: /^I understand these targets/ }).check();
       await click(page, page.getByRole('button', { name: 'Create my plan', exact: true }));
       await expect(page.getByRole('heading', { name: 'Hello, Alex!' })).toBeVisible();
     });

@@ -1,3 +1,4 @@
+import { selectBirthday } from "./birth-date";
 import { test, expect } from "@playwright/test";
 import { createAuthenticatedContext, createLocalAccount, deleteLocalAccount } from "./local-account";
 import { addDays, todayKey } from "../src/utility/dates";
@@ -16,8 +17,7 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
     if (viewport) await page.setViewportSize(viewport);
     await page.goto("/onboarding");
     await page.getByLabel("What should we call you?").fill("Everyday Test");
-    await page.getByLabel("Age", { exact: true }).fill("30");
-    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await selectBirthday(page, 30);
     await page.getByLabel("Height (cm)").fill("168");
     await page.getByLabel("Weight (kg)").fill("68");
     await page.getByRole("button", { name: /Continue/ }).click();
@@ -44,14 +44,20 @@ test("onboarding retains choices after a failed save and confirms Pilates and di
       if (attempts === 1) await route.abort("failed");
       else { await pendingSave; await route.continue(); }
     });
+    await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
+    const footer = page.locator("[data-onboarding-footer]");
+    const footerBounds = (await footer.boundingBox())!;
     await page.getByRole("button", { name: "Create my plan", exact: true }).click();
     await savedExpect(page.getByRole("button", { name: "Retry saving", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Onboarding form" }).getByRole("alert")).toBeFocused();
     await expect(page).toHaveURL(/\/onboarding$/);
     await expect(page.getByText(/Keto-style · Balanced/)).toBeVisible();
     await expect(page.getByText("8,000 steps", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Retry saving", exact: true }).click();
     await expect(page.getByRole("button", { name: "Saving your plan…", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Back", exact: true })).toBeDisabled();
+    const savingBounds = (await footer.boundingBox())!;
+    expect(savingBounds.y + savingBounds.height).toBeCloseTo(footerBounds.y + footerBounds.height, 0);
     await expect(page).toHaveURL(/\/onboarding$/);
     releaseSave?.();
     await savedExpect(page).toHaveURL(/:\d+\/$/);
@@ -221,13 +227,13 @@ test("Home keeps saved steps visible outside the walking-energy adult reference"
     if (viewport) await page.setViewportSize(viewport);
     await page.goto("/onboarding");
     await page.getByLabel("What should we call you?").fill("Steps Reference Test");
-    await page.getByLabel("Age", { exact: true }).fill("60");
-    await page.getByText("None of the situations below apply to me", { exact: true }).click();
+    await selectBirthday(page, 60);
     await page.getByLabel("Height (cm)").fill("168");
     await page.getByLabel("Weight (kg)").fill("68");
     for (let step = 0; step < 3; step += 1) await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByText("Maintain weight", { exact: true }).click();
     await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("checkbox", { name: /^I understand these targets/ }).check();
     await page.getByRole("button", { name: "Create my plan", exact: true }).click();
     await savedExpect(page).toHaveURL(/:\d+\/$/);
     await page.goto("/activity");
