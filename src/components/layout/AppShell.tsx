@@ -79,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isOnboarding) {
     return (
-      <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-6">
+      <main className="h-dvh w-full overflow-hidden">
         {children}
         <ToastHost />
       </main>

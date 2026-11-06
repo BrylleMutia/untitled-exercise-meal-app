@@ -138,6 +138,31 @@ body {
   color: var(--color-muted);
 }
 
+.onboarding-frame {
+  top: var(--onboarding-top, 0px);
+  height: var(--onboarding-height, 100dvh);
+  padding-top: max(1.25rem, env(safe-area-inset-top));
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+.onboarding-frame-header {
+  max-height: calc(var(--onboarding-height, 100dvh) * 0.25);
+}
+.onboarding-frame-footer {
+  max-height: calc(var(--onboarding-height, 100dvh) * 0.35);
+}
+.onboarding-scroll {
+  scroll-padding-block: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-lav-300) transparent;
+}
+
+.birth-date-picker { --birth-row: max(2.75rem, 44px); }
+.birth-date-wheel { height: calc(var(--birth-row) * 3); scrollbar-width: none; font-size: 0.875rem; }
+.birth-date-wheel::-webkit-scrollbar { display: none; }
+.birth-date-wheel-option { height: var(--birth-row); min-height: var(--birth-row); }
+.birth-date-wheel-spacer { height: var(--birth-row); min-height: var(--birth-row); }
+.birth-date-selection { top: var(--birth-row); height: var(--birth-row); }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

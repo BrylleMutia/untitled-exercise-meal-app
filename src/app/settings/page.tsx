@@ -20,6 +20,8 @@ import { WeekStartSettings } from "@/components/WeekStartSettings";
 import { CookingGroupSettings } from "@/components/cooking/CookingGroupSettings";
 import { DailyStepTargetSettings } from "@/components/DailyStepTargetSettings";
 import { HelpHeading, HelpPopover } from "@/components/ui/HelpPopover";
+import { useLocalToday } from "@/hooks/useLocalToday";
+import { profileAgeOnDate } from "@/utility/birthDate";
 
 function SettingsSwitchRow({ label, description, descriptionId, checked, disabled, onToggle }: {
   label: string;
@@ -58,6 +60,7 @@ function ProfileInfoPill({ children }: { children: React.ReactNode }) {
 }
 
 export default function SettingsPage() {
+  const today = useLocalToday();
   const { snapshot, actions, pendingMutation } = useApp();
   const router = useRouter();
   const [weight, setWeight] = useState("");
@@ -156,6 +159,7 @@ export default function SettingsPage() {
             </Button>
           </div>
           {profile ? <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="Profile summary">
+            <ProfileInfoPill>{profileAgeOnDate(profile, today)} years · {profile.birthDate ? `Birthday: ${profile.birthDate}` : "Birthday not set"}</ProfileInfoPill>
             <ProfileInfoPill>{profile.experience}</ProfileInfoPill>
             <ProfileInfoPill>{profile.daysPerWeek} days/week</ProfileInfoPill>
             <ProfileInfoPill>~{profile.sessionMinutes} min<span className="sr-only"> per session</span></ProfileInfoPill>
