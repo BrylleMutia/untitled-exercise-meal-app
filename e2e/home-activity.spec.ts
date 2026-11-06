@@ -17,7 +17,7 @@ test("Home activity cards share step drafts, modal saves, retry and date-specifi
   const context = await createAuthenticatedContext(browser, process.env.PLAYWRIGHT_BASE_URL!, account);
   const page = await context.newPage();
   try {
-    await repository.completeOnboarding({ profile, currentSnapshot: (await repository.load())!, idempotencyKey: crypto.randomUUID() });
+    await repository.completeOnboarding({ profile: { ...profile, daysPerWeek: 7 }, currentSnapshot: (await repository.load())!, idempotencyKey: crypto.randomUUID() });
     const today = todayKey(), yesterday = addDays(today, -1), week = startOfWeek(today, profile.weekStartsOn);
     await page.goto("/");
     const steps = page.getByRole("region", { name: "Steps", exact: true });
@@ -54,7 +54,7 @@ test("Home activity cards share step drafts, modal saves, retry and date-specifi
     expect((await repository.load())!.dailySteps).toHaveLength(0);
     await strip.getByRole("button", { name: formatFullDate(today), exact: true }).click();
     await page.emulateMedia({ reducedMotion: "reduce" });
-    for (const width of [320,367,385,390,403,414,416,421,462,469,582,594,760,1440]) {
+    for (const width of [320,367,385,390,403,414,416,421,426,462,469,582,594,760,1440]) {
       await page.setViewportSize({ width, height: 930 });
       for (const enlarged of [false,true]) {
         const style = enlarged ? await page.addStyleTag({ content: "html { font-size: 200% !important; }" }) : null;
@@ -79,6 +79,17 @@ test("Home activity cards share step drafts, modal saves, retry and date-specifi
         const overflow = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
           elements: [...document.querySelectorAll("main *")].filter(element => element.getBoundingClientRect().right > innerWidth + 1).slice(0,8).map(element => ({ tag: element.tagName, text: element.textContent?.slice(0,45), right: element.getBoundingClientRect().right })) }));
         expect(overflow.scroll, JSON.stringify({ width, enlarged, overflow })).toBeLessThanOrEqual(overflow.width);
+        const workoutSection = workouts.getByRole("region", { name: "Today's workout", exact: true });
+        await expect(workoutSection.getByRole("link", { name: "Start workout", exact: true })).toBeVisible();
+        const containment = await workoutSection.evaluate(element => {
+          const parent = element.getBoundingClientRect();
+          const row = element.children[1];
+          return [row, ...row.children].every(child => {
+            const bounds = child.getBoundingClientRect();
+            return bounds.left >= parent.left - 1 && bounds.right <= parent.right + 1 && bounds.top >= parent.top - 1 && bounds.bottom <= parent.bottom + 1;
+          });
+        });
+        expect(containment, `Workout row contained at ${width}px, enlarged=${enlarged}`).toBe(true);
         await page.evaluate(() => window.scrollTo(0,0));
         for (const date of [dates[6], dates[0], today] as string[]) {
           const tile = strip.getByRole("button", { name: formatFullDate(date), exact: true });
@@ -104,6 +115,7 @@ test("Home activity cards share step drafts, modal saves, retry and date-specifi
       }
     }
     await page.setViewportSize(info.project.use.viewport ?? { width: 390, height: 930 });
+    await workouts.screenshot({ path: `test-results/home-workout-contained-${info.project.name}.png` });
     const action = page.locator(`#home-steps-${today}`);
     await action.click();
     let modal = page.getByRole("dialog", { name: "Add steps", exact: true });

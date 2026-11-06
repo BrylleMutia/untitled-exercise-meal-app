@@ -198,7 +198,9 @@ tints and rounded corners; screens are stat-focused and mobile-first.
   and subtle dividers. Overflow stays visible for tooltips and focus outlines.
   Each slot has an icon, heading, calorie summary and right-aligned transparent
   44px plus. Compact meal rows use a small image, wrapping title,
-  a plain approximate-calorie line, navy check and quiet X controls. Logged rows show a checkmark in a
+  a plain approximate-calorie line, quiet X on the left and navy check on the right.
+  Nutrition uses the same Remove-then-Log order; keyboard order follows the visual
+  order. Logged rows show a checkmark in a
   mint circle inside a transparent 44px undo button, with an “Undo logged [meal]”
   accessible name and “Undo meal log” tooltip. Undo restores linked planned rows;
   separately logged entries disappear. Failures retain the log with retry feedback.
@@ -233,10 +235,10 @@ tints and rounded corners; screens are stat-focused and mobile-first.
   plan. Right-hand metrics show completed/scheduled workouts and approximate weekly
   energy; unavailable energy is explicit, never a numeric zero placeholder.
   A soft-white Today's workout section retains title, focus, exercise count,
-  estimated duration and progression explanation. Its workout row spans the
-  full outer Workouts card width with square corners at every viewport; interior
-  horizontal padding matches the card's 20px mobile / 23px desktop inset.
-  The section heading, rest-day copy and progression explanation remain inset.
+  estimated duration and progression explanation. Its workout row stays within
+  the soft-white section instead of bleeding across the outer Workouts card.
+  The row uses the section's 8px horizontal inset and wraps when enlarged text
+  needs more room. The section heading, rest-day copy and progression explanation remain inset.
   Transparent 44px calendar and
   Start/Resume/View actions have hover/focus tooltips. Completed workouts link to
   Workouts rather than entering the auto-start logger. Rest days keep their copy.

@@ -6,6 +6,17 @@ import { startOfWeek, todayKey } from "../src/utility/dates";
 import type { Database } from "../src/types/database.generated";
 import type { UserProfile } from "../src/types/domain";
 
+async function expectPlannedActionOrder(page: Page, scope: Locator, label: string) {
+  const remove = scope.getByRole("button", { name: `Remove planned ${label}`, exact: true });
+  const log = scope.getByRole("button", { name: `Log planned ${label}`, exact: true });
+  const left = (await remove.boundingBox())!, right = (await log.boundingBox())!;
+  expect(left.x + left.width).toBeLessThanOrEqual(right.x);
+  expect(Math.abs(left.y - right.y)).toBeLessThanOrEqual(1);
+  await remove.focus();
+  await page.keyboard.press("Tab");
+  await expect(log).toBeFocused();
+}
+
 async function expectMealSummaryAligned(home: Locator) {
   const geometry = await home.evaluate(element => {
     const ring = element.querySelector('[role="img"]')!;
@@ -136,6 +147,7 @@ test("Home and Nutrition share modal drafts, immediate planned logs and confirme
     await page.goto("/");
     const home = page.getByRole("region", { name: "Today's meals", exact: true });
     await expect(home.getByText("Breakfast egg", { exact: true })).toBeVisible();
+    await expectPlannedActionOrder(page, home, "Breakfast egg");
     await expect(home.getByText("Planned chicken lunch", { exact: true })).toBeVisible();
     await expect(home.getByText("Skipped egg", { exact: true })).toHaveCount(0);
     await expect(home.getByText("No meals logged yet", { exact: true })).toHaveCount(0);
@@ -195,6 +207,8 @@ test("Home and Nutrition share modal drafts, immediate planned logs and confirme
     await modal.getByLabel("F g", { exact: true }).fill("2");
     await modal.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.goto("/nutrition");
+    await expect(page.getByRole("button", { name: "Log planned Breakfast egg", exact: true })).toBeVisible();
+    await expectPlannedActionOrder(page, page.locator("main"), "Breakfast egg");
     for (const slot of ["breakfast", "lunch", "dinner", "snack"]) {
       const add = page.locator(`#add-meal-${slot}`);
       await expect(add).toBeEnabled();
@@ -262,7 +276,7 @@ test("Home and Nutrition share modal drafts, immediate planned logs and confirme
     await expect(undoLunch).toBeVisible();
     const undoDinner = home.getByRole("region", { name: "Dinner", exact: true }).getByRole("button", { name: `Undo logged ${recipe.name}`, exact: true });
     await undoDinner.focus();
-    await expect(page.getByRole("tooltip", { name: "Undo meal log", exact: true })).toBeVisible();
+    await expect(home.getByRole("region", { name: "Dinner", exact: true }).getByRole("tooltip", { name: "Undo meal log", exact: true })).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(undoDinner).toHaveCount(0);
     await expect(home.locator("#home-add-meal-dinner")).toBeFocused();
