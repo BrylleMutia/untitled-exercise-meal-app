@@ -4,9 +4,11 @@ import path from "node:path";
 const userAState = path.resolve("playwright/.auth/user-a.json");
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 const serverPort = Number(new URL(baseURL).port || "3000");
+const photoTest = process.env.CALI_PHOTO_BROWSER_TEST === "1";
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: photoTest ? [] : [/meal-photo\.spec\.ts/],
   timeout: 150_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -25,10 +27,13 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: `npm run dev -- --webpack --port ${serverPort}`,
+    command: photoTest
+      ? `npm run build -- --webpack && npm run start -- --port ${serverPort}`
+      : `npm run dev -- --webpack --port ${serverPort}`,
+    ...(photoTest ? { env: { NEXT_PUBLIC_NUTRITION_PHOTO_ENABLED: "true" } } : {}),
     url: baseURL,
     reuseExistingServer: !process.env.CI && process.env.PLAYWRIGHT_LOCAL_TEST !== "1",
-    timeout: 120_000,
+    timeout: photoTest ? 180_000 : 120_000,
   },
   projects: [
     {
@@ -49,7 +54,7 @@ export default defineConfig({
     },
     {
       name: "desktop",
-      testMatch: /(?:mvp[13]-release|onboarding-rulers|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
+      testMatch: /(?:meal-photo|mvp[13]-release|onboarding-rulers|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -59,7 +64,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
-      testMatch: /(?:mvp[13]-release|onboarding-rulers|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
+      testMatch: /(?:meal-photo|mvp[13]-release|onboarding-rulers|contextual-help|cooking-groups|grocery-sharing|grocery-quantity|grocery-categories|grocery-suggestions|recipe-cooking|recipe-conversions|advisory-generation|home-meals|home-activity|nutrition-flat-panels)\.spec\.ts/,
       dependencies: ["auth-setup"],
       use: {
         ...devices["Pixel 5"],

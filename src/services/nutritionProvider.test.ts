@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseNutritionTextWithProvider } from "./nutritionProvider";
+import { parseNutritionPhoto, parseNutritionTextWithProvider } from "./nutritionProvider";
+
+describe("photo extraction client boundary", () => {
+  it("forwards cancellation and validates candidates without a persistence call", async () => {
+    const invoke = vi.fn(async () => ({ data: { status: "no_food", suggestedMealName: "Meal", candidates: [], questions: [] }, error: null }));
+    const rpc = vi.fn(); const from = vi.fn();
+    const client = { auth: { getSession: async () => ({ data: { session: { access_token: "test-token" } } }) }, functions: { invoke }, rpc, from } as unknown as Parameters<typeof parseNutritionPhoto>[0];
+    const signal = new AbortController().signal;
+    await expect(parseNutritionPhoto(client, "data:image/jpeg;base64,test", " note ", signal)).resolves.toMatchObject({ status: "no_food" });
+    expect(invoke).toHaveBeenCalledWith("nutrition-photo-parse", expect.objectContaining({ signal, body: expect.objectContaining({ note: "note" }) }));
+    expect(rpc).not.toHaveBeenCalled(); expect(from).not.toHaveBeenCalled();
+  });
+});
 
 describe("text extraction client boundary", () => {
   it("invokes only the candidate endpoint and leaves saving to explicit confirmation", async () => {

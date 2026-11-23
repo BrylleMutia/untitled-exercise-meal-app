@@ -3,6 +3,14 @@ import { FOODS } from "@/constants/foods";
 import { parseMealText, servingPlanForCandidate } from "./textMeal";
 
 describe("text meal serving reconciliation", () => {
+  it("keeps a gram quantity as mass even when a USDA household portion also contains grams", () => {
+    const base = FOODS.find((food) => food.id === "food-butter")!;
+    const sandwich = { ...base, unit: "g" as const, servingGrams: 100,
+      servingOptions: [{ label: "1 egg salad sandwich (220 g)", unit: "serving", grams: 220 }] };
+    expect(servingPlanForCandidate(sandwich, 220, "g")).toEqual({ servings: 2.2, servingQuantity: 220, servingUnit: "g" });
+    expect(servingPlanForCandidate(sandwich, 2, "piece")).toBeNull();
+  });
+
   it("converts a supported tablespoon option into the trusted gram basis", () => {
     const butter = FOODS.find((food) => food.id === "food-butter");
     expect(butter).toBeDefined();

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { isPhotoExtraction, type PhotoExtraction } from "../../supabase/functions/_shared/photoContract";
 import type { Database } from "@/types/database.generated";
 import type { MacroEstimateRange, PreparationBasis } from "@/types/domain";
 
@@ -102,7 +103,7 @@ const responseSchema = z.object({ candidates: z.array(candidateSchema).max(20), 
 
 type ProviderClient = SupabaseClient<Database>;
 
-async function invoke<T>(client: ProviderClient, functionName: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
+async function invoke<T>(client: ProviderClient, functionName: string, body: unknown, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
   // SSR can prove the user is signed in while a newly-created browser client
   // is still initializing its cookie-backed session. Resolve the session
   // before invoking protected functions and refresh it once when necessary;
@@ -121,6 +122,7 @@ async function invoke<T>(client: ProviderClient, functionName: string, body: unk
   if (!accessToken) throw new Error("not_authenticated: nutrition provider requires an authenticated session");
 
   const invokeWithToken = (token: string) => client.functions.invoke(functionName, {
+    signal,
     body: body as Record<string, unknown>,
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -160,6 +162,11 @@ async function invoke<T>(client: ProviderClient, functionName: string, body: unk
   const parsed = schema.safeParse(data);
   if (!parsed.success) throw new Error("provider_invalid_response: nutrition provider returned an unexpected shape");
   return parsed.data;
+}
+
+export async function parseNutritionPhoto(client: ProviderClient, image: string, note: string, signal: AbortSignal): Promise<PhotoExtraction> {
+  return invoke(client, "nutrition-photo-parse", { image, note: note.trim(), locale: "en-US", requestId: crypto.randomUUID() },
+    z.custom<PhotoExtraction>(isPhotoExtraction), signal);
 }
 
 export async function searchNutritionProvider(client: ProviderClient, query: string, cursor?: string): Promise<FoodSearchPage> {

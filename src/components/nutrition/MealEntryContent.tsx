@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Check, Plus, Sparkles } from "lucide-react";
+import { Camera, Check, Plus, Sparkles } from "lucide-react";
 import type { AppActions } from "@/contexts/AppContext";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/Button";
@@ -25,40 +25,21 @@ import { clearDraft, createDraftEnvelope, draftTtlMs, readDraft, writeDraft } fr
 import { estimateNutritionMacros, matchNutritionMeal, parseNutritionTextWithProvider, searchNutritionProvider, type NutritionProviderCandidate } from "@/services/nutritionProvider";
 import type { AppSnapshot, Food, Meal, MealSlot, PlannedMeal, RecipeIngredient } from "@/types/domain";
 
+import { MealPhotoCapture } from "./MealPhotoCapture";
+import { PhotoMealPreview } from "./PhotoMealPreview";
+import { guidedMacros, photoEstimateFood, photoFoodMatch, photoSourceNote, photoReviewedEntry, reviewReady, type GuidedIngredient } from "@/utility/guidedMealReview";
+import type { PhotoExtraction } from "../../../supabase/functions/_shared/photoContract";
+
 export type Mode = "search" | "custom";
 export type PlanChoice = { food?: Food; meal?: Meal; servings: number; newFoods?: Food[]; plannedMeal?: PlannedMeal; fixedKey?: string; review?: ManualPlanningReview };
 export type EntryContext = { selected: string; snapshot: AppSnapshot; actions: AppActions; canAddPlan: boolean; carbLimit: number | null; addToPlan: (slot: MealSlot, choice: PlanChoice) => Promise<boolean> };
 type RecipeSelection = { id: string; revision?: number; token: string; servings: string; logKey: string; planKey: string; plannedMeal?: PlannedMeal; profileRevision?: number; planBasis?: string };
 type FoodSubmission = { logKey: string; planKey: string; plannedMeal?: PlannedMeal; profileRevision?: number; planBasis?: string };
-type GuidedDraft = { query: string; mealName: string; ingredients: GuidedIngredient[]; quantityFood?: Food | null; quantity?: string; quantityUnit?: string; recipeSelection?: RecipeSelection | null; foodSubmission?: FoodSubmission | null };
+type MealSubmission = { signature: string; key: string; mealId: string };
+type GuidedDraft = { questions?: string[]; photoStage?: "preview" | "review"; mealSubmission?: MealSubmission | null; query: string; mealName: string; ingredients: GuidedIngredient[]; quantityFood?: Food | null; quantity?: string; quantityUnit?: string; recipeSelection?: RecipeSelection | null; foodSubmission?: FoodSubmission | null };
 
-type GuidedIngredient = {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  preparation: string;
-  assumptions: string[];
-  presence: "stated" | "possible_hidden";
-  included: boolean;
-  food: Food | null;
-  estimate?: {
-    calories: number;
-    proteinG: number;
-    carbsG: number;
-    fatG: number;
-    fiberG?: number;
-    estimateRange: import("@/types/domain").MacroEstimateRange;
-    assumptions: string[];
-  };
-  custom?: {
-    calories: string;
-    proteinG: string;
-    carbsG: string;
-    fatG: string;
-    fiberG: string;
-  };
-};
+// The reviewed planning RPC checks the revision after creating the recipe and writing its cooking metadata.
+const NEW_REVIEWED_RECIPE_REVISION = 2;
 
 function nutritionProviderMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : "";
@@ -342,6 +323,13 @@ export function GuidedSearchPicker({
   const [quantity, setQuantity] = useState("1");
   const [quantityUnit, setQuantityUnit] = useState("serving");
   const [mealName, setMealName] = useState("Meal");
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoStage, setPhotoStage] = useState<"preview" | "review" | undefined>();
+  const [mealSubmission, setMealSubmission] = useState<MealSubmission | null>(null);
+  const analysisGeneration = useRef(0);
+  const reviewHeading = useRef<HTMLDivElement>(null);
+  useEffect(() => () => { analysisGeneration.current++; }, []);
   const [ingredients, setIngredients] = useState<GuidedIngredient[]>([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -389,6 +377,9 @@ export function GuidedSearchPicker({
       if (saved) {
         setRecipeSelection(saved.payload.recipeSelection ?? null);
         setFoodSubmission(saved.payload.foodSubmission ?? null);
+        setQuestions(saved.payload.questions ?? []);
+        setPhotoStage(saved.payload.photoStage);
+        setMealSubmission(saved.payload.mealSubmission ?? null);
         setQuery(saved.payload.query);
         setMealName(saved.payload.mealName);
         setIngredients(saved.payload.ingredients.map((ingredient) => ({
@@ -409,14 +400,14 @@ export function GuidedSearchPicker({
     if (closingDraft.current || !draftReady || !userId || (!query.trim() && ingredients.length === 0 && !quantityFood && !recipeSelection)) return;
     const envelope = createDraftEnvelope({
       userId, draftType,
-      payload: { query, mealName, ingredients, quantityFood, quantity, quantityUnit, recipeSelection, foodSubmission },
+      payload: { query, mealName, ingredients, questions, photoStage, mealSubmission, quantityFood, quantity, quantityUnit, recipeSelection, foodSubmission },
       baseVersions: { profileRevision }, ttlMs: draftTtlMs(draftType),
     });
     draftWrites.current = draftWrites.current.then(() => writeDraft(envelope));
     void draftWrites.current.then(saved => {
       if (!saved) setAnalysisError("Review recovery could not be written on this device. Keep this screen open until you confirm or discard it.");
     });
-  }, [draftReady, draftType, ingredients, mealName, profileRevision, quantity, quantityFood, quantityUnit, query, recipeSelection, foodSubmission, userId]);
+  }, [draftReady, draftType, ingredients, mealName, profileRevision, quantity, quantityFood, quantityUnit, query, recipeSelection, foodSubmission, questions, photoStage, mealSubmission, userId]);
 
   useEffect(() => {
     onSavingChange(savingIntent);
@@ -499,11 +490,49 @@ export function GuidedSearchPicker({
     }
   }
 
+  async function acceptPhoto(extracted: PhotoExtraction) {
+    const generation = ++analysisGeneration.current;
+    setPhotoOpen(false); setPhotoStage("preview"); setQuestions(extracted.questions);
+    setProviderError(""); setProviderResults({ candidates: [] });
+    setMealName(extracted.suggestedMealName); setQuantityFood(null); setRecipeSelection(null);
+    setAnalysisError(""); setAnalysisLoading(true);
+    const candidates: GuidedIngredient[] = extracted.candidates.map((candidate, index) => ({
+      id: `photo-${generation}-${index}`, name: candidate.name, quantity: candidate.portion?.base ?? 0,
+      unit: candidate.portion?.unit ?? "g", preparation: candidate.preparation,
+      assumptions: [...candidate.assumptions, "Photo-suggested food and portion; not a measured amount."],
+      presence: candidate.presence === "visible" ? "stated" : "possible_hidden",
+      included: candidate.presence === "visible", food: null,
+      photo: { portion: candidate.portion, reviewed: false },
+    }));
+    setIngredients(candidates);
+    await enrichPhoto(candidates, generation);
+  }
+
+  async function enrichPhoto(candidates: GuidedIngredient[], generation = ++analysisGeneration.current) {
+    setAnalysisError(""); setAnalysisLoading(true);
+    const visible = candidates.filter(item => item.included && item.name.trim().length >= 2 && !item.food && !item.estimate && !item.custom);
+    try {
+      const matches = await matchNutritionMeal(createClient(), visible.map(item => ({ name: item.name, preparation: item.preparation })));
+      if (generation !== analysisGeneration.current) return;
+      setIngredients(candidates.map(item => {
+        const suggested = matches.find(match => match.ingredientIndex === visible.indexOf(item))?.candidates ?? [];
+        const food = photoFoodMatch(item.name, suggested.map(providerFood));
+        return food ? { ...item, food, photo: item.photo ? { ...item.photo, reviewed: false } : undefined } : item;
+      }));
+    } catch {
+      if (generation === analysisGeneration.current) setAnalysisError("Food matching is unavailable. The photo review is retained; choose catalog matches or enter values manually.");
+    } finally { if (generation === analysisGeneration.current) setAnalysisLoading(false); }
+  }
+
   async function analyzeMeal() {
+    const generation = ++analysisGeneration.current;
+    setPhotoStage(undefined);
     setAnalysisLoading(true);
     setAnalysisError("");
     try {
       const extracted = await parseNutritionTextWithProvider(createClient(), query);
+      if (generation !== analysisGeneration.current) return;
+      setQuestions(extracted.questions);
       const stated = extracted.candidates.filter((candidate) => candidate.presence === "stated");
       const matchesByCandidate = new Map<number, NutritionProviderCandidate>();
       if (stated.length > 0) {
@@ -544,6 +573,7 @@ export function GuidedSearchPicker({
           food: local ?? (match ? providerFood(match) : null),
         };
       });
+      if (generation !== analysisGeneration.current) return;
       setMealName(extracted.suggestedMealName);
       setIngredients(next);
     } catch (error) {
@@ -628,159 +658,168 @@ export function GuidedSearchPicker({
     } catch { setAnalysisError("The save was not confirmed. Your food portion is retained; reconnect and retry."); }
     finally { submitting.current = false; setSavingIntent(false); onSavingChange(false); }
   }
+  async function finishReview() {
+    closingDraft.current = true;
+    await draftWrites.current;
+    if (userId) await clearDraft(userId, draftType);
+    onDone();
+  }
+
   async function confirmMeal(intent: "plan" | "log") {
     const included = ingredients.filter((ingredient) => ingredient.included);
-    if (included.length === 0 || included.some((ingredient) => !ingredient.food && !ingredient.estimate && !ingredient.custom)) return;
-    if (intent === "plan") {
-      if (!canPlan) return;
-      const newFoods: Food[] = [];
-      const recipeIngredients: RecipeIngredient[] = [];
-      for (const ingredient of included) {
-        let food = ingredient.food;
-        if (ingredient.custom) {
-          food = {
-            id: clientId("food-review"), name: ingredient.name.trim(),
-            servingLabel: `${ingredient.quantity} ${ingredient.unit} reviewed portion`,
-            servingGrams: 100, unit: "g", category: "Other",
-            calories: Number(ingredient.custom.calories), proteinG: Number(ingredient.custom.proteinG),
-            carbsG: Number(ingredient.custom.carbsG), fatG: Number(ingredient.custom.fatG),
-            ...(ingredient.custom.fiberG ? { fiberG: Number(ingredient.custom.fiberG) } : {}),
-            source: "User-provided", sourceVersion: "user-v1", valueSource: "user_provided",
-            estimated: false, confidence: "medium", preparationBasis: "prepared",
+    if (submitting.current || !reviewReady(ingredients) || analysisLoading || estimateLoading) return;
+    if (intent === "plan" && !canPlan) return;
+    submitting.current = true; setSavingIntent(true); onSavingChange(true);
+    try {
+      const signature = JSON.stringify([intent, selected, slot, mealName, ingredients]);
+      const submission = mealSubmission?.signature === signature ? mealSubmission : { signature, key: clientId("review-save"), mealId: clientId("meal-review") };
+      setMealSubmission(submission);
+      await draftWrites.current;
+      if (!userId || !await writeDraft(createDraftEnvelope({ userId, draftType,
+        payload: { query, mealName, ingredients, questions, photoStage, mealSubmission: submission },
+        baseVersions: { profileRevision }, ttlMs: draftTtlMs(draftType) }))) {
+        setAnalysisError("The review could not be retained for a safe retry. Keep this screen open and retry when draft storage is available."); return;
+      }
+      if (intent === "plan") {
+        const newFoods: Food[] = [];
+        const recipeIngredients: RecipeIngredient[] = [];
+        for (const [index, ingredient] of included.entries()) {
+          let food = ingredient.food;
+          const photoFood = photoEstimateFood(ingredient, `${submission.mealId}-food-${index}`);
+          if (photoFood) { food = photoFood; newFoods.push(photoFood); }
+          if (ingredient.custom) {
+            food = {
+              id: `${submission.mealId}-food-${index}`, name: ingredient.name.trim(),
+              servingLabel: `${ingredient.quantity} ${ingredient.unit} reviewed portion`,
+              servingGrams: 100, unit: "g", category: "Other",
+              calories: Number(ingredient.custom.calories), proteinG: Number(ingredient.custom.proteinG),
+              carbsG: Number(ingredient.custom.carbsG), fatG: Number(ingredient.custom.fatG),
+              ...(ingredient.custom.fiberG ? { fiberG: Number(ingredient.custom.fiberG) } : {}),
+              source: "User-provided", sourceVersion: "user-v1", valueSource: "user_provided",
+              estimated: false, confidence: "medium", preparationBasis: "prepared",
+            };
+            newFoods.push(food);
+          } else if (food?.fdcId && !snapshot.foods.some((saved) => saved.id === food?.id)) {
+            newFoods.push(food);
+          }
+          if (!food) return;
+          recipeIngredients.push({ foodId: food.id, servings: ingredient.custom || photoFood ? 1 : servingPlanForCandidate(food, ingredient.quantity, ingredient.unit)!.servings });
+        }
+        const newMeal: Meal = { id: submission.mealId, name: mealName.trim() || "Reviewed meal", servings: 1, ingredients: recipeIngredients, ...(photoStage ? { nutritionNotes: included.map(photoSourceNote).join("\n") } : {}) };
+        const saved = await addToPlan(slot, { meal: newMeal, servings: 1, newFoods, fixedKey: submission.key,
+            plannedMeal: { id: `${submission.mealId}-planned`, date: selected, slot, mealId: submission.mealId, label: newMeal.name, servings: 1 },
+            ...(photoStage ? { review: { reviewAcknowledged: true, reviewPolicyVersion: "advisory_v1", profileRevision: profileRevision ?? 0, recipeRevision: NEW_REVIEWED_RECIPE_REVISION } as const } : {}),
+        });
+        if (saved) await finishReview();
+        else setAnalysisError("The plan update was not confirmed. Your review is retained; retry when ready.");
+        return;
+      }
+      const entries = included.map((ingredient) => {
+        // The existing estimate contract preserves photo portion uncertainty atomically.
+        // Source records are retained in assumptions, never reclassified as AI-generated facts.
+        const photoEntry = photoReviewedEntry(ingredient, selected, slot);
+        if (photoEntry) return photoEntry;
+        if (ingredient.food) {
+          const serving = servingPlanForCandidate(ingredient.food, ingredient.quantity, ingredient.unit)!;
+          const macros = foodMacros(ingredient.food, serving.servings);
+          return {
+            date: selected,
+            slot,
+            foodId: ingredient.food.id,
+            servings: serving.servings,
+            servingQuantity: serving.servingQuantity,
+            servingUnit: serving.servingUnit,
+            calories: macros.calories,
+            proteinG: macros.proteinG,
+            carbsG: macros.carbsG,
+            fatG: macros.fatG,
+            ...(ingredient.food.fiberG === undefined ? {} : { fiberG: ingredient.food.fiberG * serving.servings }),
+            estimated: ingredient.food.estimated,
+            confidence: ingredient.food.confidence,
+            source: ingredient.food.source,
+            sourceVersion: ingredient.food.sourceVersion,
+            preparationBasis: ingredient.food.preparationBasis ?? "as_labeled",
+            valueSource: ingredient.food.valueSource,
+            ...(ingredient.food.estimateRange ? { estimateRange: ingredient.food.estimateRange } : {}),
+            assumptions: ingredient.assumptions.join(" ") || undefined,
           };
-          newFoods.push(food);
-        } else if (food?.fdcId && !snapshot.foods.some((saved) => saved.id === food?.id)) {
-          newFoods.push(food);
         }
-        if (!food) return;
-        recipeIngredients.push({ foodId: food.id, servings: ingredient.custom ? 1 : servingPlanForCandidate(food, ingredient.quantity, ingredient.unit)?.servings ?? ingredient.quantity });
-      }
-      const newMeal: Meal = { id: clientId("meal-review"), name: mealName.trim() || "Reviewed meal", servings: 1, ingredients: recipeIngredients };
-      setSavingIntent(true);
-      try {
-        if (await addToPlan(slot, { meal: newMeal, servings: 1, newFoods })) {
-          closingDraft.current = true;
-          await draftWrites.current;
-          if (userId) await clearDraft(userId, draftType);
-          onDone();
+        if (ingredient.custom) {
+          const quantity = Math.max(ingredient.quantity, 1);
+          const customValue = (value: string) => Number(value) / quantity;
+          return {
+            date: selected,
+            slot,
+            customName: ingredient.name,
+            servings: quantity,
+            servingQuantity: quantity,
+            servingUnit: "g" as const,
+            calories: customValue(ingredient.custom.calories),
+            proteinG: customValue(ingredient.custom.proteinG),
+            carbsG: customValue(ingredient.custom.carbsG),
+            fatG: customValue(ingredient.custom.fatG),
+            ...(ingredient.custom.fiberG === "" ? {} : { fiberG: customValue(ingredient.custom.fiberG) }),
+            estimated: false,
+            confidence: "medium" as const,
+            source: "User-provided",
+            sourceVersion: "user-v1",
+            preparationBasis: "prepared" as const,
+            valueSource: "user_provided" as const,
+            servingLabel: `${ingredient.quantity} ${ingredient.unit} reviewed portion`,
+            servingGrams: 100,
+            assumptions: [...ingredient.assumptions, `User-provided values for ${ingredient.quantity} ${ingredient.unit}.`].join(" ") || undefined,
+          };
         }
-      } finally { setSavingIntent(false); }
-      return;
-    }
-    const entries = included.map((ingredient) => {
-      if (ingredient.food) {
-        const serving = servingPlanForCandidate(ingredient.food, ingredient.quantity, ingredient.unit) ?? {
-          servings: ingredient.quantity,
-          servingQuantity: ingredient.food.unit === "piece" ? ingredient.quantity : ingredient.food.servingGrams * ingredient.quantity,
-          servingUnit: ingredient.food.unit,
-        };
-        const macros = foodMacros(ingredient.food, serving.servings);
-        return {
-          date: selected,
-          slot,
-          foodId: ingredient.food.id,
-          servings: serving.servings,
-          servingQuantity: serving.servingQuantity,
-          servingUnit: serving.servingUnit,
-          calories: macros.calories,
-          proteinG: macros.proteinG,
-          carbsG: macros.carbsG,
-          fatG: macros.fatG,
-          ...(ingredient.food.fiberG === undefined ? {} : { fiberG: ingredient.food.fiberG * serving.servings }),
-          estimated: ingredient.food.estimated,
-          confidence: ingredient.food.confidence,
-          source: ingredient.food.source,
-          sourceVersion: ingredient.food.sourceVersion,
-          preparationBasis: ingredient.food.preparationBasis ?? "as_labeled",
-          valueSource: ingredient.food.valueSource,
-          ...(ingredient.food.estimateRange ? { estimateRange: ingredient.food.estimateRange } : {}),
-          assumptions: ingredient.assumptions.join(" ") || undefined,
-        };
-      }
-      if (ingredient.custom) {
-        const quantity = Math.max(ingredient.quantity, 1);
-        const customValue = (value: string) => Number(value) / quantity;
         return {
           date: selected,
           slot,
           customName: ingredient.name,
-          servings: quantity,
-          servingQuantity: quantity,
-          servingUnit: "g" as const,
-          calories: customValue(ingredient.custom.calories),
-          proteinG: customValue(ingredient.custom.proteinG),
-          carbsG: customValue(ingredient.custom.carbsG),
-          fatG: customValue(ingredient.custom.fatG),
-          ...(ingredient.custom.fiberG === "" ? {} : { fiberG: customValue(ingredient.custom.fiberG) }),
-          estimated: false,
-          confidence: "medium" as const,
-          source: "User-provided",
-          sourceVersion: "user-v1",
-          preparationBasis: "prepared" as const,
-          valueSource: "user_provided" as const,
+          servings: 1,
+          servingQuantity: ingredient.quantity,
+          servingGrams: ingredient.unit === "g" ? ingredient.quantity : 100,
           servingLabel: `${ingredient.quantity} ${ingredient.unit} reviewed portion`,
-          servingGrams: 100,
-          assumptions: [...ingredient.assumptions, `User-provided values for ${ingredient.quantity} ${ingredient.unit}.`].join(" ") || undefined,
+          servingUnit: "g" as const,
+          calories: ingredient.estimate!.calories,
+          proteinG: ingredient.estimate!.proteinG,
+          carbsG: ingredient.estimate!.carbsG,
+          fatG: ingredient.estimate!.fatG,
+          ...(ingredient.estimate!.fiberG === undefined ? {} : { fiberG: ingredient.estimate!.fiberG }),
+          estimated: true,
+          confidence: "low" as const,
+          source: "DeepSeek estimate",
+          sourceVersion: "deepseek-flash",
+          preparationBasis: "prepared" as const,
+          valueSource: "ai_estimate" as const,
+          estimateRange: ingredient.estimate!.estimateRange,
+          assumptions: [...ingredient.assumptions, ...ingredient.estimate!.assumptions].join(" ") || undefined,
         };
-      }
-      return {
+      });
+      const remoteFoods = included.flatMap((ingredient) => !ingredient.photo && ingredient.food?.fdcId && !snapshot.foods.some((food) => food.id === ingredient.food?.id) && ingredient.food ? [ingredient.food] : []);
+      for (const food of remoteFoods) if (!await actions.saveFood(food)) return;
+      const saved = await actions.saveReviewedMeal({
         date: selected,
         slot,
-        customName: ingredient.name,
-        servings: ingredient.quantity,
-        servingQuantity: ingredient.quantity,
-        servingUnit: "g" as const,
-        calories: ingredient.estimate!.calories,
-        proteinG: ingredient.estimate!.proteinG,
-        carbsG: ingredient.estimate!.carbsG,
-        fatG: ingredient.estimate!.fatG,
-        ...(ingredient.estimate!.fiberG === undefined ? {} : { fiberG: ingredient.estimate!.fiberG }),
-        estimated: true,
-        confidence: "low" as const,
-        source: "DeepSeek estimate",
-        sourceVersion: "deepseek-flash",
-        preparationBasis: "prepared" as const,
-        valueSource: "ai_estimate" as const,
-        estimateRange: ingredient.estimate!.estimateRange,
-        assumptions: [...ingredient.assumptions, ...ingredient.estimate!.assumptions].join(" ") || undefined,
-      };
-    });
-    const remoteFoods = included.flatMap((ingredient) => ingredient.food?.fdcId && !snapshot.foods.some((food) => food.id === ingredient.food?.id) && ingredient.food ? [ingredient.food] : []);
-    setSavingIntent(true);
-    try {
-    for (const food of remoteFoods) if (!await actions.saveFood(food)) return;
-    const saved = await actions.saveReviewedMeal({
-      date: selected,
-      slot,
-      name: mealName.trim() || "Reviewed meal",
-      sourceMode: "ai_assisted",
-      meal: { id: clientId("meal-review"), name: mealName.trim() || "Reviewed meal", servings: 1, ingredients: [] },
-      ingredients: entries,
-    });
-    if (saved) {
-      closingDraft.current = true;
-      await draftWrites.current;
-      if (userId) await clearDraft(userId, draftType);
-      onDone();
-    }
-    } finally { setSavingIntent(false); }
+        name: mealName.trim() || "Reviewed meal",
+        sourceMode: "ai_assisted",
+        meal: { id: submission.mealId, name: mealName.trim() || "Reviewed meal", servings: 1, ingredients: [] },
+        ingredients: entries,
+        ...(photoStage ? { assumptions: "Photo-assisted meal: low-confidence portion estimates reviewed by the user. The photo is not retained." } : {}),
+      }, submission.key);
+      if (saved) await finishReview();
+      else setAnalysisError("The save was not confirmed. Your review is retained; retry when ready.");
+    } catch { setAnalysisError("The save was not confirmed. Your review is retained; reconnect and retry."); }
+    finally { submitting.current = false; setSavingIntent(false); onSavingChange(false); }
   }
 
   const included = ingredients.filter((ingredient) => ingredient.included);
-  const totals = included.reduce((sum, ingredient) => {
-    const macros = ingredient.estimate
-      ?? (ingredient.custom ? {
-        calories: Number(ingredient.custom.calories) || 0,
-        proteinG: Number(ingredient.custom.proteinG) || 0,
-        carbsG: Number(ingredient.custom.carbsG) || 0,
-        fatG: Number(ingredient.custom.fatG) || 0,
-      } : null)
-      ?? (ingredient.food ? foodMacros(ingredient.food, servingPlanForCandidate(ingredient.food, ingredient.quantity, ingredient.unit)?.servings ?? ingredient.quantity) : null);
+  const totals = included.reduce((sum, item) => {
+    const macros = guidedMacros(item);
     if (!macros) return sum;
     return { calories: sum.calories + macros.calories, proteinG: sum.proteinG + macros.proteinG, carbsG: sum.carbsG + macros.carbsG, fatG: sum.fatG + macros.fatG };
   }, { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
-  const ready = included.length > 0 && included.every((ingredient) => Number.isFinite(ingredient.quantity) && ingredient.quantity > 0 && (ingredient.food || ingredient.estimate || (ingredient.custom && [ingredient.custom.calories, ingredient.custom.proteinG, ingredient.custom.carbsG, ingredient.custom.fatG].every((value) => value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0))));
+  const ready = reviewReady(ingredients) && !analysisLoading && !estimateLoading;
   const canPlan = ready && canAddPlan && included.every((ingredient) => {
+    if (photoStage && ingredient.food) return true;
     if (ingredient.custom) return carbLimit === null;
     return Boolean(ingredient.food && ingredient.food.valueSource !== "ai_estimate" && (carbLimit === null || ingredient.food.valueSource === "trusted_catalog"));
   });
@@ -788,17 +827,20 @@ export function GuidedSearchPicker({
   const quantityMacros = quantityFood && quantityServing ? foodMacros(quantityFood, quantityServing.servings) : null;
   const quantityValid = Boolean(!foodUnavailable && !foodChanged && quantityServing && quantityServing.servings >= 0.0001 && quantityServing.servings <= 10000 && quantityMacros && Object.values(quantityMacros).every(value => Number.isFinite(value) && value >= 0));
 
+  if (photoOpen) return <MealPhotoCapture onResult={result => void acceptPhoto(result)} onClose={() => setPhotoOpen(false)} />;
+
   return (
     <div className="mt-3 grid min-w-0 gap-2">
       {draftRestored ? <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-mint-100 px-3 py-2 text-xs font-bold [overflow-wrap:anywhere]" role="status"><span>Meal review draft restored.</span><button type="button" className="min-h-11 underline" disabled={busy} onClick={() => { closingDraft.current = true; if (userId) void draftWrites.current.then(() => clearDraft(userId, draftType)); setDraftRestored(false); setDraftReady(false); setQuery(""); setMealName("Meal"); setIngredients([]); setQuantityFood(null); setRecipeSelection(null); setProviderResults({ candidates: [] }); setAnalysisError(""); onDone(); }}>Discard draft</button></div> : null}
-      {!reviewing ? <>
+      {!reviewing && photoStage !== "preview" ? <>
+      {process.env.NEXT_PUBLIC_NUTRITION_PHOTO_ENABLED === "true" ? <Button variant="soft" disabled={busy || analysisLoading || estimateLoading || !draftReady} onClick={() => { analysisGeneration.current++; setPhotoOpen(true); }}><Camera className="h-4 w-4" aria-hidden />Take or upload photo</Button> : null}
       <input value={query} onChange={(event) => setQuery(event.target.value)} ref={searchInput} disabled={busy} placeholder="Search foods or saved recipes, or describe a meal." className="input" aria-label="Search foods or saved recipes, or describe a meal." />
       <div className="flex flex-wrap gap-2">
         <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={busy || providerLoading || query.trim().length < 2} onClick={() => void runProviderSearch()}>{providerLoading ? "Searching USDA…" : "Search trusted USDA"}</Button>
         <Button variant="ghost" className="!min-h-11 !px-3 text-xs" disabled={busy} onClick={() => onMode("custom")}>Enter manually</Button>
       </div>
       {shouldSuggestAnalysis ? <div className="rounded-xl bg-lav-50 px-3 py-2 text-xs font-semibold"><div className="flex items-center justify-between gap-2"><p>Analyze sends your description to DeepSeek.</p><HelpPopover title="Meal analysis"><p>DeepSeek suggests ingredients and questions for you to review. It does not save meals. Catalog values are authoritative; optional AI estimates remain low-confidence ranges and require confirmation.</p></HelpPopover></div><Button className="mt-2 !min-h-11 !px-3 text-xs" disabled={busy || analysisLoading} onClick={() => void analyzeMeal()}><Sparkles className="h-4 w-4" aria-hidden /> {analysisLoading ? "Analyzing…" : "Analyze this meal"}</Button></div> : null}
-      {providerError || analysisError ? <div className="grid gap-1 text-[11px] font-bold text-danger-900" role="alert"><p>{providerError || analysisError}</p>{authenticationExpired ? <a className="w-fit underline underline-offset-2" href="/auth/sign-in?next=%2Fnutrition">Sign in again</a> : null}</div> : null}
+      {providerError || (!photoStage && analysisError) ? <div className="grid gap-1 text-[11px] font-bold text-danger-900" role="alert"><p>{providerError || analysisError}</p>{authenticationExpired ? <a className="w-fit underline underline-offset-2" href="/auth/sign-in?next=%2Fnutrition">Sign in again</a> : null}</div> : null}
       {recipeResults.length > 0 ? <section className="grid gap-1" aria-label="Saved recipes matches"><h3 className="text-xs font-extrabold">Saved recipes</h3><ul className="grid gap-1">{recipeResults.map(({ recipe, kind }) => {
       const calories = recipeCardCalories(recipe, foods);
       return <li key={recipe.id}><button type="button" aria-pressed={recipeSelection?.id === recipe.id} disabled={busy} className="flex min-h-11 w-full min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => selectRecipe(recipe)}><span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg"><RecipeCover image={recipe.image} name={recipe.name} selection /></span><span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{recipe.name}{kind === "close" ? <span className="ml-2 text-xs text-ink-soft">Close match</span> : null}</span>{calories !== undefined ? <NutritionPills label={`${recipe.name} nutrition per serving`} values={{ calories }} approximate precision={0} /> : <span className="text-xs text-muted">Calories unavailable</span>}</button></li>;
@@ -827,30 +869,35 @@ export function GuidedSearchPicker({
         {analysisError ? <Button variant="ghost" disabled={busy} onClick={() => void actions.refreshSnapshot()}>Refresh foods</Button> : null}
       </section> : null}
       {!reviewing && providerResults.candidates.length > 0 ? <div className="rounded-xl bg-mint-100 p-2"><p className="text-[11px] font-extrabold uppercase tracking-wide">USDA FoodData Central</p><ul className="mt-1 grid gap-1">{providerResults.candidates.map((candidate) => { const food = providerFood(candidate); return <li key={candidate.fdcId}><button type="button" disabled={busy} className="flex min-h-11 w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-sm font-semibold" onClick={() => selectFood(food)}><span>{candidate.name}<span className="block text-[11px] font-semibold text-muted">{candidate.servingLabel} · {candidate.preparationBasis} · USDA {candidate.sourceVersion}</span></span><Check className="h-4 w-4" aria-hidden /></button></li>; })}</ul></div> : null}
-      {ingredients.length > 0 && !reviewing ? (
-        <div className="grid gap-2 rounded-2xl bg-lav-50 p-3" role="region" aria-label="Guided meal review">
+      {photoStage && analysisError ? <p role="alert" className="text-sm font-semibold text-danger-900">{analysisError}</p> : null}
+      {photoStage && ingredients.some(item => item.included && !item.food && !item.estimate && !item.custom) ? <Button variant="soft" disabled={busy || analysisLoading} onClick={() => void enrichPhoto(ingredients)}>Retry ingredient matching</Button> : null}
+      {photoStage ? <PhotoMealPreview items={ingredients} questions={questions} loading={analysisLoading} onReview={photoStage === "preview" ? () => { setPhotoStage("review"); requestAnimationFrame(() => reviewHeading.current?.focus()); } : undefined} /> : null}
+      {ingredients.length > 0 && !reviewing && photoStage !== "preview" ? (
+        <fieldset disabled={busy || estimateLoading || analysisLoading} className="grid min-w-0 gap-2 rounded-2xl bg-lav-50 p-3"><div ref={reviewHeading} tabIndex={-1} role="region" aria-label="Guided meal review" className="grid gap-2">
           <HelpHeading title="Meal review" as="h3" className="text-sm font-extrabold"><p>Catalog values are authoritative. User values are explicit. Optional AI estimates are approximate, low-confidence ranges and require confirmation.</p><p>Check preparation, quantities, and assumptions before saving.</p></HelpHeading>
           <div className="grid gap-2">
             <input className="input" value={mealName} onChange={(event) => setMealName(event.target.value)} aria-label="Meal name" placeholder="Meal name" />
             {ready ? <NutritionPills label="Reviewed meal nutrition" values={totals} precision={0} approximate /> : <p className="text-xs font-semibold text-ink-soft">Review each included ingredient to see the meal nutrition.</p>}
           </div>
+          {!photoStage && questions.length ? <ul className="list-disc pl-5 text-sm">{questions.map((question, index) => <li key={index}>{question}</li>)}</ul> : null}
           {ingredients.map((ingredient, index) => (
-            <div key={ingredient.id} className={`grid gap-2 rounded-xl p-2 ${ingredient.included ? "bg-white" : "bg-cream"}`}>
+            <div key={ingredient.id} onChangeCapture={event => { if ((event.target as HTMLElement).hasAttribute("data-photo-confirm")) return; setIngredients(current => current.map(item => item.id === ingredient.id && item.photo ? { ...item, photo: { ...item.photo, reviewed: false } } : item)); }} className={`grid gap-2 rounded-xl p-2 ${ingredient.included ? "bg-white" : "bg-cream"}`}>
               <div className="flex items-start gap-2">
                 <input type="checkbox" checked={ingredient.included} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, included: event.target.checked } : item))} aria-label={`Include ${ingredient.name}`} className="mt-1 h-5 w-5" />
                 <div className="min-w-0 flex-1">
-                  <input className="input" value={ingredient.name} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, name: event.target.value } : item))} aria-label={`Ingredient ${index + 1} name`} />
-                  <p className="mt-1 text-[11px] font-semibold text-muted">{ingredient.presence === "possible_hidden" ? "Possible hidden ingredient — excluded by default" : "Stated ingredient"}</p>
+                  <input className="input" value={ingredient.name} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, name: event.target.value, food: null, estimate: undefined, custom: undefined } : item))} aria-label={`Ingredient ${index + 1} name`} />
+                  <p className="mt-1 text-[11px] font-semibold text-muted">{ingredient.presence === "possible_hidden" ? "Possible hidden ingredient — excluded by default" : ingredient.photo ? "Photo-suggested ingredient" : "Stated ingredient"}</p>
                 </div>
                 <button type="button" className="min-h-11 px-2 text-xs font-bold underline" onClick={() => setIngredients((current) => current.filter((item) => item.id !== ingredient.id))}>Remove</button>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                <input className="input" type="number" min="0.01" step="0.25" value={ingredient.quantity} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, quantity: Number(event.target.value) } : item))} aria-label={`${ingredient.name} quantity`} />
-                <input className="input" value={ingredient.unit} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, unit: event.target.value } : item))} aria-label={`${ingredient.name} unit`} />
+                <input className="input" type="number" min="0.01" step="0.25" value={ingredient.quantity || ""} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, quantity: Number(event.target.value), estimate: undefined, custom: undefined } : item))} aria-label={`${ingredient.name} quantity`} />
+                <input className="input" value={ingredient.unit} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, unit: event.target.value, estimate: undefined, custom: undefined } : item))} aria-label={`${ingredient.name} unit`} />
               </div>
-              <input className="input" value={ingredient.preparation} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, preparation: event.target.value } : item))} aria-label={`${ingredient.name} preparation`} placeholder="Preparation (raw, cooked, fried…)" />
-              <select className="input" value={ingredient.food?.id ?? ""} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, food: foods.find((food) => food.id === event.target.value) ?? null, estimate: undefined, custom: undefined } : item))}>
+              <input className="input" value={ingredient.preparation} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, preparation: event.target.value, food: null, estimate: undefined, custom: undefined } : item))} aria-label={`${ingredient.name} preparation`} placeholder="Preparation (raw, cooked, fried…)" />
+              <select className="input" aria-label={`${ingredient.name} nutrition match`} value={ingredient.food?.id ?? ""} onChange={(event) => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, food: foods.find((food) => food.id === event.target.value) ?? (item.food?.id === event.target.value ? item.food : null), estimate: undefined, custom: undefined } : item))}>
                 <option value="">No catalog match</option>
+                {ingredient.food && !foods.some(food => food.id === ingredient.food!.id) ? <option value={ingredient.food.id}>{ingredient.food.name} · USDA match</option> : null}
                 {foods.map((food) => <option key={food.id} value={food.id}>{food.name} · {food.preparationBasis ?? "basis unknown"}</option>)}
               </select>
               {ingredient.food ? (
@@ -873,16 +920,20 @@ export function GuidedSearchPicker({
                   <button type="button" className="min-h-11 rounded-full bg-cream px-3 text-[11px] font-bold underline" onClick={() => setIngredients((current) => current.map((item) => item.id === ingredient.id ? { ...item, custom: { calories: "", proteinG: "", carbsG: "", fatG: "", fiberG: "" } } : item))}>Enter custom values</button>
                 </div>
               )}
+              {ingredient.included && !guidedMacros(ingredient) ? <p className="text-xs font-semibold text-danger-900">Resolve this amount, unit, and nutrition before saving. Unknown conversions are not counted.</p> : null}
+              {ingredient.photo ? <label className="flex min-h-11 items-center gap-2 text-sm font-semibold"><input type="checkbox" data-photo-confirm checked={ingredient.photo.reviewed} onChange={event => { const checked = event.target.checked; setIngredients(current => current.map(item => item.id === ingredient.id && item.photo ? { ...item, photo: { ...item.photo, reviewed: checked } } : item)); }} />I reviewed this food, portion, and preparation</label> : null}
               {ingredient.assumptions.length > 0 ? <div className="flex items-center justify-end"><HelpPopover title={`${ingredient.name} assumptions`}><p>{ingredient.assumptions.join(" ")}</p></HelpPopover></div> : null}
             </div>
           ))}
+          <Button variant="ghost" disabled={ingredients.length >= 10 || busy} onClick={() => setIngredients(current => [...current, { id: clientId("review-item"), name: "", quantity: 0, unit: "g", preparation: "prepared", assumptions: [], presence: "stated", included: true, food: null, ...(photoStage ? { photo: { portion: null, reviewed: false } } : {}) }])}><Plus className="h-4 w-4" aria-hidden />Add missing ingredient</Button>
+          {photoStage ? <MealEntryWarnings review={mealEntryReview({ ...snapshot, foods: [...snapshot.foods, ...included.flatMap(item => item.food ? [item.food] : [])] }, selected, slot, 1, { meal: { id: "photo-review", name: mealName, servings: 1, ingredients: included.filter(item => item.food).map(item => ({ foodId: item.food!.id, servings: servingPlanForCandidate(item.food!, item.quantity, item.unit)?.servings ?? 0 })) } })} /> : null}
           <div className="flex flex-wrap gap-2">
             <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={estimateLoading || !ingredients.some((ingredient) => ingredient.included && !ingredient.food && !ingredient.estimate && !ingredient.custom)} onClick={() => void estimateSelected()}>{estimateLoading ? "Estimating…" : "Estimate selected unresolved"}</Button>
             <Button variant="soft" className="!min-h-11 !px-3 text-xs" disabled={!canPlan || savingIntent} onClick={() => void confirmMeal("plan")}>Add to plan</Button>
             <Button className="!min-h-11 !px-3 text-xs" disabled={!ready || savingIntent} onClick={() => void confirmMeal("log")}>Log meal</Button>
           </div>
           {!canPlan ? <p className="text-xs font-semibold text-muted">Planning requires an eligible goal and catalog matches or user-corrected values. Carb-limited plans require trusted catalog data. You can still log an AI estimate with its uncertainty.</p> : null}
-        </div>
+        </div></fieldset>
       ) : null}
     </div>
   );

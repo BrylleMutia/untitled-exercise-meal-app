@@ -733,18 +733,44 @@ The UI should call out uncertainty for foods with hidden ingredients, such as
 restaurant meals, sauces, cooking oil, and mixed dishes. Do not display false
 precision for estimates.
 
-After MVP-1, guided meal-photo logging may use `deepseek-flash` to suggest
-visible foods, not calories or macros. The flow is: capture a photo; review
-suggested foods; ask about portion sizes, oils, sauces, cooking method, and
-ingredients the image cannot reveal; let the user correct food and quantity;
-match trusted nutrition records and calculate estimates; then save only after
-explicit confirmation. If a food or amount remains unknown, show uncertainty
-and allow manual entry instead of false precision. Do not retain meal images in
-the app after analysis. Disclose the provider's image/data handling before
-launch, and validate accuracy and usability against representative weighed
-meals. Photo recognition, voice input, and social-media recipe extraction are
-not MVP-1 signoff requirements. Photo capture/upload and image analysis remain
-outside MVP-1.
+Guided meal-photo logging is implemented behind default-off client and server
+release gates. Inside Home/Nutrition Add meal, Take or upload photo opens capture,
+retake, upload and optional dish-note controls. Estimate meal explicitly sends
+one normalized photo and note to DeepSeek. Opening the camera or selecting a
+file never sends it. The first result is a rough calorie/protein/carbohydrate/fat
+preview, before clarification questions. The model suggests foods and rough
+low/base/high gram or piece quantities; trusted records and deterministic code
+calculate nutrition. Unknown amounts, units or matches remain unresolved, and
+subtotals are labeled Partial estimate. Hidden ingredients are excluded until
+selected. Unclear/no-food results offer retake and manual recovery.
+
+Review meal opens the shared editable review. Users confirm each included photo
+food, amount and preparation, correct assumptions, add missing ingredients (up
+to ten), and explicitly Log meal or Add to plan. Ingredient edits invalidate that
+ingredient's confirmation. Original photo bounds apply only while its suggested
+amount/unit is unchanged. Corrected amounts replace those bounds. Photo-derived
+values remain low confidence even when the nutrition source is trusted. Matched
+photo portions use the existing ai_estimate food/range persistence contract:
+the inferred portion is estimated, not the catalog nutrients. Catalog record and
+version are retained in assumptions and recipe nutrition notes. Planning uses
+the existing explicit advisory review contract and preserves estimated
+provenance. Unmatched items can use manual values or explicit AI estimates.
+
+Images remain transient. Normalize orientation, remove original metadata, resize
+to a 1,600-pixel long edge and JPEG under 2 MB; uploads accept JPEG/PNG/WebP under
+10 MB. Release photos after extraction or dismissal; stop camera tracks after
+capture, backgrounding, dismissal or unmount. Drafts contain structured review
+data and stable retry identities, never images. Failed analysis keeps the image
+in memory for retry; reloading requires a new capture/upload.
+
+Both NEXT_PUBLIC_NUTRITION_PHOTO_ENABLED and server-only NUTRITION_PHOTO_ENABLED
+default false. Before enabling, verify and disclose provider image handling,
+test physical iPhone Safari and Android Chrome over HTTPS, and evaluate at least
+30 representative weighed meals, including mixed dishes, sauces and
+restaurant-style meals. Record recognition, portion and macro error before/after
+review, latency and correction effort. Do not claim an unmeasured accuracy rate.
+These release checks remain pending. Photo assistance is outside MVP-1 signoff;
+V1 has no image gallery, continuous recognition or barcode scanning.
 
 ### 9. Custom Meals and Recipes
 
@@ -1509,12 +1535,9 @@ provider revision of `<dataType>:<fdcId>`. Household serving options are shown
 only when USDA supplies a positive gram weight. Starter foods remain explicitly
 development/estimated fixtures and are not production USDA records.
 
-Meal-photo analysis remains outside MVP-1. Its later guided contract is
-photo → visible-food suggestions → questions about portions, oils, sauces, and
-hidden ingredients → user correction → trusted nutrition calculation → explicit
-save. Images are not retained by this app after analysis; provider-side
-handling must be disclosed and the photo flow needs separate accuracy,
-privacy, and usability verification before release.
+Meal-photo analysis remains outside MVP-1 signoff. Its gated implementation is
+photo -> provisional calculated preview -> food/portion/hidden-ingredient review
+-> explicit save. See section 8 for privacy, validation and release gates.
 
 
 ## Account calendar preference and selected planning days

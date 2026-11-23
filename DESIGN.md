@@ -1660,3 +1660,23 @@ Grocery extra names remain as typed in recoverable drafts. Add saves the name wi
 Both extra-item forms reuse GroceryNameInput with existing labels, name drafts and input tokens. A fixed Floating UI portal anchors a wrapping white listbox to the input, flipping/shifting within an eight-pixel viewport margin and scrolling when necessary. Show at most six name-only options after two non-whitespace characters; rows have at least 44px targets. No automatic text replacement occurs while typing, on blur or from read responses.
 
 The combobox retains DOM focus while Arrow Up/Down changes the active descendant. Enter selects the active option and blocks form submission while open; Escape dismisses; Tab leaves without selection. Pointer selection fills the name, closes the popup and preserves focus, quantity and unit. IME composition suppresses suggestions and Enter interception until composition ends. Failed history reads show compact Retry past items guidance while dictionary suggestions remain usable. Recovered names stay unselected until the user opens or types in the field. Category, Add, first-letter capitalization and authoritative save-toasts retain their existing behavior.
+
+
+### Meal photo capture and provisional estimate (gated)
+
+The shared Home/Nutrition Add meal dialog gains Take or upload photo when enabled.
+Capture reuses the full-screen phone / centered desktop modal, with camera
+controls at least 44px, a bounded preview, retake/upload alternatives, optional
+note, and explicit Estimate meal. Camera permission and provider transmission
+are separate actions. Photos never become recipe covers or history thumbnails.
+
+The result leads with Rough estimate or Partial estimate, low-confidence copy,
+existing nutrition metric colors, approximate integer values and portion ranges.
+Unknown foods are named as missing from totals. Hidden ingredients remain
+excluded. Review meal moves focus into the shared ingredient editor. Each
+included photo food requires review of its food, amount and preparation; edits
+clear that ingredient's confirmation. Questions and source assumptions remain
+accessible, and users can add missing ingredients. Log meal and Add to plan keep
+their distinct meanings. Corrected amounts replace original portion bounds.
+Image/provider failure leaves manual entry available. No animation is required
+to understand the flow. Launch checks are recorded in FEATURES.md.

@@ -62,8 +62,9 @@ export function normalizeNutritionUnit(value: string): string {
 }
 
 function labelContainsUnit(label: string, unit: string): boolean {
-  const normalizedLabel = label.toLowerCase().replace(/[^a-z]/g, "");
-  return normalizedLabel.includes(unit);
+  // "Egg" can describe a food in this label, so only explicit piece units count here.
+  if (unit === "piece") return /\bpieces?\b/i.test(label);
+  return Boolean(unit) && (label.match(/[a-z]+/gi) ?? []).some(word => normalizeNutritionUnit(word) === unit);
 }
 
 /**
@@ -76,10 +77,16 @@ export function servingPlanForCandidate(
   quantity: number,
   requestedUnit: string,
 ): CandidateServingPlan | null {
-  if (!Number.isFinite(quantity) || quantity <= 0 || !food.servingGrams || food.servingGrams <= 0) return null;
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(food.servingGrams) || food.servingGrams <= 0) return null;
   const unit = normalizeNutritionUnit(requestedUnit || "serving");
+  // A gram amount already has a mass. A household serving label may also mention grams.
+  if (unit === "g") {
+    return { servings: quantity / food.servingGrams, servingQuantity: quantity, servingUnit: "g" };
+  }
+
   const option = food.servingOptions?.find((candidate) =>
-    normalizeNutritionUnit(candidate.unit) === unit || labelContainsUnit(candidate.label, unit),
+    Number.isFinite(candidate.grams) && candidate.grams > 0
+    && (normalizeNutritionUnit(candidate.unit) === unit || labelContainsUnit(candidate.label, unit)),
   );
 
   if (option) {
@@ -89,14 +96,6 @@ export function servingPlanForCandidate(
       servingQuantity: grams,
       servingUnit: "g",
       note: `Converted ${quantity} ${requestedUnit} to ${Math.round(grams * 10) / 10} g using the trusted ${option.label} serving option.`,
-    };
-  }
-
-  if (unit === "g" && food.unit === "g") {
-    return {
-      servings: quantity / food.servingGrams,
-      servingQuantity: quantity,
-      servingUnit: "g",
     };
   }
 

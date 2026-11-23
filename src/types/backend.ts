@@ -429,6 +429,9 @@ export type ArchiveMealInput = IdempotentInput & {
 
 export type ReviewedMealIngredientInput = Omit<NutritionLog, "id" | "createdAt" | "loggedMealId" | "ingredientOrder"> & {
   ingredientOrder?: number;
+  /** Canonical basis for a new reviewed food, already supported by the RPC. */
+  servingGrams?: number;
+  servingLabel?: string;
 };
 
 export type SaveReviewedMealInput = IdempotentInput & {
